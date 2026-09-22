@@ -109,12 +109,12 @@ return;
   switch (m.type) {
     case 'export-config': {
       const exportData = await CorsairMigration.exportConfiguration();
-      send({ ok: true, data: exportData });
+      send({ ok: true, export: exportData, data: exportData });
       break;
     }
 
     case 'import-config': {
-      const importRes = await CorsairMigration.executeImportTransaction(m.candidate);
+      const importRes = await CorsairMigration.executeImportTransaction({ ...(m.data || m.candidate || {}), restoreTelemetry: m.restoreTelemetry === true });
       send(importRes);
       break;
     }
@@ -214,6 +214,90 @@ return;
       break;
     }
 
+    case 'get-network-observation': {
+      const tabId = Number(m.tabId);
+      const observation = Number.isInteger(tabId) ? await CorsairObservation.get(tabId) : [];
+      send({ ok: true, observation });
+      break;
+    }
+
+    case 'clear-network-observation': {
+      const tabId = Number(m.tabId);
+      if (Number.isInteger(tabId)) await CorsairObservation.clear(tabId);
+      send({ ok: true });
+      break;
+    }
+
+    case 'clear-evidence': {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        await CorsairStorage.withTransactionGateShared(async () => {
+          await CorsairStorage.withPartitionLock('evidenceStore', async () => {
+            await chrome.storage.local.set({ evidenceStore: [] });
+          });
+        });
+      }
+      send({ ok: true });
+      break;
+    }
+
+    case 'get-tab-evidence': {
+      const tabId = Number(m.tabId);
+      const evidence = Number.isInteger(tabId) ? await CorsairEvidence.byTab(tabId, m.limit || 200) : [];
+      send({ ok: true, evidence });
+      break;
+    }
+
+    case 'assess-domain-risk': {
+      const domain = CorsairSecurity.normalizeHostname(m.domain || '');
+      if (!domain || !CorsairSecurity.isValidHostname(domain)) {
+        send({ ok: false, error: 'invalid-domain' });
+        break;
+      }
+      const [profile, events, chains] = await Promise.all([
+        CorsairStorage.getProfile(domain),
+        CorsairStorage.getEvents(500),
+        CorsairStorage.getChains(200)
+      ]);
+      const relevantEvents = events.filter(e => {
+        const a = CorsairSecurity.normalizeHostname(e.domain || '');
+        const b = CorsairSecurity.normalizeHostname(e.destination || '');
+        return a === domain || b === domain;
+      });
+      const chain = chains.find(c => CorsairSecurity.normalizeHostname(c.sourceHost || '') === domain) || null;
+      const destination = chain?.committedUrl ? CorsairSecurity.extractHostname(chain.committedUrl) : '';
+      const assessment = CorsairIntelligence.classifySignals({
+        events: relevantEvents,
+        chain,
+        destination,
+        source: domain,
+        tabId: Number.isInteger(m.tabId) ? m.tabId : null,
+        profile: profile || {}
+      });
+      send({ ok: true, assessment });
+      break;
+    }
+
+    case 'get-regression-cases': {
+      send({ ok: true, cases: await CorsairStorage.getRegressionCases() });
+      break;
+    }
+
+    case 'run-regressions': {
+      send({ ok: true, result: await CorsairReplay.runAll() });
+      break;
+    }
+
+    case 'run-regression': {
+      send({ ok: true, result: await CorsairReplay.runCase(m.case) });
+      break;
+    }
+
+    case 'clear-regressions': {
+      await CorsairStorage.saveRegressionCases([]);
+      send({ ok: true });
+      break;
+    }
+
     case 'get-settings': {
       const settings = await CorsairStorage.getSettings();
       send({ ok: true, settings });
@@ -265,7 +349,7 @@ return;
     }
 
     case 'get-agent-context': {
-      const ctxData = await CorsairStorage.getAgentContext(m.params || {});
+      const ctxData = await CorsairStorage.getAgentContext({ ...(m.params || {}), tabId: m.tabId, domain: m.domain, limit: m.limit || 120 });
       send({ ok: true, context: ctxData });
       break;
     }
