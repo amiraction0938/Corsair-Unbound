@@ -125,7 +125,8 @@ return CorsairStorage.withTransactionGateExclusive(async () => {
     }
 
     if (payload.restoreTelemetry === true) await CorsairStorage.replaceTelemetryUnlocked({ events: candidate.events, evidence: candidate.evidence, graph: candidate.graph, chains: candidate.chains });
-    return { ok: true, importedProfilesCount: Object.keys(candidate.profiles).length, importedTelemetry: payload.restoreTelemetry === true };
+    const importedProfiles = Object.keys(candidate.profiles).length;
+    return { ok: true, importedProfiles, importedProfilesCount: importedProfiles, importedTelemetry: payload.restoreTelemetry === true };
   } catch (err) {
     let configRolledBack = false;
     let dnrRolledBack = false;
