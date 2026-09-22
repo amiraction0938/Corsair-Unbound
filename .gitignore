@@ -1,0 +1,18 @@
+# Dependencies / generated packages
+node_modules/
+
+# Build / release artifacts
+dist/
+build/
+*.zip
+*.crx
+
+# Local test/browser artifacts
+coverage/
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
