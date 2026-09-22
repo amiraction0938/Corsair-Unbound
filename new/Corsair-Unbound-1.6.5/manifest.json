@@ -1,64 +1,22 @@
 {
   "manifest_version": 3,
   "name": "Corsair Unbound",
-  "version": "1.6.0",
+  "version": "1.6.5",
   "description": "Local-first browser shield with deterministic DNR enforcement, fortress catch-all, heuristics, custom scripts, and navigation isolation.",
-  "permissions": [
-    "storage",
-    "declarativeNetRequest",
-    "webNavigation",
-    "tabs",
-    "downloads",
-    "windows",
-    "notifications",
-    "alarms",
-    "scripting"
-  ],
-  "host_permissions": [
-    "http://*/*",
-    "https://*/*"
-  ],
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
+  "permissions": ["storage","declarativeNetRequest","webNavigation","tabs","downloads","windows","notifications","alarms","scripting"],
+  "host_permissions": ["http://*/*","https://*/*"],
+  "background": {"service_worker":"background.js","type":"module"},
   "action": {
-    "default_title": "Corsair Unbound",
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
+    "default_title":"Corsair Unbound",
+    "default_popup":"popup.html",
+    "default_icon":{"16":"icons/icon16.png","48":"icons/icon48.png","128":"icons/icon128.png"}
   },
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+  "icons":{"16":"icons/icon16.png","48":"icons/icon48.png","128":"icons/icon128.png"},
+  "content_scripts":[{"matches":["http://*/*","https://*/*"],"js":["content.js"],"run_at":"document_start","all_frames":true}],
+  "web_accessible_resources":[{"resources":["blocked.html"],"matches":["http://*/*","https://*/*"]}],
+  "commands":{
+    "toggle-fortress":{"suggested_key":{"default":"Ctrl+Shift+F","mac":"Command+Shift+F"},"description":"Toggle Fortress on current tab"},
+    "open-dashboard":{"suggested_key":{"default":"Ctrl+Shift+E","mac":"Command+Shift+E"},"description":"Open Corsair Dashboard"}
   },
-  "content_scripts": [
-    {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
-      "run_at": "document_start",
-      "all_frames": true
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["blocked.html"],
-      "matches": ["http://*/*", "https://*/*"]
-    }
-  ],
-  "commands": {
-    "toggle-fortress": {
-      "suggested_key": { "default": "Ctrl+Shift+F", "mac": "Command+Shift+F" },
-      "description": "Toggle Fortress on current tab"
-    },
-    "open-dashboard": {
-      "suggested_key": { "default": "Ctrl+Shift+E", "mac": "Command+Shift+E" },
-      "description": "Open Corsair Dashboard"
-    }
-  },
-  "incognito": "split"
+  "incognito":"split"
 }
