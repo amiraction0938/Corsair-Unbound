@@ -1,104 +1,63 @@
 # Corsair Unbound
 
-**Version:** 1.1.0  
-**Platform:** Chrome / Manifest V3  
-**Model:** Local-first browser security
+Current release: 1.6.5
 
-Corsair Unbound is a local-first Chrome MV3 browser shield that combines deterministic Fortress enforcement with redirect-chain observation, behavior intelligence, evidence, a persistent site graph, diagnostics, replay/regression tooling, and a full local dashboard.
+Corsair Unbound is a local-first Chrome Manifest V3 browser shield focused on deterministic navigation protection, Fortress enforcement, redirect containment, heuristic analysis, optional threat intelligence, and a full local dashboard.
 
-> The repository root is the current product source of truth. The historical v8 tree is preserved under `Corsair-Unbound-v8-fixed/Corsair-Unbound-v8/` for reference.
+Current source:
+new/Corsair-Unbound-1.6.5/
 
-## Product surface
+The older root runtime and v8 tree are retained as historical/reference material.
 
-- **Fortress domain profiles** — explicit protection state and per-domain policy.
-- **Safe Redirect Resolver** — local redirect controls and deterministic chain tracking.
-- **Declarative Net Request (DNR)** — source/destination enforcement rules.
-- **Navigation containment** — blocked-destination and popup/new-tab guards.
-- **Observation & graph** — page/network observations and a persistent site graph.
-- **Behavior intelligence** — local signal correlation, scoring, confidence, and verdicts.
-- **Evidence & telemetry** — bounded local evidence and activity data.
-- **Dashboard** — settings, profiles, activity, observation, intelligence, evidence, agent context, backup/restore, and regression tools.
-- **Replay / Regression** — deterministic local regression cases for runtime behavior.
-- **Recovery & durability** — storage quotas, locking, rollback, migration, and startup reconciliation.
-- **Tool router** — bounded local agent context without exposing unrestricted Chrome APIs.
+## Current release
 
-## Repository structure
+- Open Corsair Unbound 1.6.5: new/Corsair-Unbound-1.6.5/
+- Manifest: new/Corsair-Unbound-1.6.5/manifest.json
+- Changelog: new/Corsair-Unbound-1.6.5/CHANGELOG.md
+- License: new/Corsair-Unbound-1.6.5/LICENSE
 
-```text
-.
-├── background.js            # MV3 service worker and message/API boundary
-├── content.js               # page-side observation bridge
-├── popup.html / popup.js    # quick controls
-├── dashboard.html/js/css   # full local dashboard
-├── core/
-│   ├── dnr.js               # DNR registry and rule reconciliation
-│   ├── evidence.js          # bounded evidence store
-│   ├── intelligence.js      # behavior scoring and assessment
-│   ├── migration.js         # export/import and recovery
-│   ├── observation.js       # page/network observation
-│   ├── redirects.js         # redirect-chain state and guards
-│   ├── replay.js            # regression/replay support
-│   ├── security.js          # validation and normalization helpers
-│   ├── storage.js           # local/session persistence and locking
-│   ├── tool-router.js       # bounded agent/tool surface
-│   └── verifier.js           # deterministic navigation verification
-├── tests/
-│   └── self-test.mjs        # focused Node-based runtime self-test
-├── .github/workflows/
-│   └── validate.yml         # syntax, manifest, and self-test validation
-└── Corsair-Unbound-v8-fixed/
-    └── Corsair-Unbound-v8/  # historical reference implementation
-```
+### Highlights
 
-## Install locally
+- Fortress Mode and deterministic DNR enforcement
+- Popup and redirect containment
+- Download protection
+- Heuristic and behavior intelligence
+- Optional VirusTotal BYOK
+- Smart whitelist and trusted domains
+- Full Dashboard
+- Backup, restore, and privacy controls
+- Replay and regression support
+- Alarm-based TTL and recovery
+- Incognito split mode
+- Internationalization support
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Select **Load unpacked**.
-4. Choose the repository root.
-5. Open the extension popup and use **Dashboard** for full controls.
+## Install 1.6.5
 
-No build step is required for the current unpacked extension.
+1. Open chrome://extensions.
+2. Enable Developer mode.
+3. Choose Load unpacked.
+4. Select new/Corsair-Unbound-1.6.5/.
 
-## Validation
+The repository root itself is not the current 1.6.5 extension directory.
 
-The repository includes a focused self-test and GitHub Actions validation.
+## Privacy and API credentials
 
-The validation workflow checks:
+Corsair Unbound uses a local-first model.
 
-- JavaScript syntax for the runtime and core modules.
-- Manifest validity and referenced UI/icon files.
-- The deterministic local self-test in `tests/self-test.mjs`.
+The 1.6.5 source tree does not contain a hard-coded VirusTotal API key or other personal credential. VirusTotal support is BYOK: the extension reads a key supplied in local settings and sends supported queries directly to VirusTotal.
 
-For a local check:
+Profiles, settings, observations, evidence, and telemetry stay in extension storage unless the user explicitly exports them.
 
-```bash
-node --check background.js
-node --check content.js
-node --check popup.js
-node --check dashboard.js
+See SECURITY.md for credential-handling guidance.
 
-for f in core/*.js; do
-  node --check "$f"
-done
+## Repository map
 
-node tests/self-test.mjs
-```
+    new/
+      Corsair-Unbound-1.6.5/   <- current release
+    Corsair-Unbound-v8-fixed/   <- historical reference
+    core/, *.js, *.html, *.css  <- earlier runtime snapshot
+    .github/                    <- repository workflows
 
-## Backup and restore
+## License
 
-The Dashboard can export a `.corsair.json` backup containing configuration, domain profiles, regression cases, DNR diagnostics, and optional telemetry.
-
-Telemetry restore is explicitly opt-in during import.
-
-## Local-first behavior
-
-Profiles, policy state, graph data, evidence, and telemetry remain in extension storage unless the user explicitly exports them.
-
-## Historical source
-
-The `Corsair-Unbound-v8-fixed/Corsair-Unbound-v8/` tree is retained as a historical reference point for the original product surface. It is **not** the runtime source of truth for the current 1.1.0 release.
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
+MIT — see new/Corsair-Unbound-1.6.5/LICENSE.
