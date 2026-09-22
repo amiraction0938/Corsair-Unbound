@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Corsair Unbound</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>Corsair Unbound</h1>
+        <p id="version">Local-first browser shield</p>
+      </div>
+      <span id="state" class="pill">Loading</span>
+    </header>
+
+    <section class="card">
+      <div class="label">Current site</div>
+      <div id="domain" class="domain">—</div>
+      <div id="profileState" class="muted">Reading profile…</div>
+    </section>
+
+    <section class="actions">
+      <button id="toggle" class="primary" disabled>Enable Fortress</button>
+      <button id="refresh">Refresh</button>
+    </section>
+
+    <section class="card">
+      <div class="label">Blocked destination</div>
+      <div class="row">
+        <input id="destination" type="text" placeholder="example.net" autocomplete="off" spellcheck="false">
+        <button id="addBlock">Block</button>
+      </div>
+      <div id="blockedList" class="list"></div>
+    </section>
+
+    <section class="stats">
+      <div><span>DNR rules</span><strong id="dnrCount">—</strong></div>
+      <div><span>Graph nodes</span><strong id="graphCount">—</strong></div>
+      <div><span>Profiles</span><strong id="profileCount">—</strong></div>
+    </section>
+
+    <p id="message" class="message" aria-live="polite"></p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
