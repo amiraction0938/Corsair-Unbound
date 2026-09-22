@@ -786,7 +786,7 @@ return { version: 2, nodes, edges };
 }
 
 async function replaceTelemetryUnlocked({ events = [], evidence = [], graph = null, chains = [] } = {}) {
-const cleanEvents = (Array.isArray(events) ? events : []).slice(0, MAX_EVENTS).map(e => sanitizeEvent(e)).filter(Boolean);
+const cleanEvents = (Array.isArray(events) ? events : []).slice(0, MAX_EVENTS).map(e => CorsairSecurity.sanitizeObject(e)).filter(Boolean);
 const cleanEvidence = (Array.isArray(evidence) ? evidence : []).slice(0, 500).map(e => CorsairSecurity.sanitizeObject(e)).filter(Boolean);
 const cleanChains = (Array.isArray(chains) ? chains : []).slice(0, MAX_CHAINS).map(c => CorsairSecurity.sanitizeObject(c)).filter(Boolean);
 const cleanGraph = sanitizeTelemetryGraph(graph);
