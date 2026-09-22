@@ -1,0 +1,10 @@
+const fs=require('fs');const vm=require('vm');const path=require('path');
+const sandbox={globalThis:{},crypto:{randomUUID:()=>"test-id"},console};sandbox.globalThis=sandbox;
+const security=fs.readFileSync(path.join(__dirname,'../core/security.js'),'utf8');vm.runInNewContext(security,sandbox);const intel=fs.readFileSync(path.join(__dirname,'../core/intelligence.js'),'utf8');vm.runInNewContext(intel,sandbox);
+const C=sandbox.CorsairIntelligence;
+const low=C.classifySignals({source:'example.com',destination:'cdn.example.com',events:[],chain:{hops:[{host:'example.com',external:false,auto:false}]},profile:{mode:'fortress',maxRedirectHops:8}});
+if(low.risk>=25||low.verdict==='suspicious') throw new Error('same-site baseline unexpectedly risky');
+const high=C.classifySignals({source:'example.com',destination:'evil.test',events:[{type:'download_blocked',timestamp:Date.now(),domain:'example.com'},{type:'popup_blocked',timestamp:Date.now(),domain:'example.com'}],chain:{hops:[{host:'example.com',external:false,auto:true},{host:'a.test',external:true,auto:true},{host:'b.test',external:true,auto:true},{host:'c.test',external:true,auto:true}]},profile:{mode:'fortress',maxRedirectHops:2}});
+if(high.risk<60) throw new Error('high-risk correlation did not trigger');
+if(!C.shouldContain({assessment:high,profile:{autoContainRedirects:true},source:'example.com',destination:'evil.test',userInitiated:false})) throw new Error('containment decision failed');
+console.log('Corsair v8 intelligence tests: PASS');
