@@ -2,108 +2,104 @@ const CorsairIntelligence = (() => {
 'use strict';
 
 const WINDOW_MS = 15000;
-const MAX_SIGNALS = 20;
+const MAX_SIGNALS = 40;
 
-function classifySignals({ events = [], chain = null, destination = '', source = '', tabId = null, now = null } = {}) {
+function scoreEvent(e) {
+const t = String(e?.type || '');
+if (t === 'download_blocked') return 45;
+if (t === 'popup_blocked') return 25;
+if (t === 'new_tab_blocked') return 25;
+if (t === 'navigation_blocked') return 20;
+if (t === 'navigation_contained') return 40;
+if (t === 'dnr_rule_added') return 40;
+return 0;
+}
+
+function classifySignals({ events = [], chain = null, destination = '', source = '', tabId = null, now = null, profile = {} } = {}) {
 const currentTime = Number.isFinite(now) ? Number(now) : Date.now();
 const destHost = CorsairSecurity.normalizeHostname(destination);
 const srcHost = CorsairSecurity.normalizeHostname(source);
+
 const scopedEvents = (Array.isArray(events) ? events : []).filter(e => {
-  if (!e || typeof e !== 'object') return false;
-  if (tabId !== null && Number.isInteger(e.tabId) && e.tabId !== tabId) return false;
-  const dom = CorsairSecurity.normalizeHostname(e.domain || '');
-  const dst = CorsairSecurity.normalizeHostname(e.destination || '');
-  if (srcHost && (dom === srcHost || dst === srcHost)) return true;
-  if (destHost && (dom === destHost || dst === destHost)) return true;
-  return false;
+if (!e || typeof e !== 'object') return false;
+if (tabId !== null && Number.isInteger(e.tabId) && e.tabId !== tabId) return false;
+const dom = CorsairSecurity.normalizeHostname(e.domain || '');
+const dst = CorsairSecurity.normalizeHostname(e.destination || '');
+if (!srcHost && !destHost) return true;
+return (srcHost && (dom === srcHost || dst === srcHost)) ||
+       (destHost && (dom === destHost || dst === destHost));
 });
 
 const recent = scopedEvents.filter(e => {
-  const ts = Number(e?.timestamp || 0);
-  if (!Number.isFinite(ts)) return false;
-  const age = currentTime - ts;
-  return age >= 0 && age <= WINDOW_MS;
+const ts = Number(e?.timestamp || 0);
+const age = currentTime - ts;
+return Number.isFinite(ts) && age >= 0 && age <= WINDOW_MS;
 }).slice(0, MAX_SIGNALS);
 
-let risk = 0;
 const signals = [];
-const reasons = [];
-
-for (const ev of recent) {
-  if (ev.type === 'download_blocked') {
-    risk += 45;
-    signals.push({ kind: 'download_blocked', weight: 45, ref: ev });
-    reasons.push('download_blocked');
-  } else if (ev.type === 'popup_blocked') {
-    risk += 25;
-    signals.push({ kind: 'popup_blocked', weight: 25, ref: ev });
-    reasons.push('popup_blocked');
-  } else if (ev.type === 'new_tab_blocked') {
-    risk += 25;
-    signals.push({ kind: 'new_tab_blocked', weight: 25, ref: ev });
-    reasons.push('new_tab_blocked');
-  } else if (ev.type === 'navigation_blocked') {
-    risk += 20;
-    signals.push({ kind: 'navigation_blocked', weight: 20, ref: ev });
-    reasons.push('navigation_blocked');
-  }
+for (const e of recent) {
+const points = scoreEvent(e);
+if (points) signals.push({ kind: e.type, points, timestamp: e.timestamp, reason: e.reason || '' });
 }
 
-if (chain && Array.isArray(chain.hops) && chain.hops.length > 1) {
-  if (chain.cycleDetected) {
-    risk += 50;
-    signals.push({ kind: 'redirect_cycle', weight: 50 });
-    reasons.push('redirect_cycle');
-  }
+const hops = Array.isArray(chain?.hops) ? chain.hops : [];
+const externalHops = hops.filter(h => h.external || (srcHost && h.host && !CorsairSecurity.sameOrSubdomain(h.host, srcHost))).length;
+const distinctHosts = new Set(hops.map(h => h.host).filter(Boolean)).size;
+const autoHops = hops.filter(h => h.auto).length;
 
-  const hops = chain.hops;
-  let rapidCount = 0;
-  for (let i = 1; i < hops.length; i++) {
-    const delta = (hops[i].timestamp || 0) - (hops[i - 1].timestamp || 0);
-    if (delta >= 0 && delta < 500) {
-      rapidCount++;
-    }
-  }
-  if (rapidCount >= 2) {
-    risk += 30;
-    signals.push({ kind: 'rapid_redirects', weight: 30, count: rapidCount });
-    reasons.push('rapid_redirects');
-  }
+if (externalHops >= 1) signals.push({ kind:'external-hop', points:15 });
+if (externalHops >= 3) signals.push({ kind:'multiple-external-hops', points:15 });
+if (distinctHosts >= 4) signals.push({ kind:'many-hosts', points:15 });
+if (autoHops >= 1) signals.push({ kind:'automatic-navigation', points:10 });
+if (hops.length > (Number(profile.maxRedirectHops) || 8)) signals.push({ kind:'hop-limit-exceeded', points:25 });
 
-  const externalDomains = new Set(
-    hops
-      .map(h => h.host)
-      .filter(h => h && srcHost && !CorsairSecurity.sameOrSubdomain(h, srcHost))
-  );
-  if (externalDomains.size >= 3) {
-    risk += 35;
-    signals.push({ kind: 'external_hop_burst', weight: 35, domains: [...externalDomains] });
-    reasons.push('external_hop_burst');
-  }
-}
+const sameSite = Boolean(srcHost && destHost && CorsairSecurity.sameOrSubdomain(destHost, srcHost));
+if (sameSite) signals.push({ kind:'same-site-destination', points:-20 });
+if (profile.clickbaitGuard === true && profile.mode === 'fortress') signals.push({ kind:'fortress-context', points:5 });
+
+if (chain?.cycleDetected) signals.push({ kind:'redirect-cycle', points:50 });
+
+const raw = signals.reduce((n, x) => n + Number(x.points || 0), 0);
+const risk = Math.max(0, Math.min(100, raw));
+const reasons = signals
+.filter(x => Number(x.points) > 0)
+.sort((a,b) => Number(b.points) - Number(a.points))
+.map(x => x.kind);
 
 let verdict = 'low-risk';
-if (risk >= 60) {
-  verdict = 'dangerous';
-} else if (risk >= 35) {
-  verdict = 'suspicious';
-}
+if (risk >= 75) verdict = 'high-risk';
+else if (risk >= 45) verdict = 'suspicious';
+else if (risk >= 25) verdict = 'review';
 
+const confidence = Math.min(0.99, 0.5 + Math.min(0.45, signals.length * 0.07));
 return {
-  risk,
-  verdict,
-  signals,
-  reasons: [...new Set(reasons)],
-  destination: destHost,
-  sourceHost: srcHost
+risk,
+verdict,
+confidence,
+reasons: [...new Set(reasons)],
+signals,
+destination: destHost,
+sourceHost: srcHost,
+metrics: { recentEvents: recent.length, hops: hops.length, externalHops, distinctHosts, autoHops, sameSite }
 };
 }
 
-return {
-WINDOW_MS,
-MAX_SIGNALS,
-classifySignals
-};
+function shouldContain({ assessment, profile = {}, destination = '', source = '', userInitiated = false } = {}) {
+if (!assessment || userInitiated) return false;
+if (source && destination && CorsairSecurity.sameOrSubdomain(destination, source)) return false;
+if (profile.autoContainRedirects !== true) return false;
+return assessment.risk >= 60;
+}
+
+function fingerprint({ source, destination, reasons = [] } = {}) {
+return [
+CorsairSecurity.normalizeHostname(source),
+CorsairSecurity.normalizeHostname(destination),
+[...reasons].sort().join(',')
+].join('|');
+}
+
+return { WINDOW_MS, MAX_SIGNALS, classifySignals, shouldContain, fingerprint };
 })();
 
 globalThis.CorsairIntelligence = CorsairIntelligence;
