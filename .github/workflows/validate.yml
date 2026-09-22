@@ -3,16 +3,21 @@ name: Corsair Unbound validation
 on:
   push:
     branches:
-      - "final/corsair-unbound-complete"
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Syntax check runtime
         shell: bash
         run: |
@@ -24,7 +29,34 @@ jobs:
           for f in core/*.js; do
             node --check "$f"
           done
+
       - name: Validate manifest
-        run: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.json','utf8')); if(m.manifest_version!==3) throw new Error('manifest_version must be 3'); if(m.version!=='1.1.0') throw new Error('version mismatch'); for(const p of [m.action?.default_popup,...Object.values(m.icons||{}),...Object.values(m.action?.default_icon||{})]) if(p && !fs.existsSync(p)) throw new Error('missing file: '+p);"
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+
+          if (m.manifest_version !== 3) {
+            throw new Error('manifest_version must be 3');
+          }
+
+          if (!/^\\d+\\.\\d+\\.\\d+$/.test(String(m.version || ''))) {
+            throw new Error('manifest version must be semver-like: x.y.z');
+          }
+
+          const referenced = [
+            m.action?.default_popup,
+            ...Object.values(m.icons || {}),
+            ...Object.values(m.action?.default_icon || {}),
+          ].filter(Boolean);
+
+          for (const file of referenced) {
+            if (!fs.existsSync(file)) {
+              throw new Error('missing referenced file: ' + file);
+            }
+          }
+          NODE
+
       - name: Focused self-test
         run: node tests/self-test.mjs
