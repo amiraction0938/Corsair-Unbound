@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Corsair Unbound</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="toastContainer" class="toast-container"></div>
+  
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <span class="brand-icon">🛡️</span>
+        <div>
+          <h1>Corsair Unbound</h1>
+          <span id="version" class="version-tag">Fortress Shield</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="theme" class="tool-btn" title="Toggle Theme">☀</button>
+        <button id="openDashboard" class="tool-btn btn-dashboard" title="Open Dashboard">
+          ⚙ Dashboard
+        </button>
+      </div>
+    </header>
+
+    <!-- دکمه بزرگ محافظت و ثبت آنی دامنه -->
+    <section class="card site-card">
+      <div class="site-meta">
+        <span class="label">CURRENT TARGET SITE</span>
+        <div id="domain" class="domain-title">—</div>
+        <div id="profileState" class="domain-status">Checking defense state…</div>
+      </div>
+      <button id="instantShieldBtn" class="shield-btn" disabled>
+        <span class="shield-btn-icon">⚡</span>
+        <span id="shieldBtnText">Add & Arm Fortress</span>
+      </button>
+    </section>
+
+    <!-- کارت هوشمند VirusTotal با نمایش درصد خطر و نام آنتی‌ویروس‌ها -->
+    <section class="card vt-card">
+      <div class="card-header-row">
+        <div>
+          <span class="label">VIRUSTOTAL INTELLIGENCE</span>
+          <div id="threatStatus" class="vt-status">Checking reputation…</div>
+        </div>
+        <button id="scanDomainBtn" class="action-pill">Analyze</button>
+      </div>
+      
+      <!-- گیج و درصد ریسک -->
+      <div id="vtRiskGauge" class="vt-gauge-box">
+        <div class="risk-bar-wrap">
+          <div id="riskBarFill" class="risk-bar-fill"></div>
+        </div>
+        <span id="riskPercentText" class="risk-pct">0% Risk</span>
+      </div>
+
+      <!-- موتورهای گزارش‌دهنده -->
+      <div id="vtEnginesDetected" class="vt-flags">Clean / Whitelisted</div>
+      <div id="threatStats" class="vt-meta">Engines: — • Local Cache: Active</div>
+    </section>
+
+    <!-- سوئیچ‌های دفاعی -->
+    <section class="card toggle-card">
+      <div class="toggle-row">
+        <div>
+          <strong>Safe Redirect Resolver</strong>
+          <p class="muted-text">Bypasses tracking URLs & open redirectors</p>
+        </div>
+        <button id="resolver" class="status-badge on">ON</button>
+      </div>
+    </section>
+
+    <!-- مقاصد مسدودشده -->
+    <section class="card">
+      <span class="label">BLOCKED DESTINATION DOMAINS</span>
+      <div class="input-row">
+        <input id="destination" type="text" placeholder="e.g. tracker.com" autocomplete="off" spellcheck="false">
+        <button id="addBlock" class="btn-block">Block</button>
+      </div>
+      <div id="blockedList" class="blocked-list"></div>
+    </section>
+
+    <!-- فوتر آمار -->
+    <footer class="stats-grid">
+      <div class="stat-box">
+        <span>DNR Rules</span>
+        <strong id="dnrCount">0</strong>
+      </div>
+      <div class="stat-box">
+        <span>Graph Nodes</span>
+        <strong id="graphCount">0</strong>
+      </div>
+      <div class="stat-box">
+        <span>Profiles</span>
+        <strong id="profileCount">0</strong>
+      </div>
+      <button id="refreshBtn" class="stat-box refresh-btn" title="Sync State">
+        <span>Sync</span>
+        <strong>🔄</strong>
+      </button>
+    </footer>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

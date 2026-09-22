@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Navigation Blocked — Corsair Unbound</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: #080d1a; color: #f8fafc;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 24px;
+  }
+  .card {
+    max-width: 520px; width: 100%;
+    background: #101827; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 40px 32px; text-align: center;
+  }
+  .shield { font-size: 64px; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin-bottom: 12px; color: #f87171; }
+  p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+  code {
+    background: #090d16; padding: 3px 8px; border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #38bdf8;
+  }
+  .reason {
+    background: #090d16; border-radius: 10px; padding: 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: #fbbf24; margin: 16px 0;
+    word-break: break-all;
+  }
+  button {
+    background: #2563eb; color: #fff; border: none;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    margin-top: 8px;
+  }
+  button:hover { background: #1d4ed8; }
+  .hint { font-size: 12px; color: #64748b; margin-top: 20px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="shield">🛡️</div>
+    <h1>Navigation Blocked</h1>
+    <p>
+      Corsair Unbound intercepted a third-party navigation from a
+      <strong>Fortress-protected</strong> page.
+    </p>
+    <div class="reason">
+      Source page is under lockdown. Script-driven redirects to external
+      domains are contained before they leave the browser.
+    </div>
+    <p>
+      If you trust the destination, open the extension popup on the source site
+      and add the domain to your allowlist.
+    </p>
+    <button onclick="history.length > 1 ? history.back() : window.close()">
+      ← Go Back
+    </button>
+    <div class="hint">
+      Protected by Corsair Unbound — local-first browser shield
+    </div>
+  </div>
+</body>
+</html>
