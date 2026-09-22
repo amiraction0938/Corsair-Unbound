@@ -13,7 +13,7 @@
         <h1>Corsair Unbound</h1>
         <p id="version">Local-first browser shield</p>
       </div>
-      <span id="state" class="pill">Loading</span>
+      <div class="popup-tools"><button id="theme" class="tool-btn" title="Toggle theme">☀</button><button id="openDashboard" class="tool-btn">Dashboard</button><span id="state" class="pill">Loading</span></div>
     </header>
 
     <section class="card">
@@ -22,7 +22,9 @@
       <div id="profileState" class="muted">Reading profile…</div>
     </section>
 
-    <section class="actions">
+    <section class="card"><div class="row between"><div><div class="label">Safe Redirect Resolver</div><div class="muted">Controls the local redirect resolver.</div></div><button id="resolver" class="tool-btn">ON</button></div></section>
+
+<section class="actions">
       <button id="toggle" class="primary" disabled>Enable Fortress</button>
       <button id="refresh">Refresh</button>
     </section>

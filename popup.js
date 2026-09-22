@@ -5,7 +5,8 @@
   const state = {
     domain: '',
     profile: null,
-    diagnostics: null
+    diagnostics: null,
+    settings: {}
   };
 
   function showMessage(message, error = false) {
@@ -82,12 +83,15 @@
         return;
       }
 
-      const [profileResult, diagResult] = await Promise.all([
+      const [profileResult, diagResult, settingsResult] = await Promise.all([
         send({ type: 'get-profile', domain: state.domain }),
-        send({ type: 'get-diagnostics' })
+        send({ type: 'get-diagnostics' }),
+        send({ type: 'get-settings' })
       ]);
       state.profile = profileResult.profile;
       state.diagnostics = diagResult.diagnostics;
+      state.settings = settingsResult.settings || {};
+      $('resolver').textContent = state.settings.resolverEnabled === true ? 'ON' : 'OFF';
       $('dnrCount').textContent = String(state.diagnostics.dnrRuleCount);
       $('graphCount').textContent = String(state.diagnostics.graphNodeCount);
       $('profileCount').textContent = String(state.diagnostics.profileCount);
@@ -167,8 +171,32 @@
   $('toggle').addEventListener('click', toggleProfile);
   $('refresh').addEventListener('click', refresh);
   $('addBlock').addEventListener('click', addBlock);
+  $('resolver').addEventListener('click', async () => {
+    try {
+      const next = state.settings.resolverEnabled !== true;
+      const result = await send({ type: 'patch-settings', patch: { resolverEnabled: next } });
+      state.settings = result.settings || state.settings;
+      $('resolver').textContent = next ? 'ON' : 'OFF';
+      showMessage(next ? 'Safe Redirect Resolver enabled.' : 'Safe Redirect Resolver disabled.');
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  $('openDashboard').addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') }).catch(() => {});
+  });
+
+  $('theme').addEventListener('click', async () => {
+    const current = (await chrome.storage.local.get('theme')).theme || 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    await chrome.storage.local.set({ theme: next });
+    document.body.dataset.theme = next;
+  });
+
   $('destination').addEventListener('keydown', event => {
     if (event.key === 'Enter') addBlock();
   });
+  chrome.storage.local.get('theme').then(({ theme = 'dark' }) => { document.body.dataset.theme = theme; });
   refresh();
 })();

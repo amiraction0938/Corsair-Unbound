@@ -83,6 +83,14 @@ if (candidate.regressionCases) {
   candidate.regressionCases = [];
 }
 
+if (candidate.events && !Array.isArray(candidate.events)) return { ok: false, error: 'invalid-events' };
+if (candidate.evidence && !Array.isArray(candidate.evidence)) return { ok: false, error: 'invalid-evidence' };
+if (candidate.chains && !Array.isArray(candidate.chains)) return { ok: false, error: 'invalid-chains' };
+if (candidate.graph && (typeof candidate.graph !== 'object' || Array.isArray(candidate.graph))) return { ok: false, error: 'invalid-graph' };
+candidate.events = Array.isArray(candidate.events) ? candidate.events.slice(0, 1000).map(v => CorsairSecurity.sanitizeObject(v)).filter(Boolean) : [];
+candidate.evidence = Array.isArray(candidate.evidence) ? candidate.evidence.slice(0, 500).map(v => CorsairSecurity.sanitizeObject(v)).filter(Boolean) : [];
+candidate.chains = Array.isArray(candidate.chains) ? candidate.chains.slice(0, 200).map(v => CorsairSecurity.sanitizeObject(v)).filter(Boolean) : [];
+candidate.graph = candidate.graph && typeof candidate.graph === 'object' ? CorsairSecurity.sanitizeObject(candidate.graph) : { version: 2, nodes: {}, edges: [] };
 return { ok: true, candidate };
 }
 
@@ -98,7 +106,11 @@ return CorsairStorage.withTransactionGateExclusive(async () => {
     profiles: await CorsairStorage.getProfiles(),
     settings: await CorsairStorage.getSettings(),
     regression: await CorsairStorage.getRegressionCases(),
-    registry: await CorsairStorage.getDnrRegistry()
+    registry: await CorsairStorage.getDnrRegistry(),
+    events: await CorsairStorage.getEvents(1000),
+    evidence: typeof CorsairEvidence !== 'undefined' ? await CorsairEvidence.recent(500) : [],
+    graph: await CorsairStorage.getGraph(),
+    chains: await CorsairStorage.getChains(200)
   };
   const snapshotDnrRules = await CorsairDNR.listCorsairRules();
 
@@ -112,13 +124,16 @@ return CorsairStorage.withTransactionGateExclusive(async () => {
       throw new Error('dnr-rebuild-failed: ' + (rebuildRes.error || 'unknown'));
     }
 
-    return { ok: true, importedProfilesCount: Object.keys(candidate.profiles).length };
+    if (payload.restoreTelemetry === true) await CorsairStorage.replaceTelemetryUnlocked({ events: candidate.events, evidence: candidate.evidence, graph: candidate.graph, chains: candidate.chains });
+    const importedProfiles = Object.keys(candidate.profiles).length;
+    return { ok: true, importedProfiles, importedProfilesCount: importedProfiles, importedTelemetry: payload.restoreTelemetry === true };
   } catch (err) {
     let configRolledBack = false;
     let dnrRolledBack = false;
 
     try {
       await CorsairStorage.rollbackImportConfig(snapshot);
+      await CorsairStorage.replaceTelemetryUnlocked({ events: snapshot.events, evidence: snapshot.evidence, graph: snapshot.graph, chains: snapshot.chains });
       configRolledBack = true;
     } catch {}
 
@@ -149,19 +164,27 @@ return CorsairStorage.withTransactionGateExclusive(async () => {
 
 async function exportConfiguration() {
 return CorsairStorage.withTransactionGateShared(async () => {
-const [profiles, settings, regressionCases, dnrRegistry] = await Promise.all([
+const [profiles, settings, regressionCases, dnrRegistry, events, graph, chains] = await Promise.all([
 CorsairStorage.getProfiles(),
 CorsairStorage.getSettings(),
 CorsairStorage.getRegressionCases(),
-CorsairStorage.getDnrRegistry()
+CorsairStorage.getDnrRegistry(),
+CorsairStorage.getEvents(1000),
+CorsairStorage.getGraph(),
+CorsairStorage.getChains(200)
 ]);
+const evidence = typeof CorsairEvidence !== 'undefined' ? await CorsairEvidence.recent(500) : [];
 return {
 format: 'corsair-unbound',
-version: 8,
+version: 9,
 exportedAt: Date.now(),
 profiles,
 settings,
 regressionCases,
+events,
+evidence,
+graph,
+chains,
 dnrRegistryMeta: {
 rulesCount: Object.keys(dnrRegistry.rules || {}).length,
 nextId: dnrRegistry.nextId
@@ -169,6 +192,7 @@ nextId: dnrRegistry.nextId
 };
 });
 }
+
 
 return {
 validateCandidate,

@@ -753,6 +753,54 @@ return saveRegressionCasesUnlocked(cases);
 });
 }
 
+
+function sanitizeTelemetryGraph(rawGraph) {
+const graph = rawGraph && typeof rawGraph === 'object' && !Array.isArray(rawGraph) ? rawGraph : {};
+const nodes = {};
+for (const [id, node] of Object.entries(graph.nodes || {}).slice(0, MAX_NODES)) {
+  if (!node || typeof node !== 'object') continue;
+  const host = CorsairSecurity.normalizeHostname(node.host || String(id).replace(/^origin:/, ''));
+  if (!host || !CorsairSecurity.isValidHostname(host)) continue;
+  nodes['origin:' + host] = {
+    id: 'origin:' + host,
+    kind: String(node.kind || 'origin').slice(0, 30),
+    host,
+    lastSeen: Number(node.lastSeen) || Date.now(),
+    seenCount: Math.max(1, Number(node.seenCount) || 1)
+  };
+}
+const edges = [];
+for (const edge of Array.isArray(graph.edges) ? graph.edges.slice(0, MAX_EDGES) : []) {
+  if (!edge || typeof edge !== 'object') continue;
+  const from = String(edge.from || '');
+  const to = String(edge.to || '');
+  if (!from || !to) continue;
+  edges.push({
+    from: from.slice(0, 300),
+    to: to.slice(0, 300),
+    kind: String(edge.kind || 'requests').slice(0, 40),
+    lastSeen: Number(edge.lastSeen) || Date.now()
+  });
+}
+return { version: 2, nodes, edges };
+}
+
+async function replaceTelemetryUnlocked({ events = [], evidence = [], graph = null, chains = [] } = {}) {
+const cleanEvents = (Array.isArray(events) ? events : []).slice(0, MAX_EVENTS).map(e => CorsairSecurity.sanitizeObject(e)).filter(Boolean);
+const cleanEvidence = (Array.isArray(evidence) ? evidence : []).slice(0, 500).map(e => CorsairSecurity.sanitizeObject(e)).filter(Boolean);
+const cleanChains = (Array.isArray(chains) ? chains : []).slice(0, MAX_CHAINS).map(c => CorsairSecurity.sanitizeObject(c)).filter(Boolean);
+const cleanGraph = sanitizeTelemetryGraph(graph);
+await chrome.storage.local.set({
+  [KEYS.events]: cleanEvents,
+  [KEYS.evidence]: cleanEvidence,
+  [KEYS.graph]: cleanGraph,
+  [KEYS.chains]: cleanChains
+});
+invalidateByteCache();
+_eventSeq = cleanEvents.reduce((m, e) => Math.max(m, Number(e?.seq) || 0), 0);
+return { ok: true };
+}
+
 async function commitImportConfig(candidate) {
 await ensureQuotaBudgetBeforeWrite(KEYS.profiles, estimateBytes(candidate.profiles));
 const batch = {
