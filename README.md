@@ -19,10 +19,7 @@ Corsair Unbound is a local-first Chrome Manifest V3 browser shield focused on de
 
 ## Current release
 
-- Open the 1.6.5 package: `new/Corsair-Unbound-1.6.5/`
-- Manifest: `new/Corsair-Unbound-1.6.5/manifest.json`
-- Changelog: `new/Corsair-Unbound-1.6.5/CHANGELOG.md`
-- License: `new/Corsair-Unbound-1.6.5/LICENSE`
+**1.6.5 is the repository root.** There is no extra folder to enter before loading the extension.
 
 ## Highlights
 
@@ -39,14 +36,13 @@ Corsair Unbound is a local-first Chrome Manifest V3 browser shield focused on de
 - Incognito split mode
 - Internationalization support
 
-## Install 1.6.5
+## Install
 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Choose **Load unpacked**.
-4. Select `new/Corsair-Unbound-1.6.5/`.
-
-The repository root is not the current 1.6.5 extension directory.
+4. Select the **repository root**.
+5. Open the popup and launch **Dashboard**.
 
 ## Privacy and API credentials
 
@@ -58,19 +54,30 @@ Profiles, settings, observations, evidence, and telemetry stay in extension stor
 
 See [SECURITY.md](SECURITY.md) for credential-handling guidance.
 
-## Repository map
+## Project structure
 
 ```text
 .
-├── new/
-│   └── Corsair-Unbound-1.6.5/   ← current release
 ├── assets/
 │   └── corsair-unbound-hero.png
-├── Corsair-Unbound-v8-fixed/    ← historical reference
-├── core/, *.js, *.html, *.css  ← earlier runtime snapshot
-└── .github/                     ← repository workflows
+├── core/
+├── icons/
+├── .github/
+├── background.js
+├── content.js
+├── popup.html / popup.css / popup.js
+├── dashboard.html / dashboard.css / dashboard.js
+├── blocked.html
+├── manifest.json
+├── CHANGELOG.md
+├── LICENSE
+├── SECURITY.md
+├── README.md
+└── README.fa.md
 ```
+
+The repository root is the active 1.6.5 extension source. Older versions remain available in Git history rather than mixed into the active project tree.
 
 ## License
 
-MIT — see `new/Corsair-Unbound-1.6.5/LICENSE`.
+MIT — see [LICENSE](LICENSE).
