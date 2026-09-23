@@ -1,16 +1,61 @@
 # Changelog
 
-All notable changes to Corsair Unbound are documented here.
+All notable changes to this release line are documented here.
 
-## 1.6.5
+## [1.6.5] — Finalized release build
 
-- Finalized the current 1.6.5 release package.
-- Aligned the extension manifest with the release version.
-- Consolidated the release README and changelog.
-- Added security guidance and automated high-signal credential scanning for the 1.6.5 tree.
+- Finalized the 1.6.5 release package and version metadata.
+- Consolidated release documentation around the current product surface.
+- Documented BYOK VirusTotal handling and local-first data behavior.
+- Added repository validation and credential-pattern scanning for the 1.6.5 tree.
 
-## 1.1.0
+## [1.5.0] — 2025
 
-- Restored the full Dashboard product surface.
-- Added settings, profiles, activity, observation, intelligence, evidence, agent context, backup/restore, and replay/regression UI.
-- Hardened migration, rollback, bounded storage, DNR reconciliation, and startup recovery.
+### Added
+
+- Heuristic Analysis Engine.
+- Alarm-based TTL handling.
+- Extension badge with per-tab status.
+- Trust button and user trusted domains.
+- Download guard.
+- Keyboard shortcuts.
+- Dashboard search, bulk actions, theme toggle, and privacy/data controls.
+- Separate safe-list export/import.
+- Incognito split mode.
+- Automatic banner dismissal.
+
+### Changed
+
+- Added alarms permission and command shortcuts.
+- Reworked dashboard information hierarchy.
+- Unified Fortress allow-rule expiry around alarms.
+
+### Fixed
+
+- Fortress TTL recovery after service-worker restarts.
+- First-install settings defaults.
+- Dashboard maxRedirectHops handling.
+- Popup auto-dismiss timing.
+
+## [1.4.0]
+
+- Fortress catch-all with DNR session rules.
+- VirusTotal BYOK integration.
+- Smart whitelist with OpenDNS synchronization.
+- Automatic threat scanning.
+- Domain analyzer dashboard.
+
+## [1.3.0]
+
+- Fortress popup lockdown.
+- Redirect storm containment.
+- Auto-scan with notifications.
+
+## [1.2.0]
+
+- Initial deterministic DNR enforcement.
+- Redirect chain tracking.
+
+## [1.1.0]
+
+- First public release.

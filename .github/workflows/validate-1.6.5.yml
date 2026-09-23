@@ -2,29 +2,21 @@ name: Corsair Unbound 1.6.5 validation
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: new/Corsair-Unbound-1.6.5
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Check JavaScript syntax
         shell: bash
         run: |
@@ -33,10 +25,7 @@ jobs:
           node --check content.js
           node --check popup.js
           node --check dashboard.js
-          for file in core/*.js; do
-            node --check "$file"
-          done
-
+          for file in core/*.js; do node --check "$file"; done
       - name: Validate manifest and referenced files
         shell: bash
         run: |
@@ -53,11 +42,8 @@ jobs:
             ...(manifest.content_scripts || []).flatMap(x => x.js || []),
             ...(manifest.web_accessible_resources || []).flatMap(x => x.resources || []),
           ].filter(Boolean);
-          for (const file of referenced) {
-            if (!fs.existsSync(file)) throw new Error('missing referenced file: ' + file);
-          }
+          for (const file of referenced) if (!fs.existsSync(file)) throw new Error('missing referenced file: ' + file);
           NODE
-
       - name: Scan for high-signal credentials
         shell: bash
         run: |
@@ -65,33 +51,29 @@ jobs:
           const fs = require('fs');
           const path = require('path');
           const root = process.cwd();
-          const extensions = new Set(['.js', '.json', '.html', '.css', '.md', '.txt']);
+          const extensions = new Set(['.js','.json','.html','.css','.md','.txt']);
           const blocked = [
-            /ghp_[A-Za-z0-9]{20,}/,
-            /github_pat_[A-Za-z0-9_]{20,}/,
-            /sk-[A-Za-z0-9]{16,}/,
-            /AIza[0-9A-Za-z_-]{20,}/,
-            /xox[baprs]-[0-9A-Za-z-]{10,}/,
-            /Bearer\\s+[A-Za-z0-9._-]{20,}/i,
+            /ghp_[A-Za-z0-9]{20,}/, /github_pat_[A-Za-z0-9_]{20,}/,
+            /sk-[A-Za-z0-9]{16,}/, /AIza[0-9A-Za-z_-]{20,}/,
+            /xox[baprs]-[0-9A-Za-z-]{10,}/, /Bearer\s+[A-Za-z0-9._-]{20,}/i,
             /-----BEGIN [A-Z ]+PRIVATE KEY-----/,
-            /\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b/,
-            /(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\\s*[:=]\\s*["']([^"']{12,})["']/i,
+            /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
+            /(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']([^"']{12,})["']/i
           ];
           const files = [];
           function walk(dir) {
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            for (const entry of fs.readdirSync(dir, {withFileTypes:true})) {
               const full = path.join(dir, entry.name);
               if (entry.isDirectory()) walk(full);
               else if (extensions.has(path.extname(entry.name).toLowerCase())) files.push(full);
             }
           }
           walk(root);
-          const hits = [];
+          const hits=[];
           for (const file of files) {
-            const text = fs.readFileSync(file, 'utf8');
-            text.split(/\\r?\\n/).forEach((line, index) => {
-              if (blocked.some(re => re.test(line))) hits.push(`${path.relative(root, file)}:${index + 1}`);
-            });
+            for (const [i,line] of fs.readFileSync(file,'utf8').split(/\r?\n/).entries()) {
+              if (blocked.some(re=>re.test(line))) hits.push(`${file}:${i+1}`);
+            }
           }
           if (hits.length) throw new Error('Potential credential pattern(s) found: ' + hits.join(', '));
           NODE
