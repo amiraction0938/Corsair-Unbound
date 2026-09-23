@@ -9,7 +9,11 @@ graph: 'siteGraph',
 chains: 'redirectChains',
 evidence: 'evidenceStore',
 dnrRegistry: 'dnrRuleRegistry',
-cases: 'regressionCases'
+cases: 'regressionCases',
+threatCache: 'threatCache',
+userTrusted: 'userTrustedDomains',
+remoteWhitelist: 'remoteWhitelist',
+customScripts: 'customDomainScripts'
 };
 
 const SOFT_BUDGETS = {
@@ -18,7 +22,11 @@ siteGraph: 2.5 * 1024 * 1024,
 redirectChains: 1.5 * 1024 * 1024,
 evidenceStore: 2 * 1024 * 1024,
 domainProfiles: 1 * 1024 * 1024,
-dnrRuleRegistry: 512 * 1024
+dnrRuleRegistry: 512 * 1024,
+threatCache: 1 * 1024 * 1024,
+userTrustedDomains: 256 * 1024,
+remoteWhitelist: 2 * 1024 * 1024,
+customDomainScripts: 1 * 1024 * 1024
 };
 
 const GLOBAL_HARD_CAP = 10 * 1024 * 1024;
@@ -35,7 +43,11 @@ const CANONICAL_PARTITION_ORDER = [
 'globalSettings',
 'redirectChains',
 'regressionCases',
-'siteGraph'
+'siteGraph',
+'threatCache',
+'userTrustedDomains',
+'remoteWhitelist',
+'customDomainScripts'
 ];
 
 let _lockObserver = null;
@@ -68,13 +80,30 @@ _lockObserver(event, name);
 
 function defaultSettings() {
 return {
-version: 8,
+version: 13,
+// ---- Defense toggles (ALL ON BY DEFAULT) ----
+resolverEnabled: true,
+notifications: true,
+siteVerdictBanner: true,
+notifyOnSafeSites: true,
 logEvents: true,
 logEvidence: true,
-theme: 'dark',
-dampeningWindowMs: 4000,
+observationEnabled: true,
+verificationEnabled: true,
+enforceSuspiciousRedirects: true,
+downloadGuard: true,
+// ---- Fortress behavior ----
 autoContainRedirects: true,
 clickbaitGuard: true,
+maxRedirectHops: 8,
+dampeningWindowMs: 4000,
+// ---- Threat intel ----
+threatIntelEnabled: true,
+threatIntelAutoScan: true,
+vtApiKey: '',
+// ---- UI ----
+theme: 'dark',
+language: 'en',
 updatedAt: Date.now()
 };
 }
@@ -753,7 +782,6 @@ return saveRegressionCasesUnlocked(cases);
 });
 }
 
-
 function sanitizeTelemetryGraph(rawGraph) {
 const graph = rawGraph && typeof rawGraph === 'object' && !Array.isArray(rawGraph) ? rawGraph : {};
 const nodes = {};
@@ -840,7 +868,7 @@ async function ensureReady() {
 if (_readyPromise) return _readyPromise;
 _readyPromise = (async () => {
 _profilesCache = await get(KEYS.profiles, {});
-_settingsCache = await get(KEYS.settings, defaultSettings());
+_settingsCache = { ...defaultSettings(), ...(await get(KEYS.settings, {})) };
 _eventSeq = await initializeSequence();
 await estimateTotalStorageBytes(true);
 return true;
@@ -1004,6 +1032,8 @@ withTransactionGateShared,
 withTransactionGateExclusive,
 withPartitionLock,
 withMultiPartitionLock,
+get,
+set,
 getGraph,
 mutateGraph,
 addGraphNode,

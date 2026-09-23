@@ -1,4 +1,4 @@
-# کورسِیر آنباند — Corsair Unbound 1.6.5
+# Corsair Unbound 1.6.5
 
 <p align="center">
   <strong>نسخه فعلی: 1.6.5</strong>
@@ -15,93 +15,59 @@
   <a href="README.md"><strong>🇬🇧 English Documentation</strong></a>
 </p>
 
-## معرفی
+## وضعیت فعلی
 
-Corsair Unbound یک افزونه امنیتی محلی برای Chrome و Manifest V3 است که روی حفاظت قطعی از ناوبری، Fortress، مهار زنجیره‌های redirect، تحلیل رفتاری و heuristic، اطلاعات تهدید اختیاری و یک داشبورد کامل محلی تمرکز دارد.
+نسخه نهایی **1.6.5** مستقیماً در ریشه همین repository قرار دارد.
 
-## نسخه فعلی
-
-نسخه نهایی پروژه در این مسیر قرار دارد:
-
-`new/Corsair-Unbound-1.6.5/`
-
-فایل‌های مهم:
-
-- `manifest.json` — مشخصات و مجوزهای افزونه
-- `background.js` — Service Worker
-- `popup.*` — کنترل‌های سریع
-- `dashboard.*` — داشبورد کامل
-- `core/` — موتورهای امنیت، DNR، ذخیره‌سازی، intelligence و threat intelligence
-- `CHANGELOG.md` — تاریخچه تغییرات
-- `LICENSE` — مجوز MIT
+برای نصب افزونه فقط خودِ repository root را در `chrome://extensions` با گزینه **Load unpacked** انتخاب کنید.
 
 ## قابلیت‌ها
 
-### محافظت
-
-- Fortress Mode برای قفل‌کردن دامنه‌ها با DNR
-- مهار popup و new-tab های مشکوک
-- مهار redirect storm و زنجیره‌های redirect
+- Fortress Mode و اجرای سیاست‌ها با DNR
+- مهار popup و redirect
 - Download Guard
-- مسدودسازی قطعی مقصدهای ممنوع
-- پشتیبانی از بازیابی وضعیت و TTL مبتنی بر alarm
-
-### هوش و تحلیل
-
-- تشخیص typosquatting
-- تشخیص homograph و Punycode/IDN
-- تحلیل TLDهای مشکوک
-- تحلیل رفتاری و correlation سیگنال‌ها
-- Smart Whitelist
-- Trusted Domains
-- VirusTotal BYOK به‌صورت اختیاری
-
-### رابط کاربری
-
-- Verdict Banner داخل صفحه
-- Extension Badge برای وضعیت هر tab
-- Keyboard Shortcuts
+- تحلیل heuristic و رفتاری
+- VirusTotal به‌صورت اختیاری و BYOK
+- Smart Whitelist و Trusted Domains
 - Dashboard کامل
-- حالت روشن و تاریک
-- پشتیبانی چندزبانه
-
-### داده و بازیابی
-
-- ذخیره‌سازی محلی تنظیمات، پروفایل‌ها، evidence و telemetry
 - Backup / Restore
-- Safe List Export / Import
-- Storage statistics و Wipe All
 - Replay / Regression
+- مدیریت TTL با alarms
 - Incognito Split Mode
-
-## نصب
-
-1. وارد `chrome://extensions` شوید.
-2. **Developer mode** را روشن کنید.
-3. **Load unpacked** را بزنید.
-4. پوشه `new/Corsair-Unbound-1.6.5/` را انتخاب کنید.
-5. افزونه را باز کنید و وارد Dashboard شوید.
+- پشتیبانی چندزبانه
 
 ## حریم خصوصی و API Key
 
-این پروژه با مدل **Local-first** طراحی شده است.
+پروژه Local-first است.
 
-در سورس نسخه 1.6.5 یک VirusTotal API Key یا credential شخصی hard-code نشده است.
+در نسخه 1.6.5 هیچ VirusTotal API Key یا credential شخصی به‌صورت hard-code داخل سورس قرار نگرفته است. کلید VirusTotal توسط خود کاربر در تنظیمات محلی وارد می‌شود و queryهای پشتیبانی‌شده مستقیماً به VirusTotal ارسال می‌شوند.
 
-پشتیبانی VirusTotal به‌صورت **BYOK (Bring Your Own Key)** است؛ یعنی کلید را خود کاربر در تنظیمات محلی وارد می‌کند و افزونه queryهای پشتیبانی‌شده را مستقیماً برای VirusTotal ارسال می‌کند.
+پروفایل‌ها، تنظیمات، observation، evidence و telemetry در extension storage باقی می‌مانند؛ مگر اینکه کاربر خودش export کند.
 
-پروفایل‌ها، تنظیمات، observation، evidence و telemetry به‌صورت محلی در extension storage نگهداری می‌شوند؛ مگر اینکه کاربر خودش آنها را export کند.
+راهنمای امنیتی در [SECURITY.md](SECURITY.md) قرار دارد.
 
-برای سیاست امنیتی پروژه، [SECURITY.md](SECURITY.md) را ببینید.
+## ساختار
 
-## وضعیت سورس
+```text
+.
+├── core/
+├── icons/
+├── assets/
+├── background.js
+├── content.js
+├── popup.*
+├── dashboard.*
+├── blocked.html
+├── manifest.json
+├── CHANGELOG.md
+├── LICENSE
+├── SECURITY.md
+├── README.md
+└── README.fa.md
+```
 
-پوشه نسخه فعلی:
-
-`new/Corsair-Unbound-1.6.5/`
-
-سورس‌های قدیمی در root و در `Corsair-Unbound-v8-fixed/` صرفاً برای مرجع تاریخی نگه‌داری شده‌اند.
+نسخه‌های قدیمی در Git history باقی می‌مانند و با سورس فعال پروژه قاطی نمی‌شوند.
 
 ## مجوز
 
-MIT — فایل [LICENSE](new/Corsair-Unbound-1.6.5/LICENSE).
+MIT — [LICENSE](LICENSE)
