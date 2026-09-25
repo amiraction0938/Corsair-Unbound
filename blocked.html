@@ -30,38 +30,48 @@
     color: #fbbf24; margin: 16px 0;
     word-break: break-all;
   }
+  .actions {
+    display: flex; gap: 10px; justify-content: center;
+    flex-wrap: wrap; margin-top: 12px;
+  }
   button {
     background: #2563eb; color: #fff; border: none;
     padding: 10px 20px; border-radius: 8px;
     font-size: 14px; font-weight: 600; cursor: pointer;
-    margin-top: 8px;
   }
   button:hover { background: #1d4ed8; }
+  button.secondary {
+    background: #1e293b; border: 1px solid #334155;
+  }
+  button.secondary:hover { background: #334155; }
   .hint { font-size: 12px; color: #64748b; margin-top: 20px; }
 </style>
 </head>
 <body>
   <div class="card">
-    <div class="shield">🛡️</div>
-    <h1>Navigation Blocked</h1>
-    <p>
+    <div class="shield" id="shieldIcon">🛡️</div>
+    <h1 id="titleText">Navigation Blocked</h1>
+    <p id="introText">
       Corsair Unbound intercepted a third-party navigation from a
       <strong>Fortress-protected</strong> page.
     </p>
-    <div class="reason">
+    <div class="reason" id="reasonText">
       Source page is under lockdown. Script-driven redirects to external
       domains are contained before they leave the browser.
     </div>
-    <p>
+    <p id="hintText">
       If you trust the destination, open the extension popup on the source site
       and add the domain to your allowlist.
     </p>
-    <button onclick="history.length > 1 ? history.back() : window.close()">
-      ← Go Back
-    </button>
-    <div class="hint">
+    <div class="actions">
+      <button id="escapeBtn" class="secondary">← Leave this page</button>
+      <button id="dashboardBtn">Open Corsair Dashboard</button>
+    </div>
+    <div class="hint" id="footerText">
       Protected by Corsair Unbound — local-first browser shield
     </div>
   </div>
+  <script src="core/i18n.js"></script>
+  <script src="blocked.js"></script>
 </body>
 </html>

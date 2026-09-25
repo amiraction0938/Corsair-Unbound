@@ -8,102 +8,116 @@
 </head>
 <body>
   <div id="toastContainer" class="toast-container"></div>
-  
+
   <main class="shell">
     <header>
       <div class="brand">
         <span class="brand-icon">🛡️</span>
         <div>
           <h1>Corsair Unbound</h1>
-          <span id="version" class="version-tag">Fortress Shield</span>
+          <span id="version" class="version-tag" data-i18n="popup.fortressShield">Fortress Shield</span>
         </div>
       </div>
       <div class="header-actions">
-        <button id="theme" class="tool-btn" title="Toggle Theme">☀</button>
-        <button id="openDashboard" class="tool-btn btn-dashboard" title="Open Dashboard">
-          ⚙ Dashboard
+        <button id="theme" class="tool-btn" title="Toggle Theme" data-i18n-title="actions.theme">☀</button>
+        <button id="openDashboard" class="tool-btn btn-dashboard" title="Open Dashboard" data-i18n-title="popup.openDashboard">
+          ⚙ <span data-i18n="popup.dashboardShort">Dashboard</span>
         </button>
       </div>
     </header>
 
-    <!-- دکمه بزرگ محافظت و ثبت آنی دامنه -->
     <section class="card site-card">
       <div class="site-meta">
-        <span class="label">CURRENT TARGET SITE</span>
+        <span class="label" data-i18n="popup.currentTarget">CURRENT TARGET SITE</span>
         <div id="domain" class="domain-title">—</div>
-        <div id="profileState" class="domain-status">Checking defense state…</div>
+        <div id="profileState" class="domain-status" data-i18n="popup.checking">Checking defense state…</div>
       </div>
       <button id="instantShieldBtn" class="shield-btn" disabled>
         <span class="shield-btn-icon">⚡</span>
-        <span id="shieldBtnText">Add & Arm Fortress</span>
+        <span id="shieldBtnText" data-i18n="popup.addArm">Add &amp; Arm Fortress</span>
       </button>
     </section>
 
-    <!-- کارت هوشمند VirusTotal با نمایش درصد خطر و نام آنتی‌ویروس‌ها -->
     <section class="card vt-card">
       <div class="card-header-row">
         <div>
-          <span class="label">VIRUSTOTAL INTELLIGENCE</span>
-          <div id="threatStatus" class="vt-status">Checking reputation…</div>
+          <span class="label" data-i18n="popup.vtTitle">VIRUSTOTAL INTELLIGENCE</span>
+          <div id="threatStatus" class="vt-status" data-i18n="popup.checkingRep">Checking reputation…</div>
         </div>
-        <button id="scanDomainBtn" class="action-pill">Analyze</button>
+        <button id="scanDomainBtn" class="action-pill" data-i18n="popup.analyze">Analyze</button>
       </div>
-      
-      <!-- گیج و درصد ریسک -->
+
       <div id="vtRiskGauge" class="vt-gauge-box">
         <div class="risk-bar-wrap">
           <div id="riskBarFill" class="risk-bar-fill"></div>
         </div>
-        <span id="riskPercentText" class="risk-pct">0% Risk</span>
+        <span id="riskPercentText" class="risk-pct">0% <span data-i18n="popup.risk">Risk</span></span>
       </div>
 
-      <!-- موتورهای گزارش‌دهنده -->
-      <div id="vtEnginesDetected" class="vt-flags">Clean / Whitelisted</div>
-      <div id="threatStats" class="vt-meta">Engines: — • Local Cache: Active</div>
+      <div id="vtEnginesDetected" class="vt-flags" data-i18n="popup.cleanOrWL">Clean / Whitelisted</div>
+      <div id="threatStats" class="vt-meta" data-i18n="popup.enginesMeta">Engines: — • Local Cache: Active</div>
     </section>
 
-    <!-- سوئیچ‌های دفاعی -->
+    <section class="card auto-arm-card">
+      <div class="toggle-row">
+        <div>
+          <strong data-i18n="popup.autoArmTitle">⚡ Auto-Arm Fortress</strong>
+          <p class="muted-text" data-i18n="popup.autoArmDesc">Shield risky sites automatically</p>
+        </div>
+        <button id="autoArmToggle" class="status-badge on">ON</button>
+      </div>
+      <div class="threshold-row">
+        <span class="threshold-label" data-i18n="popup.armAt">Arm at</span>
+        <input type="range" id="armThreshold" min="1" max="100" value="10" class="threshold-slider">
+        <span id="armThresholdValue" class="threshold-value">10%</span>
+      </div>
+      <div class="threshold-row">
+        <span class="threshold-label" data-i18n="popup.blockAt">Block at</span>
+        <input type="range" id="blockThreshold" min="1" max="100" value="70" class="threshold-slider">
+        <span id="blockThresholdValue" class="threshold-value">70%</span>
+      </div>
+    </section>
+
     <section class="card toggle-card">
       <div class="toggle-row">
         <div>
-          <strong>Safe Redirect Resolver</strong>
-          <p class="muted-text">Bypasses tracking URLs & open redirectors</p>
+          <strong data-i18n="setting.resolverEnabled">Safe Redirect Resolver</strong>
+          <p class="muted-text" data-i18n="popup.resolverDesc">Bypasses tracking URLs &amp; open redirectors</p>
         </div>
         <button id="resolver" class="status-badge on">ON</button>
       </div>
     </section>
 
-    <!-- مقاصد مسدودشده -->
     <section class="card">
-      <span class="label">BLOCKED DESTINATION DOMAINS</span>
+      <span class="label" data-i18n="popup.blockedDest">BLOCKED DESTINATION DOMAINS</span>
       <div class="input-row">
-        <input id="destination" type="text" placeholder="e.g. tracker.com" autocomplete="off" spellcheck="false">
-        <button id="addBlock" class="btn-block">Block</button>
+        <input id="destination" type="text" placeholder="e.g. tracker.com" autocomplete="off" spellcheck="false" data-i18n-placeholder="popup.blockedPlaceholder">
+        <button id="addBlock" class="btn-block" data-i18n="popup.blockBtn">Block</button>
       </div>
       <div id="blockedList" class="blocked-list"></div>
     </section>
 
-    <!-- فوتر آمار -->
     <footer class="stats-grid">
       <div class="stat-box">
-        <span>DNR Rules</span>
+        <span data-i18n="popup.dnrRules">DNR Rules</span>
         <strong id="dnrCount">0</strong>
       </div>
       <div class="stat-box">
-        <span>Graph Nodes</span>
+        <span data-i18n="popup.graphNodes">Graph Nodes</span>
         <strong id="graphCount">0</strong>
       </div>
       <div class="stat-box">
-        <span>Profiles</span>
+        <span data-i18n="popup.profiles">Profiles</span>
         <strong id="profileCount">0</strong>
       </div>
-      <button id="refreshBtn" class="stat-box refresh-btn" title="Sync State">
-        <span>Sync</span>
+      <button id="refreshBtn" class="stat-box refresh-btn" title="Sync State" data-i18n-title="popup.sync">
+        <span data-i18n="popup.sync">Sync</span>
         <strong>🔄</strong>
       </button>
     </footer>
   </main>
 
+  <script src="core/i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -77,10 +77,25 @@ const CorsairSecurity = (() => {
     };
   }
 
+  /**
+   * Normalize a profile to a canonical shape.
+   *
+   * IMPORTANT: this function must preserve ANY field the caller put on
+   * the profile that isn't explicitly cleaned — otherwise custom flags
+   * like `autoArmed` / `autoArmedAt` / `autoArmReason` (written by the
+   * auto-arm path in background.js) would get silently stripped on the
+   * very next save, and `patchProfileAtomic` would appear to succeed
+   * while losing the data.
+   *
+   * The explicit fields below are the ones we always normalize.
+   * Everything else on the incoming object is spread through unchanged,
+   * except sanitized to a safe string/number form.
+   */
   function normalizeProfile(prof) {
     if (!prof || typeof prof !== 'object' || Array.isArray(prof)) {
       return fortressProfile();
     }
+
     const cleanDests = [];
     if (Array.isArray(prof.blockedDestinationDomains)) {
       for (const d of prof.blockedDestinationDomains) {
@@ -90,7 +105,8 @@ const CorsairSecurity = (() => {
         }
       }
     }
-    return {
+
+    const out = {
       mode: prof.mode === 'fortress' ? 'fortress' : 'standard',
       protected: Boolean(prof.protected),
       autoContainRedirects: prof.autoContainRedirects !== false,
@@ -100,6 +116,27 @@ const CorsairSecurity = (() => {
       createdAt: Number(prof.createdAt) || Date.now(),
       updatedAt: Date.now()
     };
+
+    // ---- Preserve custom / metadata fields ----
+    // Any extra key on the incoming object is copied through, sanitized
+    // to a primitive so it stays JSON-serializable and cannot smuggle
+    // nested structures past the sanitization step.
+    for (const [k, v] of Object.entries(prof)) {
+      if (k in out) continue; // already handled above
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (typeof v === 'string') {
+        out[k] = sanitizeString(v, 500);
+      } else if (typeof v === 'number' && Number.isFinite(v)) {
+        out[k] = v;
+      } else if (typeof v === 'boolean') {
+        out[k] = v;
+      }
+      // Objects / arrays / null are intentionally dropped — profiles
+      // are meant to be flat. If a future field needs to be structured,
+      // whitelist it explicitly above.
+    }
+
+    return out;
   }
 
   function sanitizeString(str, maxLen = 500) {
@@ -135,6 +172,45 @@ const CorsairSecurity = (() => {
     return clean;
   }
 
+  const CUSTOM_SCRIPT_MAX_LEN = 5000;
+
+  const CUSTOM_SCRIPT_BLOCKLIST = [
+    { re: /document\s*\.\s*cookie/i, label: 'document.cookie access' },
+    { re: /\blocalStorage\b/i, label: 'localStorage access' },
+    { re: /\bsessionStorage\b/i, label: 'sessionStorage access' },
+    { re: /\bindexedDB\b/i, label: 'indexedDB access' },
+    { re: /\bfetch\s*\(/i, label: 'fetch() network call' },
+    { re: /\bXMLHttpRequest\b/i, label: 'XMLHttpRequest' },
+    { re: /\bnavigator\s*\.\s*sendBeacon\b/i, label: 'navigator.sendBeacon' },
+    { re: /\bWebSocket\b/i, label: 'WebSocket' },
+    { re: /\bchrome\s*\.\s*\w+/i, label: 'chrome.* extension API access' },
+    { re: /\bimport\s*\(/i, label: 'dynamic import()' },
+    { re: /\beval\s*\(/i, label: 'eval()' },
+    { re: /\bnew\s+Function\s*\(/i, label: 'new Function()' },
+    { re: /\bsetTimeout\s*\(\s*['"`]/i, label: "setTimeout('string', ...) — string form re-enters eval" },
+    { re: /\bsetInterval\s*\(\s*['"`]/i, label: "setInterval('string', ...) — string form re-enters eval" },
+    { re: /window\s*\.\s*top\b/i, label: 'window.top cross-frame access' },
+    { re: /window\s*\.\s*parent\b/i, label: 'window.parent cross-frame access' },
+    { re: /\bdocument\s*\.\s*domain\s*=/i, label: 'document.domain assignment' }
+  ];
+
+  function lintCustomScript(code) {
+    if (typeof code !== 'string') return { ok: false, error: 'Script must be a string' };
+    if (code.length > CUSTOM_SCRIPT_MAX_LEN) {
+      return { ok: false, error: `Script too long (${code.length}/${CUSTOM_SCRIPT_MAX_LEN} chars)` };
+    }
+    const lines = code.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const { re, label } of CUSTOM_SCRIPT_BLOCKLIST) {
+        if (re.test(line)) {
+          return { ok: false, error: `Blocked: ${label}`, line: i + 1 };
+        }
+      }
+    }
+    return { ok: true };
+  }
+
   return {
     normalizeUrl,
     extractHostname,
@@ -144,7 +220,9 @@ const CorsairSecurity = (() => {
     fortressProfile,
     normalizeProfile,
     sanitizeString,
-    sanitizeObject
+    sanitizeObject,
+    lintCustomScript,
+    CUSTOM_SCRIPT_MAX_LEN
   };
 })();
 

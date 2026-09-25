@@ -2,8 +2,13 @@ const CorsairDNR = (() => {
   'use strict';
 
   const BLOCK_BASE = 100000;
-  const FORTRESS_BASE = 800000;        // session rules for fortress catch-all
-  const FORTRESS_ALLOW_BASE = 850000;  // session rules for temporary allows
+  const FORTRESS_BASE = 800000;
+  const FORTRESS_ALLOW_BASE = 850000;
+  const USER_BLOCK_BASE = 900000;
+
+  const FORTRESS_SPAN = 40000;
+  const FORTRESS_ALLOW_SPAN = 40000;
+  const USER_BLOCK_SPAN = 40000;
 
   let _dnrLock = false;
   let _dnrLockWaiters = [];
@@ -31,6 +36,36 @@ const CorsairDNR = (() => {
         next();
       }
     }
+  }
+
+  /* ------------------------------------------------------------------
+     COLLISION-FREE RULE ID ALLOCATION
+     ------------------------------------------------------------------
+     Previous scheme hashed the host with djb2 and took `% 40000`, so
+     two different hosts could (and inevitably did) land on the same
+     Fortress rule ID. That meant: arming site B silently disarmed
+     site A. The new scheme uses the hash ONLY as a *preferred starting
+     point* and then does linear probing against the set of IDs that
+     are currently in use. Allocation is therefore guaranteed unique
+     within the active session-rule set.
+     ------------------------------------------------------------------ */
+
+  function fnv1a(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  function findFreeId(base, span, key, usedIds) {
+    const start = fnv1a(key) % span;
+    for (let i = 0; i < span; i++) {
+      const candidate = base + ((start + i) % span);
+      if (!usedIds.has(candidate)) return candidate;
+    }
+    return null;
   }
 
   function getDynamicCapacity(type = 'block') {
@@ -81,24 +116,11 @@ const CorsairDNR = (() => {
      FORTRESS CATCH-ALL (session rules)
      ========================================================= */
 
-  function fortressRuleIdFor(source) {
-    let h = 5381;
-    for (let i = 0; i < source.length; i++) h = ((h << 5) + h + source.charCodeAt(i)) | 0;
-    return FORTRESS_BASE + (Math.abs(h) % 40000);
-  }
-
-  function fortressAllowRuleIdFor(source, destination) {
-    const key = `${source}|${destination}`;
-    let h = 5381;
-    for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) | 0;
-    return FORTRESS_ALLOW_BASE + (Math.abs(h) % 40000);
-  }
-
   async function listFortressCatchAllRules() {
     if (typeof chrome === 'undefined' || !chrome.declarativeNetRequest?.getSessionRules) return [];
     const all = await chrome.declarativeNetRequest.getSessionRules();
     return (Array.isArray(all) ? all : []).filter(r =>
-      r.id >= FORTRESS_BASE && r.id < FORTRESS_BASE + 40000
+      r.id >= FORTRESS_BASE && r.id < FORTRESS_BASE + FORTRESS_SPAN
     );
   }
 
@@ -106,14 +128,18 @@ const CorsairDNR = (() => {
     if (typeof chrome === 'undefined' || !chrome.declarativeNetRequest?.getSessionRules) return [];
     const all = await chrome.declarativeNetRequest.getSessionRules();
     return (Array.isArray(all) ? all : []).filter(r =>
-      r.id >= FORTRESS_ALLOW_BASE && r.id < FORTRESS_ALLOW_BASE + 40000
+      r.id >= FORTRESS_ALLOW_BASE && r.id < FORTRESS_ALLOW_BASE + FORTRESS_ALLOW_SPAN
     );
   }
 
-  /**
-   * Sync fortress catch-all rules with the set of Fortress-armed profiles.
-   * Called after every profile mutation and on startup.
-   */
+  async function listUserBlockRules() {
+    if (typeof chrome === 'undefined' || !chrome.declarativeNetRequest?.getSessionRules) return [];
+    const all = await chrome.declarativeNetRequest.getSessionRules();
+    return (Array.isArray(all) ? all : []).filter(r =>
+      r.id >= USER_BLOCK_BASE && r.id < USER_BLOCK_BASE + USER_BLOCK_SPAN
+    );
+  }
+
   async function syncFortressCatchAll(profiles) {
     if (typeof chrome === 'undefined' || !chrome.declarativeNetRequest?.updateSessionRules) {
       return { ok: false, error: 'dnr-session-unavailable' };
@@ -128,35 +154,48 @@ const CorsairDNR = (() => {
     }
 
     const current = await listFortressCatchAllRules();
-    const currentMap = new Map(); // host -> ruleId
+    const currentByHost = new Map(); // host -> existing rule (kept as-is)
+    const usedIds = new Set();
+
     for (const r of current) {
       const host = r.condition?.initiatorDomains?.[0];
-      if (host) currentMap.set(host, r.id);
+      if (!host) continue;
+      if (wanted.has(host)) {
+        currentByHost.set(host, r);
+        usedIds.add(r.id);
+      }
     }
 
     const toAdd = [];
     const toRemove = [];
 
-    for (const host of wanted) {
-      if (!currentMap.has(host)) {
-        toAdd.push({
-          id: fortressRuleIdFor(host),
-          priority: 50,
-          action: {
-            type: 'redirect',
-            redirect: { extensionPath: '/blocked.html' }
-          },
-          condition: {
-            initiatorDomains: [host],
-            resourceTypes: ['main_frame'],
-            domainType: 'thirdParty'
-          }
-        });
-      }
+    for (const r of current) {
+      const host = r.condition?.initiatorDomains?.[0];
+      if (!host || !wanted.has(host)) toRemove.push(r.id);
     }
 
-    for (const [host, id] of currentMap) {
-      if (!wanted.has(host)) toRemove.push(id);
+    for (const host of wanted) {
+      if (currentByHost.has(host)) continue;
+      const id = findFreeId(FORTRESS_BASE, FORTRESS_SPAN, 'catch-all::' + host, usedIds);
+      if (id == null) continue; // span exhausted — extremely unlikely
+      usedIds.add(id);
+      toAdd.push({
+        id,
+        priority: 50,
+        action: {
+          type: 'redirect',
+          redirect: {
+            url: chrome.runtime.getURL(
+              `blocked.html?reason=fortress&host=${encodeURIComponent(host)}`
+            )
+          }
+        },
+        condition: {
+          initiatorDomains: [host],
+          resourceTypes: ['main_frame'],
+          domainType: 'thirdParty'
+        }
+      });
     }
 
     if (toAdd.length === 0 && toRemove.length === 0) {
@@ -174,16 +213,6 @@ const CorsairDNR = (() => {
     }
   }
 
-  /**
-   * Temporarily allow a specific source→destination main_frame navigation.
-   * Higher priority than catch-all.
-   *
-   * IMPORTANT: expiry is scheduled by the CALLER (background.js) via
-   * CorsairAlarms.scheduleFortressAllowExpiry(ruleId, ttlMs).
-   * We intentionally do NOT use setTimeout here because service worker
-   * restarts would silently drop the timer and leave the rule installed
-   * forever. chrome.alarms survives restarts.
-   */
   async function installFortressAllow(source, destination, ttlMs = 30000) {
     if (typeof chrome === 'undefined' || !chrome.declarativeNetRequest?.updateSessionRules) {
       return { ok: false, error: 'dnr-session-unavailable' };
@@ -193,10 +222,25 @@ const CorsairDNR = (() => {
     if (!CorsairSecurity.isValidHostname(src) || !CorsairSecurity.isValidHostname(dst)) {
       return { ok: false, error: 'invalid-domain' };
     }
-    const ruleId = fortressAllowRuleIdFor(src, dst);
+
+    // Idempotency: if an allow rule for this exact pair already exists,
+    // reuse its ID so repeated installs never leak duplicate rules.
+    const existing = await listFortressAllowRules();
+    const usedIds = new Set();
+    for (const r of existing) {
+      const rSrc = r.condition?.initiatorDomains?.[0];
+      const rDst = r.condition?.requestDomains?.[0];
+      if (rSrc === src && rDst === dst) {
+        return { ok: true, ruleId: r.id, ttlMs, reused: true };
+      }
+      usedIds.add(r.id);
+    }
+
+    const ruleId = findFreeId(FORTRESS_ALLOW_BASE, FORTRESS_ALLOW_SPAN, src + '|' + dst, usedIds);
+    if (ruleId == null) return { ok: false, error: 'allow-id-exhausted' };
+
     try {
       await chrome.declarativeNetRequest.updateSessionRules({
-        removeRuleIds: [ruleId],
         addRules: [{
           id: ruleId,
           priority: 200,
@@ -219,15 +263,90 @@ const CorsairDNR = (() => {
     const src = CorsairSecurity.normalizeHostname(source);
     const dst = CorsairSecurity.normalizeHostname(destination);
     if (!CorsairSecurity.isValidHostname(src) || !CorsairSecurity.isValidHostname(dst)) return { ok: true };
-    const ruleId = fortressAllowRuleIdFor(src, dst);
     try {
-      await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [ruleId] });
+      const rules = await listFortressAllowRules();
+      const ids = rules
+        .filter(r => r.condition?.initiatorDomains?.[0] === src && r.condition?.requestDomains?.[0] === dst)
+        .map(r => r.id);
+      if (ids.length > 0) {
+        await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids });
+      }
     } catch {}
     return { ok: true };
   }
 
+  async function syncUserBlocklist(domains) {
+    if (typeof chrome === 'undefined' || !chrome.declarativeNetRequest?.updateSessionRules) {
+      return { ok: false, error: 'dnr-session-unavailable' };
+    }
+
+    const wanted = new Set();
+    for (const raw of (Array.isArray(domains) ? domains : [])) {
+      const norm = CorsairSecurity.normalizeHostname(raw);
+      if (CorsairSecurity.isValidHostname(norm)) wanted.add(norm);
+    }
+
+    const current = await listUserBlockRules();
+    const currentByHost = new Map();
+    const usedIds = new Set();
+
+    for (const r of current) {
+      const host = r.condition?.requestDomains?.[0];
+      if (!host) continue;
+      if (wanted.has(host)) {
+        currentByHost.set(host, r);
+        usedIds.add(r.id);
+      }
+    }
+
+    const toAdd = [];
+    const toRemove = [];
+
+    for (const r of current) {
+      const host = r.condition?.requestDomains?.[0];
+      if (!host || !wanted.has(host)) toRemove.push(r.id);
+    }
+
+    for (const host of wanted) {
+      if (currentByHost.has(host)) continue;
+      const id = findFreeId(USER_BLOCK_BASE, USER_BLOCK_SPAN, 'userblock::' + host, usedIds);
+      if (id == null) continue;
+      usedIds.add(id);
+      // extensionPath with a query string is not reliably preserved by
+      // Chrome's DNR engine (documented behavior is path-only). We
+      // instead redirect to blocked.html?host=... using a full URL
+      // constructed at rule-install time so query params survive.
+      toAdd.push({
+        id,
+        priority: 60,
+        action: {
+          type: 'redirect',
+          redirect: {
+            url: chrome.runtime.getURL(
+              `blocked.html?reason=user-blocklist&host=${encodeURIComponent(host)}`
+            )
+          }
+        },
+        condition: {
+          requestDomains: [host],
+          resourceTypes: ['main_frame']
+        }
+      });
+    }
+
+    if (toAdd.length === 0 && toRemove.length === 0) {
+      return { ok: true, installed: 0, removed: 0, total: wanted.size };
+    }
+    try {
+      await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: toRemove, addRules: toAdd });
+      return { ok: true, installed: toAdd.length, removed: toRemove.length, total: wanted.size };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
   /* =========================================================
-     EXISTING BLOCK FUNCTIONS
+     EXISTING BLOCK FUNCTIONS (dynamic rules, per-source block)
      ========================================================= */
 
   async function ensureNavigationBlockUnlocked(source, destination, reason) {
@@ -431,10 +550,8 @@ const CorsairDNR = (() => {
       return { ok: false, error: 'storage-unhydrated', reconciled: false, rulesPreserved: true };
     }
 
-    // === Fortress catch-all sync (session rules) ===
     const fortressSync = await syncFortressCatchAll(profiles);
 
-    // === Dynamic block rules (existing behaviour) ===
     const currentRules = await listCorsairRules();
     const currentRuleMap = new Map(currentRules.map(r => [r.id, r]));
 
@@ -591,6 +708,7 @@ const CorsairDNR = (() => {
     BLOCK_BASE,
     FORTRESS_BASE,
     FORTRESS_ALLOW_BASE,
+    USER_BLOCK_BASE,
     setDnrLockObserver,
     withDnrLock,
     getDynamicCapacity,
@@ -610,12 +728,13 @@ const CorsairDNR = (() => {
     reconcileRegistryUnlocked,
     reconcileDnrRegistry,
     patchProfileAtomic,
-    // Fortress API
     syncFortressCatchAll,
     installFortressAllow,
     clearFortressAllow,
     listFortressCatchAllRules,
-    listFortressAllowRules
+    listFortressAllowRules,
+    syncUserBlocklist,
+    listUserBlockRules
   };
 })();
 

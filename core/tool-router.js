@@ -52,7 +52,11 @@ switch (name) {
         profileCount: Object.keys(profiles || {}).length,
         dnrRuleCount: dnrRules.length,
         totalBytes: totalStorage.total,
-        settingsVersion: settings.version
+        // NOTE: `_version` is the canonical schema version tracked by
+        // CorsairStorage.patchSettings(). The old `version` field was
+        // never incremented and has been removed from defaultSettings()
+        // — reading it here always returned `undefined`.
+        settingsVersion: settings._version
       }
     };
   }

@@ -3,18 +3,75 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Corsair Unbound Dashboard</title>
+  <title>Corsair Unbound — Security Command Center</title>
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
   <div id="toastContainer" class="toast-container"></div>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1 data-i18n="header.title">🏴‍☠️ Corsair Unbound</h1>
-        <p data-i18n="header.subtitle">Security dashboard • deterministic isolation, intelligence & recovery</p>
+
+  <!-- ================= ONBOARDING OVERLAY ================= -->
+  <div id="onboardingOverlay" class="onboarding-overlay" hidden></div>
+
+  <!-- ================= UPDATE AVAILABLE BANNER ================= -->
+  <div id="updateBanner" class="update-banner" hidden>
+    <div class="update-banner-content">
+      <span class="update-banner-icon">🎉</span>
+      <div class="update-banner-text">
+        <strong id="updateBannerTitle">New version available</strong>
+        <span id="updateBannerDetail">A newer version is ready to install.</span>
       </div>
-      <div class="actions">
+      <a id="updateBannerLink" class="btn-primary" href="#" rel="noopener">Download</a>
+      <button id="updateBannerDismiss" class="icon-btn" aria-label="Dismiss">✕</button>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- ================= SIDEBAR ================= -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">🏴‍☠️</span>
+        <div class="brand-text">
+          <div class="brand-title">Corsair Unbound</div>
+          <div class="brand-sub" data-i18n="brand.sub">Security Command Center</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebarNav">
+        <button class="nav-item active" data-view="overview">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label" data-i18n="nav.overview">Overview</span>
+        </button>
+        <button class="nav-item" data-view="activity">
+          <span class="nav-icon">📜</span>
+          <span class="nav-label" data-i18n="nav.activity">Activity</span>
+        </button>
+        <button class="nav-item" data-view="domains">
+          <span class="nav-icon">🔬</span>
+          <span class="nav-label" data-i18n="nav.domains">Domain Intelligence</span>
+        </button>
+        <button class="nav-item" data-view="security">
+          <span class="nav-icon">🛡️</span>
+          <span class="nav-label" data-i18n="nav.security">Security</span>
+        </button>
+        <button class="nav-item" data-view="privacy">
+          <span class="nav-icon">🔐</span>
+          <span class="nav-label" data-i18n="nav.privacy">Privacy</span>
+        </button>
+        <button class="nav-item" data-view="api">
+          <span class="nav-icon">🔑</span>
+          <span class="nav-label" data-i18n="nav.api">API &amp; Intelligence</span>
+        </button>
+        <button class="nav-item" data-view="settings">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label" data-i18n="nav.settings">Settings</span>
+        </button>
+        <button class="nav-item" data-view="about">
+          <span class="nav-icon">ℹ️</span>
+          <span class="nav-label" data-i18n="nav.about">About</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
         <div class="lang-selector" id="langSelector">
           <button id="langToggle" class="lang-btn" type="button">
             <span id="currentFlag">🇬🇧</span>
@@ -23,271 +80,485 @@
           </button>
           <div class="lang-menu" id="langMenu"></div>
         </div>
+        <button id="theme" class="tool-btn icon-btn" title="Toggle Theme" aria-label="Toggle theme">☀</button>
+      </div>
+    </aside>
 
-        <button id="theme" class="tool-btn" data-i18n-title="actions.theme" title="Toggle Theme">☀</button>
-        <input id="configFile" type="file" accept=".json,.corsair.json,application/json" hidden>
-        <button id="clearEvents" data-i18n="actions.clearEvents">Clear events</button>
-        <button id="clearTelemetry" data-i18n="actions.clearGraph">Clear graph</button>
-      </div>
-    </header>
+    <!-- ================= MAIN ================= -->
+    <main class="main">
+      <header class="main-header">
+        <button id="sidebarToggle" class="icon-btn menu-btn" aria-label="Toggle sidebar">☰</button>
+        <h1 class="view-title" id="viewTitle">Overview</h1>
+        <div class="header-actions">
+          <input id="configFile" type="file" accept=".json,.corsair.json,application/json" hidden>
+          <button id="startTourBtn" class="tool-btn" title="Take a guided tour">
+            <span>🎯</span> <span data-i18n="actions.tour">Take Tour</span>
+          </button>
+        </div>
+      </header>
 
-    <section class="stats stats-4">
-      <div class="stat-card stat-events">
-        <div class="stat-icon">📊</div>
-        <div class="stat-body"><b id="statEvents">0</b><span data-i18n="stats.totalEvents">Total Events</span></div>
-      </div>
-      <div class="stat-card stat-protection">
-        <div class="stat-icon">🛡️</div>
-        <div class="stat-body"><b id="statProtection">0</b><span data-i18n="stats.protection">Protection Events</span></div>
-      </div>
-      <div class="stat-card stat-blacklist">
-        <div class="stat-icon">🚫</div>
-        <div class="stat-body"><b id="statBlacklist">0</b><span data-i18n="stats.blacklisted">Blacklisted Domains</span></div>
-      </div>
-      <div class="stat-card stat-groups">
-        <div class="stat-icon">🌐</div>
-        <div class="stat-body"><b id="statGroups">0</b><span data-i18n="stats.profiles">Protected Profiles</span></div>
-      </div>
-    </section>
+      <!-- ============ VIEW: OVERVIEW ============ -->
+      <section class="view active" id="view-overview">
+        <!-- Hero -->
+        <div class="hero" id="heroStatus">
+          <div class="hero-shield">🛡️</div>
+          <div class="hero-content">
+            <div class="hero-label" data-i18n="hero.label">SYSTEM STATUS</div>
+            <div class="hero-title" id="heroTitle" data-i18n="hero.active">Protection Active</div>
+            <div class="hero-sub" id="heroSub">All security systems operational</div>
+          </div>
+          <div class="hero-pulse"></div>
+        </div>
 
-    <!-- DOMAIN ANALYZER -->
-    <section class="panel analyzer-panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="analyzer.title">🔬 Domain Analyzer</h2>
-          <div class="muted" data-i18n="analyzer.subtitle">Check any domain against the whitelist + VirusTotal + heuristics</div>
+        <!-- Quick Stats -->
+        <div class="quick-stats" id="quickStats">
+          <div class="stat-card" data-stat="events">
+            <div class="stat-icon-wrap stat-events"><span>📊</span></div>
+            <div class="stat-body">
+              <b id="statEvents" data-count="0">0</b>
+              <span data-i18n="stats.totalEvents">Total Events</span>
+            </div>
+          </div>
+          <div class="stat-card" data-stat="protection">
+            <div class="stat-icon-wrap stat-protection"><span>🛡️</span></div>
+            <div class="stat-body">
+              <b id="statProtection" data-count="0">0</b>
+              <span data-i18n="stats.protection">Protection Events</span>
+            </div>
+          </div>
+          <div class="stat-card" data-stat="blacklist">
+            <div class="stat-icon-wrap stat-blacklist"><span>🚫</span></div>
+            <div class="stat-body">
+              <b id="statBlacklist" data-count="0">0</b>
+              <span data-i18n="stats.blacklisted">Blacklisted Domains</span>
+            </div>
+          </div>
+          <div class="stat-card" data-stat="profiles">
+            <div class="stat-icon-wrap stat-groups"><span>🌐</span></div>
+            <div class="stat-body">
+              <b id="statGroups" data-count="0">0</b>
+              <span data-i18n="stats.profiles">Protected Profiles</span>
+            </div>
+          </div>
         </div>
-        <button id="syncWhitelistBtn" class="btn-action" data-i18n="analyzer.syncWhitelist">🔄 Sync Whitelist</button>
-      </div>
-      <div class="analyzer-input-row">
-        <input id="analyzerInput" data-i18n-placeholder="analyzer.input" placeholder="example.com" autocomplete="off" spellcheck="false">
-        <button id="analyzerBtn" class="btn-primary" data-i18n="analyzer.analyze">Analyze</button>
-        <button id="analyzerForceBtn" class="btn-action" data-i18n="analyzer.forceScan">Force Scan</button>
-      </div>
-      <div id="analyzerResult" class="analyzer-result">
-        <div class="empty" data-i18n="analyzer.placeholder">Enter a domain above to analyze its reputation.</div>
-      </div>
-    </section>
 
-    <!-- CUSTOM DOMAIN SCRIPTS -->
-    <section class="panel custom-scripts-panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="scripts.title">🎨 Custom Domain Scripts</h2>
-          <div class="muted" data-i18n="scripts.subtitle">Inject your own JS snippets into specific domains — executed automatically on every visit.</div>
+        <!-- Recent Activity Preview -->
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="overview.recentActivity">Recent Activity</h2>
+            <button class="link-btn" data-navigate="activity" data-i18n="actions.viewAll">View all →</button>
+          </div>
+          <div id="recentActivity" class="events"></div>
         </div>
-      </div>
-      <div class="script-input-row">
-        <input id="scriptDomain" data-i18n-placeholder="scripts.domainPlaceholder" placeholder="example.com" autocomplete="off" spellcheck="false">
-        <button id="scriptAddBtn" class="btn-primary" data-i18n="scripts.addDomain">Add Domain</button>
-      </div>
-      <div id="scriptList" class="script-list">
-        <div class="empty" data-i18n="scripts.empty">No custom scripts yet. Add a domain above to begin.</div>
-      </div>
-    </section>
+      </section>
 
-    <!-- SAFE SCANNED DOMAINS -->
-    <section class="panel safe-domains-panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="safe.title">✅ Safe Scanned Domains</h2>
-          <div class="muted" data-i18n="safe.subtitle">Domains scanned clean by VirusTotal. Cached locally.</div>
+      <!-- ============ VIEW: ACTIVITY ============ -->
+      <section class="view" id="view-activity">
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-head">
+              <h2 data-i18n="risk.title">🧠 Behavior Intelligence</h2>
+            </div>
+            <div id="riskBoard" class="events"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2 data-i18n="evidence.title">📁 Evidence Store</h2>
+              <button id="clearEvidence" class="tool-btn" data-i18n="evidence.clear">Clear evidence</button>
+            </div>
+            <div id="evidence" class="events"></div>
+          </div>
         </div>
-        <div class="actions">
-          <button id="exportSafeList" class="btn-action" data-i18n="safe.export">⬇ Export List</button>
-          <button id="importSafeList" class="btn-action" data-i18n="safe.import">⬆ Import List</button>
-          <input id="safeListFile" type="file" accept=".json" hidden>
-          <button id="clearSafeDomains" class="btn-action" style="background:#7f1d1d;" data-i18n="safe.clearAll">Clear All</button>
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="activity.title">Activity Log</h2>
+            <div class="actions">
+              <button id="refresh" class="tool-btn" data-i18n="activity.refresh">Refresh</button>
+              <button id="clearEvents" class="tool-btn" data-i18n="actions.clearEvents">Clear events</button>
+              <button id="clearTelemetry" class="tool-btn" data-i18n="actions.clearGraph">Clear graph</button>
+            </div>
+          </div>
+          <div id="activity" class="events"></div>
         </div>
-      </div>
-      <div class="safe-search-row">
-        <input id="safeDomainSearch" data-i18n-placeholder="safe.searchPlaceholder" placeholder="Search safe domains..." autocomplete="off">
-        <label class="safe-select-all">
-          <input type="checkbox" id="safeSelectAll">
-          <span data-i18n="safe.selectAll">Select all</span>
-        </label>
-        <button id="removeSelected" class="btn-action" style="background:#7f1d1d;" data-i18n="safe.removeSelected">Remove selected</button>
-        <span id="safeSelectedCount" class="muted">0 <span data-i18n="safe.selected">selected</span></span>
-      </div>
-      <div id="safeDomainsList" class="safe-domains-list">
-        <div class="empty">—</div>
-      </div>
-    </section>
+      </section>
 
-    <!-- USER TRUSTED DOMAINS -->
-    <section class="panel trusted-panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="trusted.title">🛡️ User Trusted Domains</h2>
-          <div class="muted" data-i18n="trusted.subtitle">Domains you explicitly trusted. Never sent to VirusTotal.</div>
-        </div>
-      </div>
-      <div id="trustedList" class="safe-domains-list">
-        <div class="empty" data-i18n="trusted.empty">No trusted domains yet.</div>
-      </div>
-    </section>
+      <!-- ============ VIEW: DOMAINS ============ -->
+      <section class="view" id="view-domains">
+        <div class="panel analyzer-panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="analyzer.title">🔬 Domain Analyzer</h2>
+              <div class="muted" data-i18n="analyzer.subtitle">Check any domain against the whitelist + VirusTotal + heuristics</div>
+            </div>
+            <button id="syncWhitelistBtn" class="tool-btn" data-i18n="analyzer.syncWhitelist">🔄 Sync Whitelist</button>
+          </div>
+          <div class="analyzer-input-row">
+            <input id="analyzerInput" data-i18n-placeholder="analyzer.input" placeholder="example.com" autocomplete="off" spellcheck="false">
+            <button id="analyzerBtn" class="btn-primary" data-i18n="analyzer.analyze">Analyze</button>
+            <button id="analyzerForceBtn" class="tool-btn" data-i18n="analyzer.forceScan">Force Scan</button>
+            <button id="analyzerDeepBtn" class="btn-primary deep-btn" data-i18n="analyzer.deepScan">🔎 Deep Scan</button>
+          </div>
+          <div id="analyzerResult" class="analyzer-result">
+            <div class="empty" data-i18n="analyzer.placeholder">Enter a domain above to analyze its reputation.</div>
+          </div>
 
-    <!-- GUIDE -->
-    <section class="panel guide-panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="guide.title">📖 How Corsair Unbound Works</h2>
-          <div class="muted" data-i18n="guide.subtitle">Quick operating guide & setup instructions</div>
+          <div class="analyzer-subsection">
+            <h3 data-i18n="analyzer.urlTitle">🔗 Scan an exact link</h3>
+            <div class="muted" data-i18n="analyzer.urlSubtitle">Checks the full URL itself with VirusTotal.</div>
+            <div class="analyzer-input-row">
+              <input id="urlScanInput" data-i18n-placeholder="analyzer.urlInput" placeholder="https://example.com/suspicious/path" autocomplete="off" spellcheck="false">
+              <button id="urlScanBtn" class="btn-primary" data-i18n="analyzer.scanUrl">Scan URL</button>
+            </div>
+            <div id="urlScanResult" class="analyzer-result"></div>
+          </div>
         </div>
-      </div>
-      <div class="guide-grid">
-        <div class="guide-card">
-          <strong data-i18n="guide.card1.title">⚡ 1. Arming Fortress</strong>
-          <p data-i18n-html="guide.card1.body">Open the extension popup on any site and click <b>Add &amp; Arm Fortress</b>. All third-party popups and script-driven redirects on that site are terminated at the browser kernel via DNR session rules.</p>
-        </div>
-        <div class="guide-card">
-          <strong data-i18n="guide.card2.title">🌐 2. Smart Whitelist</strong>
-          <p data-i18n-html="guide.card2.body">500+ trusted domains built-in and synced from Cisco OpenDNS weekly. Whitelisted sites are <b>never</b> sent to VirusTotal — saving your API quota.</p>
-        </div>
-        <div class="guide-card">
-          <strong data-i18n="guide.card3.title">🔍 3. Auto Threat Scan</strong>
-          <p data-i18n-html="guide.card3.body">When you open a non-whitelisted site, Corsair queries VirusTotal and shows a banner in the top-right corner of the page.</p>
-        </div>
-        <div class="guide-card">
-          <strong data-i18n="guide.card4.title">🛡️ 4. DNR Catch-All</strong>
-          <p data-i18n-html="guide.card4.body">Every Fortress-armed profile installs a <code>domainType: thirdParty</code> session rule that blocks any main_frame navigation leaving the origin.</p>
-        </div>
-        <div class="guide-card">
-          <strong data-i18n="guide.card5.title">🧠 5. Heuristic Analysis</strong>
-          <p data-i18n-html="guide.card5.body">Corsair analyzes domains for typosquatting, suspicious TLDs, homograph attacks, and recently registered domains.</p>
-        </div>
-        <div class="guide-card">
-          <strong data-i18n="guide.card6.title">🎨 6. Custom Scripts</strong>
-          <p data-i18n-html="guide.card6.body">Add your own JS snippets per domain. They inject automatically every time you visit — perfect for removing annoying page overlays or tweaking styles.</p>
-        </div>
-      </div>
-    </section>
 
-    <!-- Backup -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="backup.title">Backup & Restore</h2>
-          <div class="muted" data-i18n="backup.subtitle">Exports settings, profiles, regression suites and telemetry as one JSON file.</div>
+        <!-- SAFE SCANNED -->
+        <div class="panel safe-domains-panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="safe.title">✅ Safe Scanned Domains</h2>
+              <div class="muted" data-i18n="safe.subtitle">Domains scanned clean by VirusTotal. Cached locally.</div>
+            </div>
+            <div class="actions">
+              <button id="exportSafeList" class="tool-btn" data-i18n="safe.export">⬇ Export</button>
+              <button id="importSafeList" class="tool-btn" data-i18n="safe.import">⬆ Import</button>
+              <input id="safeListFile" type="file" accept=".json" hidden>
+              <button id="clearSafeDomains" class="tool-btn danger-btn" data-i18n="safe.clearAll">Clear All</button>
+            </div>
+          </div>
+          <div class="safe-search-row">
+            <input id="safeDomainSearch" data-i18n-placeholder="safe.searchPlaceholder" placeholder="Search safe domains..." autocomplete="off">
+            <label class="safe-select-all">
+              <input type="checkbox" id="safeSelectAll">
+              <span data-i18n="safe.selectAll">Select all</span>
+            </label>
+            <button id="removeSelected" class="tool-btn danger-btn" data-i18n="safe.removeSelected">Remove selected</button>
+            <span id="safeSelectedCount" class="muted">0 <span data-i18n="safe.selected">selected</span></span>
+          </div>
+          <div id="safeDomainsList" class="safe-domains-list">
+            <div class="empty">—</div>
+          </div>
         </div>
-        <label class="custom-switch-label">
-          <input type="checkbox" id="restoreTelemetry">
-          <span class="slider-track"></span>
-          <span class="switch-caption" data-i18n="backup.restoreTelemetry">Restore telemetry on import</span>
-        </label>
-      </div>
-      <div class="backup-row">
-        <button id="exportConfig2" class="btn-action" data-i18n="backup.download">Download Corsair Backup</button>
-        <button id="importConfig2" class="btn-action" data-i18n="backup.choose">Choose Backup File</button>
-      </div>
-    </section>
 
-    <!-- PRIVACY -->
-    <section class="panel privacy-panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="privacy.title">🔐 Privacy & Data</h2>
-          <div class="muted" data-i18n="privacy.subtitle">Everything is stored locally. Nothing is uploaded to our servers.</div>
+        <!-- PROFILES -->
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="profiles.title">Domain Profiles</h2>
+            <input id="domainSearch" class="search-input" data-i18n-placeholder="profiles.searchPlaceholder" placeholder="Search domains...">
+          </div>
+          <div id="profiles"></div>
         </div>
-        <button id="refreshStorage" class="btn-action" data-i18n="privacy.refresh">Refresh</button>
-      </div>
-      <div id="storageStats" class="storage-stats">
-        <div class="storage-stat-card"><strong id="storageTotalBytes">—</strong><span data-i18n="privacy.totalStorage">Total local storage</span></div>
-        <div class="storage-stat-card"><strong id="storageProfiles">—</strong><span data-i18n="privacy.profiles">Protected profiles</span></div>
-        <div class="storage-stat-card"><strong id="storageTrusted">—</strong><span data-i18n="privacy.userTrusted">User-trusted domains</span></div>
-        <div class="storage-stat-card"><strong id="storageSafeScanned">—</strong><span data-i18n="privacy.safeScanned">Safe-scanned domains</span></div>
-        <div class="storage-stat-card"><strong id="storageCacheCount">—</strong><span data-i18n="privacy.cacheCount">Threat cache entries</span></div>
-      </div>
-      <div class="privacy-actions">
-        <button id="wipeAllData" class="btn-action" style="background:#7f1d1d;" data-i18n="privacy.wipe">🗑 Wipe ALL Local Data</button>
-        <span class="muted" style="margin-left: 12px;" data-i18n="privacy.wipeNote">This removes everything. Cannot be undone.</span>
-      </div>
-    </section>
+      </section>
 
-    <!-- SETTINGS -->
-    <section class="panel">
-      <div class="panel-head">
-        <h2 data-i18n="settings.title">Global Settings</h2>
-        <button id="saveSettings" class="btn-primary" data-i18n="settings.save">Save settings</button>
-      </div>
-      <div id="settingsForm" class="settings-grid"></div>
-    </section>
+      <!-- ============ VIEW: SECURITY ============ -->
+      <section class="view" id="view-security">
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-head">
+              <h2 data-i18n="trusted.title">🛡️ Trusted Domains</h2>
+            </div>
+            <div class="analyzer-input-row">
+              <input id="trustedDomainInput" data-i18n-placeholder="trusted.addPlaceholder" placeholder="example.com" autocomplete="off" spellcheck="false">
+              <button id="trustedDomainBtn" class="btn-primary" data-i18n="trusted.add">Add trusted domain</button>
+            </div>
+            <div id="trustedList" class="safe-domains-list">
+              <div class="empty" data-i18n="trusted.empty">No trusted domains yet.</div>
+            </div>
+          </div>
 
-    <!-- RISK -->
-    <section class="panel">
-      <div class="panel-head">
-        <h2 data-i18n="risk.title">🧠 Behavior Intelligence</h2>
-        <span class="muted" data-i18n="risk.subtitle">Correlates recent redirects, popups, and navigation signals.</span>
-      </div>
-      <div id="riskBoard" class="events"></div>
-    </section>
-
-    <!-- EVIDENCE -->
-    <section class="panel">
-      <div class="panel-head">
-        <h2 data-i18n="evidence.title">📁 Evidence Store</h2>
-        <button id="clearEvidence" data-i18n="evidence.clear">Clear evidence</button>
-      </div>
-      <div id="evidence" class="events"></div>
-    </section>
-
-    <!-- PROFILES + ACTIVITY -->
-    <section class="grid">
-      <div class="panel">
-        <div class="panel-head">
-          <h2 data-i18n="profiles.title">Domain Profiles</h2>
-          <input id="domainSearch" data-i18n-placeholder="profiles.searchPlaceholder" placeholder="Search domains...">
+          <div class="panel">
+            <div class="panel-head">
+              <h2 data-i18n="blocked.title">🚫 Blocked Domains</h2>
+            </div>
+            <div class="analyzer-input-row">
+              <input id="blockedDomainInput" data-i18n-placeholder="blocked.addPlaceholder" placeholder="example.com" autocomplete="off" spellcheck="false">
+              <button id="blockedDomainBtn" class="btn-danger" data-i18n="blocked.add">Block domain</button>
+            </div>
+            <div id="blockedList" class="safe-domains-list">
+              <div class="empty" data-i18n="blocked.empty">No manually blocked domains yet.</div>
+            </div>
+          </div>
         </div>
-        <div id="profiles"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h2 data-i18n="activity.title">Activity Log</h2>
-          <button id="refresh" data-i18n="activity.refresh">Refresh</button>
-        </div>
-        <div id="activity"></div>
-      </div>
-    </section>
 
-    <!-- AGENT -->
-    <section class="panel">
-      <div class="panel-head">
-        <h2 data-i18n="agent.title">Agent Context</h2>
-        <button id="copyContext" data-i18n="agent.copy">Copy JSON</button>
-      </div>
-      <pre id="agentContext" class="context"></pre>
-    </section>
+        <!-- CUSTOM SCRIPTS -->
+        <div class="panel custom-scripts-panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="scripts.title">🎨 Custom Domain Scripts</h2>
+              <div class="muted" data-i18n="scripts.subtitle">Inject your own JS snippets into specific domains — executed automatically on every visit.</div>
+            </div>
+          </div>
+          <div class="script-input-row">
+            <input id="scriptDomain" data-i18n-placeholder="scripts.domainPlaceholder" placeholder="example.com" autocomplete="off" spellcheck="false">
+            <button id="scriptAddBtn" class="btn-primary" data-i18n="scripts.addDomain">Add Domain</button>
+          </div>
+          <div id="scriptList" class="script-list">
+            <div class="empty" data-i18n="scripts.empty">No custom scripts yet. Add a domain above to begin.</div>
+          </div>
+        </div>
+      </section>
 
-    <!-- REGRESSION -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="regression.title">Deterministic Replay / Regression</h2>
-          <div class="muted" data-i18n="regression.subtitle">Run local regression test fixtures.</div>
+      <!-- ============ VIEW: PRIVACY ============ -->
+      <section class="view" id="view-privacy">
+        <div class="panel privacy-panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="privacy.title">🔐 Privacy &amp; Data</h2>
+              <div class="muted" data-i18n="privacy.subtitle">Everything is stored locally. Nothing is uploaded to our servers.</div>
+            </div>
+            <button id="refreshStorage" class="tool-btn" data-i18n="privacy.refresh">Refresh</button>
+          </div>
+          <div id="storageStats" class="storage-stats">
+            <div class="storage-stat-card"><strong id="storageTotalBytes">—</strong><span data-i18n="privacy.totalStorage">Total local storage</span></div>
+            <div class="storage-stat-card"><strong id="storageProfiles">—</strong><span data-i18n="privacy.profiles">Protected profiles</span></div>
+            <div class="storage-stat-card"><strong id="storageTrusted">—</strong><span data-i18n="privacy.userTrusted">User-trusted domains</span></div>
+            <div class="storage-stat-card"><strong id="storageBlocked">—</strong><span data-i18n="privacy.userBlocked">Manually blocked</span></div>
+            <div class="storage-stat-card"><strong id="storageSafeScanned">—</strong><span data-i18n="privacy.safeScanned">Safe-scanned domains</span></div>
+            <div class="storage-stat-card"><strong id="storageCacheCount">—</strong><span data-i18n="privacy.cacheCount">Threat cache entries</span></div>
+            <div class="storage-stat-card"><strong id="storageCustomScripts">—</strong><span data-i18n="privacy.customScripts">Custom scripts</span></div>
+          </div>
+          <div class="privacy-actions">
+            <button id="wipeAllData" class="tool-btn danger-btn" data-i18n="privacy.wipe">🗑 Wipe ALL Local Data</button>
+            <span class="muted" data-i18n="privacy.wipeNote">This removes everything. Cannot be undone.</span>
+          </div>
         </div>
-        <button id="runRegression" data-i18n="regression.runAll">Run all</button>
-      </div>
-      <div id="regression" class="events"></div>
-    </section>
+      </section>
 
-    <!-- NETWORK -->
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2 data-i18n="network.title">🌐 Network Observation</h2>
-          <div class="muted" data-i18n="network.subtitle">External resources captured for the active tab.</div>
+      <!-- ============ VIEW: API ============ -->
+      <section class="view" id="view-api">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="vt.title">🔑 VirusTotal API Key</h2>
+              <div class="muted" data-i18n="vt.subtitle">Bring Your Own Key (BYOK). Stored in memory only, never written to disk.</div>
+            </div>
+          </div>
+          <div id="apiStatusBox" class="api-status-box">
+            <div class="api-status-indicator" id="apiStatusIndicator"></div>
+            <div>
+              <div class="api-status-title" id="apiStatusTitle">Not configured</div>
+              <div class="api-status-detail" id="apiStatusDetail">Paste your 64-character VirusTotal API key below.</div>
+            </div>
+          </div>
+
+          <div class="api-input-row">
+            <input type="password" id="vtApiKeyField" data-i18n-placeholder="vt.placeholder" placeholder="Paste your 64-char VirusTotal API Key" autocomplete="off" spellcheck="false">
+            <button id="apiKeyToggle" class="tool-btn" aria-label="Show or hide key">👁</button>
+            <button id="apiKeySave" class="btn-primary" data-i18n="settings.save">Save &amp; Verify</button>
+          </div>
+
+          <div class="vt-hint-box">
+            <strong data-i18n="vt.hintTitle">🔑 How to get a free VirusTotal API key:</strong>
+            <ol>
+              <li><span data-i18n="vt.step1">Create a free account:</span> <a href="https://www.virustotal.com/gui/join-us" target="_blank" rel="noopener">virustotal.com/gui/join-us</a></li>
+              <li><span data-i18n="vt.step2">Open your API key page:</span> <a href="https://www.virustotal.com/gui/my-apikey" target="_blank" rel="noopener">virustotal.com/gui/my-apikey ↗</a></li>
+              <li><span data-i18n="vt.step3">Copy the 64-character key, paste it above, click Save &amp; Verify.</span></li>
+            </ol>
+            <div class="whitelist-row">
+              <button id="syncWhitelistInline" class="tool-btn" data-i18n="vt.refreshWhitelist">🔄 Refresh Whitelist</button>
+              <span id="whitelistStatsInline" class="muted">loading…</span>
+            </div>
+          </div>
         </div>
-        <div>
-          <input id="networkTabId" type="number" min="0" data-i18n-placeholder="network.tabId" placeholder="Tab ID">
-          <button id="refreshNetwork" data-i18n="network.refresh">Refresh</button>
-          <button id="clearNetwork" data-i18n="network.clear">Clear</button>
+      </section>
+
+      <!-- ============ VIEW: SETTINGS ============ -->
+      <section class="view" id="view-settings">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="settings.title">Global Settings</h2>
+            <button id="saveSettings" class="btn-primary" data-i18n="settings.save">Save settings</button>
+          </div>
+          <div id="settingsForm" class="settings-grid"></div>
         </div>
-      </div>
-      <div id="network" class="events"></div>
-    </section>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="backup.title">Backup &amp; Restore</h2>
+              <div class="muted" data-i18n="backup.subtitle">Exports settings, profiles and telemetry as one JSON file.</div>
+            </div>
+            <label class="custom-switch-label">
+              <input type="checkbox" id="restoreTelemetry">
+              <span class="slider-track"></span>
+              <span class="switch-caption" data-i18n="backup.restoreTelemetry">Restore telemetry on import</span>
+            </label>
+          </div>
+          <div class="backup-row">
+            <button id="exportConfig2" class="tool-btn" data-i18n="backup.download">⬇ Download Backup</button>
+            <button id="importConfig2" class="tool-btn" data-i18n="backup.choose">⬆ Restore from File</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ VIEW: ABOUT ============ -->
+      <section class="view" id="view-about">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="guide.title">📖 How Corsair Unbound Works</h2>
+              <div class="muted" data-i18n="guide.subtitle">Quick operating guide &amp; setup instructions</div>
+            </div>
+          </div>
+          <div class="guide-grid">
+            <div class="guide-card">
+              <strong data-i18n="guide.card1.title">⚡ 1. Arming Fortress</strong>
+              <p data-i18n-html="guide.card1.body">Open the extension popup on any site and click <b>Add &amp; Arm Fortress</b>.</p>
+            </div>
+            <div class="guide-card">
+              <strong data-i18n="guide.card2.title">🌐 2. Smart Whitelist</strong>
+              <p data-i18n-html="guide.card2.body">500+ trusted domains built-in and synced from Cisco OpenDNS weekly.</p>
+            </div>
+            <div class="guide-card">
+              <strong data-i18n="guide.card3.title">🔍 3. Auto Threat Scan</strong>
+              <p data-i18n-html="guide.card3.body">When you open a non-whitelisted site, Corsair queries VirusTotal and shows a banner.</p>
+            </div>
+            <div class="guide-card">
+              <strong data-i18n="guide.card4.title">🛡️ 4. DNR Catch-All</strong>
+              <p data-i18n-html="guide.card4.body">Every Fortress-armed profile installs a <code>domainType: thirdParty</code> session rule.</p>
+            </div>
+            <div class="guide-card">
+              <strong data-i18n="guide.card5.title">🧠 5. Heuristic Analysis</strong>
+              <p data-i18n-html="guide.card5.body">Corsair analyzes domains for typosquatting, suspicious TLDs, homograph attacks.</p>
+            </div>
+            <div class="guide-card">
+              <strong data-i18n="guide.card6.title">🎨 6. Custom Scripts</strong>
+              <p data-i18n-html="guide.card6.body">Add your own JS snippets per domain.</p>
+            </div>
+            <div class="guide-card">
+              <strong data-i18n="guide.card7.title">⚡ 7. Auto-Arm Fortress</strong>
+              <p data-i18n-html="guide.card7.body">Sites whose threat score exceeds the <b>Arm threshold</b> are automatically Fortress-armed.</p>
+            </div>
+            <div class="guide-card">
+              <strong data-i18n="guide.card8.title">🚫 8. Manual Blocklist</strong>
+              <p data-i18n-html="guide.card8.body">Click <b>🚫 Block</b> on any verdict banner to block a domain everywhere.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="about-box">
+            <div class="about-shield">🏴‍☠️</div>
+            <div class="about-text">
+              <h3>Corsair Unbound <span class="version-badge" id="aboutVersionBadge">v1.7.0</span></h3>
+              <p>Local-first browser shield — deterministic isolation, intelligence &amp; recovery.</p>
+              <p class="muted">All data stored locally. No telemetry. No cloud.</p>
+
+              <div class="about-links">
+                <a id="aboutGithubLink" href="https://github.com/amiraction0938/Corsair-Unbound" target="_blank" rel="noopener" class="about-link">
+                  <span class="about-link-icon">🐙</span>
+                  <span data-i18n="about.github">View on GitHub</span>
+                </a>
+                <button id="aboutCheckUpdate" class="about-link" type="button">
+                  <span class="about-link-icon">🔄</span>
+                  <span id="aboutCheckUpdateText" data-i18n="about.check">Check for updates</span>
+                </button>
+              </div>
+
+              <div id="aboutUpdateStatus" class="about-update-status" hidden></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <!-- EDITOR MODAL -->
+  <!-- ================= UPDATE INSTALL MODAL ================= -->
+  <div id="updateModal" class="update-modal" hidden>
+    <div class="update-modal-card">
+      <button class="update-modal-close" id="updateModalClose" aria-label="Close">✕</button>
+
+      <div class="update-modal-hero">
+        <div class="update-modal-icon">🎉</div>
+        <h2 class="update-modal-title" id="updateModalTitle">A new version is available</h2>
+        <p class="update-modal-subtitle" id="updateModalSubtitle">
+          Corsair Unbound <span id="updateModalLatest">v1.7.0</span> is ready.
+        </p>
+      </div>
+
+      <div class="update-modal-steps">
+        <div class="update-step">
+          <div class="update-step-num">1</div>
+          <div class="update-step-body">
+            <strong>Download the new version</strong>
+            <span>The ZIP file contains all the source files you need.</span>
+            <button id="updateDownloadBtn" class="btn-primary update-download-btn">
+              ⬇ Download v<span id="updateDownloadVersion">1.7.0</span>
+            </button>
+            <div id="updateDownloadStatus" class="update-download-status" hidden></div>
+          </div>
+        </div>
+
+        <div class="update-step">
+          <div class="update-step-num">2</div>
+          <div class="update-step-body">
+            <strong>Extract the ZIP</strong>
+            <span>Right-click the downloaded file → Extract All. This creates a folder named <code id="updateFolderName">Corsair-Unbound-main</code>.</span>
+          </div>
+        </div>
+
+        <div class="update-step">
+          <div class="update-step-num">3</div>
+          <div class="update-step-body">
+            <strong>Replace the extension files</strong>
+            <span>Go to your Corsair Unbound extension folder. Copy all files from the extracted folder and paste them over the existing ones. Overwrite when asked.</span>
+            <button id="updateCopyPathBtn" class="tool-btn copy-path-btn" type="button">
+              <span>📋</span> <span>Copy the path to paste in Explorer</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="update-step">
+          <div class="update-step-num">4</div>
+          <div class="update-step-body">
+            <strong>Reload the extension</strong>
+            <span>Open <code>chrome://extensions</code>, find Corsair Unbound, and click the ↻ reload button.</span>
+            <button id="updateOpenExtensionsBtn" class="tool-btn copy-path-btn" type="button">
+              <span>🔗</span> <span>Copy chrome://extensions</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="update-step">
+          <div class="update-step-num">✓</div>
+          <div class="update-step-body">
+            <strong>Your data is safe</strong>
+            <span>Settings, profiles, blocklists, and cached data are all preserved across the update — they live in Chrome's storage, not in the extension files.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="update-modal-footer">
+        <button id="updateSkipVersion" class="tool-btn">Remind me later</button>
+        <button id="updateModalDone" class="btn-primary">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TOUR OVERLAY ================= -->
+  <div id="tourOverlay" class="tour-overlay" hidden>
+    <div id="tourSpotlight" class="tour-spotlight"></div>
+    <div id="tourTooltip" class="tour-tooltip">
+      <div class="tour-tooltip-header">
+        <div class="tour-step-counter" id="tourStepCounter">1 / 7</div>
+        <button class="tour-close" id="tourClose" aria-label="Close tour" title="Close (Esc)">✕</button>
+      </div>
+      <div class="tour-tooltip-body">
+        <h3 class="tour-tooltip-title" id="tourTitle">Welcome aboard</h3>
+        <p class="tour-tooltip-desc" id="tourDesc">This is your security command center.</p>
+      </div>
+      <div class="tour-tooltip-footer">
+        <div class="tour-progress" id="tourProgress"></div>
+        <div class="tour-nav">
+          <button class="tool-btn" id="tourBack" type="button">← Back</button>
+          <button class="btn-primary" id="tourNext" type="button">Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= EDITOR MODAL ================= -->
   <div class="editor-modal" id="editorModal" hidden>
     <div class="editor-box">
       <div class="editor-header">
@@ -301,7 +572,7 @@
         <div class="editor-actions">
           <span class="editor-host" id="editorHost">—</span>
           <button id="editorSave" class="btn-primary" data-i18n="scripts.save">Save</button>
-          <button id="editorClose" class="btn-action" data-i18n="scripts.cancel">Cancel</button>
+          <button id="editorClose" class="tool-btn" data-i18n="scripts.cancel">Cancel</button>
         </div>
       </div>
       <div class="editor-body">
@@ -321,6 +592,7 @@
 
   <script src="core/security.js"></script>
   <script src="core/i18n.js"></script>
+  <script src="core/updater.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>

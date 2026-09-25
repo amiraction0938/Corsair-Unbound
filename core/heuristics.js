@@ -77,14 +77,94 @@ const CorsairHeuristics = (() => {
 
   function stripDigits(label) {
     let out = '';
-    for (const ch of String(label || '')) {
-      out += DIGIT_MAP[ch] || ch;
-    }
+    for (const ch of String(label || '')) out += DIGIT_MAP[ch] || ch;
     return out;
   }
 
   function stripHyphens(label) {
     return String(label || '').replace(/-/g, '');
+  }
+
+  /* ------------------------------------------------------------------
+     BEST-MATCH BRAND DETECTION
+     ------------------------------------------------------------------
+     The previous code iterated POPULAR_BRANDS and `break`-ed at the
+     first hit. So "amaz0n-paypal" would report only whichever brand
+     happened to be earlier in the array, not the CLOSEST match. This
+     version scores every candidate brand and returns the best one
+     using:
+       1. Lowest edit distance (after normalization for digit/hyphen)
+       2. Tiebreak: highest points (most specific signal wins)
+     Exact matches score 0 points and are excluded.
+     ------------------------------------------------------------------ */
+
+  function findBestBrandMatch(label) {
+    if (!label || label.length < 3) return null;
+
+    const noDigits = stripDigits(label);
+    const noHyphens = stripHyphens(label);
+    const noBoth = stripHyphens(noDigits);
+
+    let best = null;
+
+    for (const brand of POPULAR_BRANDS) {
+      if (label === brand) return null; // exact real domain — no signal
+
+      let candidate = null;
+
+      // Substitution patterns are treated as "distance 1" — they are
+      // deliberate, targeted obfuscation, more severe than a generic
+      // edit-distance match.
+      if (noDigits === brand) {
+        candidate = {
+          kind: 'typosquatting-digits',
+          brand,
+          points: 40,
+          editDistance: 1,
+          message: `Looks like "${brand}" using digit substitution`
+        };
+      } else if (noHyphens === brand) {
+        candidate = {
+          kind: 'typosquatting-hyphens',
+          brand,
+          points: 35,
+          editDistance: 1,
+          message: `Looks like "${brand}" with hyphens`
+        };
+      } else if (noBoth === brand) {
+        candidate = {
+          kind: 'typosquatting-mixed',
+          brand,
+          points: 40,
+          editDistance: 1,
+          message: `Resembles "${brand}" after normalizing`
+        };
+      } else {
+        const d = levenshtein(label, brand);
+        if (d > 0 && d <= 2 && Math.abs(label.length - brand.length) <= 2) {
+          candidate = {
+            kind: 'typosquatting-levenshtein',
+            brand,
+            distance: d,
+            points: d === 1 ? 35 : 25,
+            editDistance: d + 1, // de-prioritize generic edits vs. substitutions
+            message: `Very similar to "${brand}" (edit distance ${d})`
+          };
+        }
+      }
+
+      if (!candidate) continue;
+
+      if (
+        !best ||
+        candidate.editDistance < best.editDistance ||
+        (candidate.editDistance === best.editDistance && candidate.points > best.points)
+      ) {
+        best = candidate;
+      }
+    }
+
+    return best;
   }
 
   function analyze(rawHost, options = {}) {
@@ -120,54 +200,9 @@ const CorsairHeuristics = (() => {
       });
     }
 
-    if (label && label.length >= 3) {
-      const noHyphens = stripHyphens(label);
-      const noDigits = stripDigits(label);
-      const noBoth = stripHyphens(noDigits);
-
-      for (const brand of POPULAR_BRANDS) {
-        if (label === brand) break;
-
-        if (noDigits === brand && label !== brand) {
-          signals.push({
-            kind: 'typosquatting-digits',
-            brand,
-            points: 40,
-            message: `Looks like "${brand}" using digit substitution`
-          });
-          break;
-        }
-        if (noHyphens === brand && label !== brand) {
-          signals.push({
-            kind: 'typosquatting-hyphens',
-            brand,
-            points: 35,
-            message: `Looks like "${brand}" with hyphens`
-          });
-          break;
-        }
-        if (noBoth === brand && label !== brand) {
-          signals.push({
-            kind: 'typosquatting-mixed',
-            brand,
-            points: 40,
-            message: `Resembles "${brand}" after normalizing`
-          });
-          break;
-        }
-        const d = levenshtein(label, brand);
-        if (d > 0 && d <= 2 && Math.abs(label.length - brand.length) <= 2) {
-          signals.push({
-            kind: 'typosquatting-levenshtein',
-            brand,
-            distance: d,
-            points: d === 1 ? 35 : 25,
-            message: `Very similar to "${brand}" (edit distance ${d})`
-          });
-          break;
-        }
-      }
-    }
+    // Best-match typosquatting (not first-match)
+    const brandMatch = findBestBrandMatch(label);
+    if (brandMatch) signals.push(brandMatch);
 
     const hyphens = (label.match(/-/g) || []).length;
     if (hyphens >= 3) {
@@ -218,16 +253,20 @@ const CorsairHeuristics = (() => {
     const parts = host.split('.');
     if (parts.length >= 3) {
       const subparts = parts.slice(0, -2);
+      let brandInSub = null;
       for (const brand of POPULAR_BRANDS) {
         if (subparts.some(p => p.includes(brand)) && !label.includes(brand)) {
-          signals.push({
-            kind: 'brand-in-subdomain',
-            brand,
-            points: 30,
-            message: `"${brand}" appears in subdomain but not main domain`
-          });
+          brandInSub = brand;
           break;
         }
+      }
+      if (brandInSub) {
+        signals.push({
+          kind: 'brand-in-subdomain',
+          brand: brandInSub,
+          points: 30,
+          message: `"${brandInSub}" appears in subdomain but not main domain`
+        });
       }
     }
 
@@ -240,7 +279,8 @@ const CorsairHeuristics = (() => {
     isSuspiciousTld: (tld) => SUSPICIOUS_TLDS.has(String(tld || '').toLowerCase()),
     getSecondLevelLabel,
     getTld,
-    levenshtein
+    levenshtein,
+    findBestBrandMatch
   };
 })();
 
