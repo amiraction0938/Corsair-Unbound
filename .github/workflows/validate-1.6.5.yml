@@ -1,4 +1,4 @@
-name: Corsair Unbound 1.6.5 validation
+name: Corsair Unbound 1.7.0 validation
 
 on:
   push:
@@ -13,10 +13,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Check JavaScript syntax
         shell: bash
         run: |
@@ -26,6 +28,7 @@ jobs:
           node --check popup.js
           node --check dashboard.js
           for file in core/*.js; do node --check "$file"; done
+
       - name: Validate manifest and referenced files
         shell: bash
         run: |
@@ -33,7 +36,7 @@ jobs:
           const fs = require('fs');
           const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
           if (manifest.manifest_version !== 3) throw new Error('manifest_version must be 3');
-          if (manifest.version !== '1.6.5') throw new Error('expected release version 1.6.5');
+          if (manifest.version !== '1.7.0') throw new Error('expected release version 1.7.0');
           const referenced = [
             manifest.action?.default_popup,
             ...Object.values(manifest.icons || {}),
@@ -44,6 +47,7 @@ jobs:
           ].filter(Boolean);
           for (const file of referenced) if (!fs.existsSync(file)) throw new Error('missing referenced file: ' + file);
           NODE
+
       - name: Scan for high-signal credentials
         shell: bash
         run: |
@@ -72,7 +76,7 @@ jobs:
           const hits=[];
           for (const file of files) {
             for (const [i,line] of fs.readFileSync(file,'utf8').split(/\r?\n/).entries()) {
-              if (blocked.some(re=>re.test(line))) hits.push(`${file}:${i+1}`);
+              if (blocked.some(re=>re.test(line))) hits.push(file + ':' + (i+1));
             }
           }
           if (hits.length) throw new Error('Potential credential pattern(s) found: ' + hits.join(', '));
