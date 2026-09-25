@@ -1,7 +1,7 @@
-# Corsair Unbound 1.6.5
+# Corsair Unbound 1.7.0
 
 <p align="center">
-  <strong>نسخه فعلی: 1.6.5</strong>
+  <strong>نسخه فعلی: 1.7.0</strong>
 </p>
 
 <p align="center">
@@ -17,56 +17,85 @@
 
 ## وضعیت فعلی
 
-نسخه نهایی **1.6.5** مستقیماً در ریشه همین repository قرار دارد.
+نسخه‌ی فعال release line پروژه **1.7.0** است.
 
-برای نصب افزونه فقط خودِ repository root را در `chrome://extensions` با گزینه **Load unpacked** انتخاب کنید.
+در این نسخه Dashboard از یک صفحه‌ی طولانی تنظیمات به یک **Security Command Center** حرفه‌ای تبدیل شده است؛ با ناوبری دسته‌بندی‌شده، وضعیت امنیت، Activity، تحلیل Domain، کنترل‌های امنیتی، Privacy، API و تنظیمات.
 
-## قابلیت‌ها
+## قابلیت‌های مهم
 
+### امنیت
 - Fortress Mode و اجرای سیاست‌ها با DNR
-- مهار popup و redirect
-- Download Guard
+- مهار popup، new tab، download و redirect
+- محافظت از navigation در frameها
 - تحلیل heuristic و رفتاری
+- اجرای enforcement پس از verification
+
+### Intelligence
 - VirusTotal به‌صورت اختیاری و BYOK
-- Smart Whitelist و Trusted Domains
-- Dashboard کامل
-- Backup / Restore
-- Replay / Regression
-- مدیریت TTL با alarms
-- Incognito Split Mode
-- پشتیبانی چندزبانه
+- Domain Intelligence و تحلیل دامنه
+- Safe Scanned Domains و Trusted Domains
+- دسترسی به تحلیل از Context Menu
 
-## حریم خصوصی و API Key
+### تجربه کاربری
+- Dashboard مدرن با Sidebar و Viewهای جدا
+- صفحه‌ی Overview و وضعیت فعلی امنیت
+- Activity و Evidence جداگانه
+- API & Intelligence مستقل
+- Onboarding مرحله‌به‌مرحله برای کاربر جدید
+- Product Tour تعاملی
+- Theme روشن/تیره
+- انیمیشن‌های نرم و وضعیت‌های واضح برای loading، success و error
 
-پروژه Local-first است.
+## نصب
 
-در نسخه 1.6.5 هیچ VirusTotal API Key یا credential شخصی به‌صورت hard-code داخل سورس قرار نگرفته است. کلید VirusTotal توسط خود کاربر در تنظیمات محلی وارد می‌شود و queryهای پشتیبانی‌شده مستقیماً به VirusTotal ارسال می‌شوند.
+1. به `chrome://extensions` بروید.
+2. **Developer mode** را فعال کنید.
+3. روی **Load unpacked** بزنید.
+4. ریشه‌ی repository را انتخاب کنید.
+5. از Popup وارد Dashboard شوید.
 
-پروفایل‌ها، تنظیمات، observation، evidence و telemetry در extension storage باقی می‌مانند؛ مگر اینکه کاربر خودش export کند.
+برای فعال کردن VirusTotal:
 
-راهنمای امنیتی در [SECURITY.md](SECURITY.md) قرار دارد.
+1. وارد حساب VirusTotal شوید.
+2. API Key خودتان را دریافت کنید.
+3. در Dashboard به **API & Intelligence** بروید.
+4. کلید را فقط در فرم محلی افزونه وارد کنید.
+5. ذخیره و Verify را انجام دهید.
+
+## حریم خصوصی
+
+Corsair Unbound یک پروژه Local-first و BYOK است.
+
+- هیچ API Key شخصی داخل source code قرار ندارد.
+- API Key توسط خود کاربر وارد و در storage محلی نگهداری می‌شود.
+- queryهای پشتیبانی‌شده مستقیماً به VirusTotal ارسال می‌شوند.
+- داده‌ها و telemetry در extension storage باقی می‌مانند، مگر اینکه کاربر خودش export کند.
+
+راهنمای امنیت در [SECURITY.md](SECURITY.md) قرار دارد.
 
 ## ساختار
 
 ```text
 .
+├── .github/workflows/
+├── assets/
 ├── core/
 ├── icons/
-├── assets/
 ├── background.js
+├── blocked.html
+├── blocked.js
 ├── content.js
+├── content-frame-guard.js
 ├── popup.*
 ├── dashboard.*
-├── blocked.html
 ├── manifest.json
 ├── CHANGELOG.md
-├── LICENSE
 ├── SECURITY.md
 ├── README.md
 └── README.fa.md
 ```
 
-نسخه‌های قدیمی در Git history باقی می‌مانند و با سورس فعال پروژه قاطی نمی‌شوند.
+نسخه‌های قدیمی در Git history باقی می‌مانند و با سورس فعال release قاطی نمی‌شوند.
 
 ## مجوز
 
