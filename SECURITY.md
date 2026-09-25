@@ -15,4 +15,4 @@ For a suspected security issue, use GitHub's private security reporting features
 
 ## Release hygiene
 
-The 1.6.5 validation workflow validates the Manifest V3 package, syntax-checks the JavaScript runtime, and scans the release tree for high-signal credential patterns.
+The 1.7.0 validation workflow validates the Manifest V3 package, syntax-checks the JavaScript runtime, and scans the release tree for high-signal credential patterns.
