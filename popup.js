@@ -5,12 +5,13 @@
   const t = (k, fb) => (window.CorsairI18n ? CorsairI18n.t(k, fb) : (fb || k));
 
   const state = {
-    domain: '',
-    profile: null,
-    diagnostics: null,
-    settings: {},
-    threatReport: null
-  };
+  domain: '',
+  profile: null,
+  diagnostics: null,
+  settings: {},
+  threatReport: null,
+  hasApiKey: false
+};
 
   /* ============================================================
      DOM HELPERS — Trusted-Types / XSS safe (all createElement)
@@ -390,15 +391,17 @@
         return;
       }
 
-      const [profileResult, diagResult, settingsResult] = await Promise.all([
+      const [profileResult, diagResult, settingsResult, apiKeyResult] = await Promise.all([
         send({ type: 'get-profile', domain: state.domain }),
         send({ type: 'get-diagnostics' }),
-        send({ type: 'get-settings' })
+        send({ type: 'get-settings' }),
+        send({ type: 'get-api-key-secure' }).catch(() => ({ apiKey: '' }))
       ]);
 
       state.profile = profileResult.profile;
       state.diagnostics = diagResult.diagnostics;
       state.settings = settingsResult.settings || {};
+      state.hasApiKey = Boolean(apiKeyResult?.apiKey);
 
       if (state.settings.threatIntelEnabled && state.settings.threatIntelAutoScan) {
         const cached = await send({ type: 'get-threat-intel', domain: state.domain }).catch(() => null);
@@ -507,6 +510,23 @@
 
   $('scanDomainBtn')?.addEventListener('click', async () => {
     if (!state.domain) return;
+
+    // 1) Allowlisted domains never need a scan — even with a valid
+    //    API key. Say so explicitly rather than pretending we scanned.
+    if (state.threatReport?.status === 'allowlisted') {
+      showToast(t('popup.scanSkippedTrusted',
+        'Domain is on the trusted allowlist — no scan needed.'));
+      return;
+    }
+
+    // 2) Without an API key there is nothing to scan with. Tell the
+    //    user right away instead of showing a fake "scan requested"
+    //    and then a fake "analysis updated".
+    if (!state.hasApiKey) {
+      showToast(t('popup.errSetKey', 'Set VirusTotal API Key in Dashboard!'), 'error');
+      return;
+    }
+
     const btn = $('scanDomainBtn');
     if (btn) btn.disabled = true;
     showToast(t('popup.toastScanRequested', 'VirusTotal scan requested (rate-limit active)…'));
@@ -514,7 +534,14 @@
       const res = await send({ type: 'query-threat-intel', domain: state.domain, force: true });
       if (res?.ok) {
         await loadThreatIntel();
-        showToast(t('popup.toastScanDone', 'VirusTotal analysis updated!'));
+        if (res.report?.status === 'allowlisted') {
+          showToast(t('popup.scanSkippedTrusted',
+            'Domain is on the trusted allowlist — no scan needed.'));
+        } else {
+          showToast(t('popup.toastScanDone', 'VirusTotal analysis updated!'));
+        }
+      } else {
+        showToast(res?.error || 'Scan failed', 'error');
       }
     } catch (err) {
       showToast(err.message === 'no-api-key'
@@ -524,7 +551,6 @@
       if (btn) btn.disabled = false;
     }
   });
-
   $('resolver')?.addEventListener('click', async () => {
     const next = state.settings.resolverEnabled !== true;
     try {

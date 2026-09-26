@@ -17,6 +17,29 @@ const CorsairI18n = (() => {
        ENGLISH
        ============================================================ */
     en: {
+            'api.verifying': 'Verifying…',
+      'api.savedVerified': '✓ API key saved and verified.',
+      'api.savedRateLimited': '✓ Key verified — you are currently rate-limited by VirusTotal.',
+      'api.verifyFailed': 'Key verification failed.',
+      'api.invalidKey': '⚠ VirusTotal rejected this key. It may be expired, revoked, or mistyped.',
+      'api.invalidLength': '⚠ VirusTotal API keys are 64 characters (yours is {n}).',
+      'api.networkError': '⚠ Could not reach VirusTotal. Check your internet connection.',
+      'api.emptyKey': '⚠ Please paste your API key first.',
+      'api.alreadySaved': 'Key already saved and verified.',
+
+      'urlhaus.disabled': 'URLhaus disabled.',
+      'urlhaus.verifying': 'Verifying…',
+      'urlhaus.savedVerified': '✓ URLhaus key saved and verified.',
+      'urlhaus.savedRateLimited': '✓ Key verified — you are currently rate-limited by abuse.ch.',
+      'urlhaus.verifyFailed': 'Key verification failed.',
+      'urlhaus.invalidKey': '⚠ abuse.ch rejected this Auth-Key. Check that you copied the full key.',
+      'urlhaus.invalidLength': '⚠ Auth-Key looks too short.',
+      'urlhaus.networkError': '⚠ Could not reach abuse.ch. Check your internet connection.',
+      'urlhaus.emptyKey': '⚠ Please paste your Auth-Key first.',
+      'urlhaus.alreadySaved': 'Key already saved and verified.',
+            'activity.type.clipboard_hijack': 'Clipboard hijacked',
+      'activity.type.csp_violation': 'CSP violation',
+      'activity.type.form_jacking': 'Form jacking blocked',
             'about.privacyNote': 'All data stored locally. No telemetry. No cloud.',
 
       /* ============ IN-PAGE BANNER ============ */
@@ -70,6 +93,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API & Intelligence',
       'nav.settings': 'Settings',
       'nav.about': 'About',
+      'nav.analytics': 'Analytics',
 
       'view.overview': 'Overview',
       'view.activity': 'Activity & Intelligence',
@@ -79,6 +103,31 @@ const CorsairI18n = (() => {
       'view.api': 'API & Intelligence',
       'view.settings': 'Settings',
       'view.about': 'About Corsair Unbound',
+      'view.analytics': 'Analytics & Insights',
+      'analytics.subtitle': 'A visual breakdown of protection activity, built from your local event log.',
+      'analytics.range.7': '7 Days',
+      'analytics.range.14': '14 Days',
+      'analytics.range.30': '30 Days',
+      'analytics.chart.timeline': 'Threats Over Time',
+      'analytics.chart.severity': 'Severity Breakdown',
+      'analytics.chart.types': 'Event Types',
+      'analytics.chart.domains': 'Most Targeted Domains',
+      'analytics.empty': 'No data yet — protection events will appear here as Corsair works.',
+      'analytics.totalShown': 'Based on the last {n} recorded events',
+      'analytics.severity.high': 'High',
+      'analytics.severity.medium': 'Medium',
+      'analytics.severity.low': 'Low',
+      'analytics.severity.info': 'Info',
+      'analytics.export': 'Export Report',
+      'analytics.noDomains': 'No domain activity in this range.',
+      'notif.title': 'Notifications',
+      'notif.markAll': 'Mark all read',
+      'notif.viewAll': 'View all activity →',
+      'notif.empty': 'You\'re all caught up — no recent alerts.',
+      'notif.justNow': 'Just now',
+      'notif.minutesAgo': '{n}m ago',
+      'notif.hoursAgo': '{n}h ago',
+      'notif.daysAgo': '{n}d ago',
 
       'header.title': 'Corsair Unbound',
       'header.subtitle': 'Security dashboard • deterministic isolation, intelligence & recovery',
@@ -441,7 +490,9 @@ const CorsairI18n = (() => {
     /* ============================================================
        PERSIAN (FA)
        ============================================================ */
-    fa: {
+    fa: {      'activity.type.clipboard_hijack': 'کلیپ‌بورد تغییر داده شد',
+      'activity.type.csp_violation': 'نقض CSP',
+      'activity.type.form_jacking': 'ارسال فرم به مقصد نامعتبر مسدود شد',
             'about.privacyNote': 'همه داده‌ها لوکال ذخیره می‌شن. بدون تلمتری. بدون ابر.',
 
       /* ============ IN-PAGE BANNER ============ */
@@ -513,6 +564,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API و هوش',
       'nav.settings': 'تنظیمات',
       'nav.about': 'درباره',
+      'nav.analytics': 'تحلیل‌ها',
 
       'view.overview': 'نمای کلی',
       'view.activity': 'فعالیت و هوش',
@@ -522,6 +574,31 @@ const CorsairI18n = (() => {
       'view.api': 'API و هوش',
       'view.settings': 'تنظیمات',
       'view.about': 'درباره کورسِر آنباند',
+      'view.analytics': 'تحلیل و آمار',
+      'analytics.subtitle': 'نمایی تصویری از فعالیت‌های محافظتی، ساخته‌شده از گزارش رویدادهای محلی شما.',
+      'analytics.range.7': '۷ روز',
+      'analytics.range.14': '۱۴ روز',
+      'analytics.range.30': '۳۰ روز',
+      'analytics.chart.timeline': 'تهدیدات در طول زمان',
+      'analytics.chart.severity': 'تفکیک بر اساس شدت',
+      'analytics.chart.types': 'انواع رویداد',
+      'analytics.chart.domains': 'هدف‌گرفته‌شده‌ترین دامنه‌ها',
+      'analytics.empty': 'هنوز داده‌ای ثبت نشده — با فعالیت کورسِر، رویدادها اینجا نمایش داده می‌شوند.',
+      'analytics.totalShown': 'بر اساس {n} رویداد اخیر ثبت‌شده',
+      'analytics.severity.high': 'بالا',
+      'analytics.severity.medium': 'متوسط',
+      'analytics.severity.low': 'پایین',
+      'analytics.severity.info': 'اطلاعاتی',
+      'analytics.export': 'خروجی گزارش',
+      'analytics.noDomains': 'در این بازه فعالیتی روی دامنه‌ای ثبت نشده.',
+      'notif.title': 'اعلان‌ها',
+      'notif.markAll': 'علامت‌گذاری همه به‌عنوان خوانده‌شده',
+      'notif.viewAll': 'مشاهده‌ی همه‌ی فعالیت‌ها ←',
+      'notif.empty': 'همه چیز مرتبه — هشدار جدیدی نیست.',
+      'notif.justNow': 'همین الان',
+      'notif.minutesAgo': '{n} دقیقه پیش',
+      'notif.hoursAgo': '{n} ساعت پیش',
+      'notif.daysAgo': '{n} روز پیش',
 
       'header.title': '🏴‍☠️ کورسِر آنباند',
       'header.subtitle': 'داشبورد امنیتی • ایزوله‌سازی قطعی، هوش و بازیابی',
@@ -868,7 +945,10 @@ const CorsairI18n = (() => {
     /* ============================================================
        ARABIC (AR)
        ============================================================ */
-    ar: {      'about.privacyNote': 'كل البيانات محلية. بدون قياسات. بدون سحابة.',
+    ar: {       'activity.type.clipboard_hijack': 'تم اعتراض الحافظة',
+      'activity.type.csp_violation': 'انتهاك CSP',
+      'activity.type.form_jacking': 'حظر إرسال النموذج إلى وجهة غير آمنة',
+            'about.privacyNote': 'كل البيانات محلية. بدون قياسات. بدون سحابة.',
 
       /* ============ IN-PAGE BANNER ============ */
       'banner.scanningTitle': 'جارٍ فحص الموقع…',
@@ -997,6 +1077,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API والاستخبارات',
       'nav.settings': 'الإعدادات',
       'nav.about': 'حول',
+      'nav.analytics': 'التحليلات',
 
       'view.overview': 'نظرة عامة',
       'view.activity': 'النشاط والاستخبارات',
@@ -1006,6 +1087,31 @@ const CorsairI18n = (() => {
       'view.api': 'API والاستخبارات',
       'view.settings': 'الإعدادات',
       'view.about': 'حول Corsair Unbound',
+      'view.analytics': 'التحليلات والرؤى',
+      'analytics.subtitle': 'عرض مرئي لنشاط الحماية، مبني على سجل الأحداث المحلي لديك.',
+      'analytics.range.7': '7 أيام',
+      'analytics.range.14': '14 يومًا',
+      'analytics.range.30': '30 يومًا',
+      'analytics.chart.timeline': 'التهديدات عبر الزمن',
+      'analytics.chart.severity': 'التوزيع حسب الخطورة',
+      'analytics.chart.types': 'أنواع الأحداث',
+      'analytics.chart.domains': 'أكثر النطاقات استهدافًا',
+      'analytics.empty': 'لا توجد بيانات بعد — ستظهر أحداث الحماية هنا أثناء عمل Corsair.',
+      'analytics.totalShown': 'استنادًا إلى آخر {n} حدثًا مسجلاً',
+      'analytics.severity.high': 'مرتفعة',
+      'analytics.severity.medium': 'متوسطة',
+      'analytics.severity.low': 'منخفضة',
+      'analytics.severity.info': 'معلومات',
+      'analytics.export': 'تصدير التقرير',
+      'analytics.noDomains': 'لا يوجد نشاط نطاقات في هذه الفترة.',
+      'notif.title': 'الإشعارات',
+      'notif.markAll': 'تعليم الكل كمقروء',
+      'notif.viewAll': 'عرض كل النشاط ←',
+      'notif.empty': 'لا توجد تنبيهات جديدة.',
+      'notif.justNow': 'الآن',
+      'notif.minutesAgo': 'قبل {n} دقيقة',
+      'notif.hoursAgo': 'قبل {n} ساعة',
+      'notif.daysAgo': 'قبل {n} يوم',
 
       'header.title': 'Corsair Unbound',
       'header.subtitle': 'لوحة الأمان • عزل حتمي واستخبارات واستعادة',
@@ -1278,7 +1384,10 @@ const CorsairI18n = (() => {
     /* ============================================================
        SPANISH (ES)
        ============================================================ */
-    es: {      'about.privacyNote': 'Todos los datos locales. Sin telemetría. Sin nube.',
+    es: {      'activity.type.clipboard_hijack': 'Portapapeles secuestrado',
+      'activity.type.csp_violation': 'Violación de CSP',
+      'activity.type.form_jacking': 'Envío de formulario bloqueado',
+            'about.privacyNote': 'Todos los datos locales. Sin telemetría. Sin nube.',
 
       /* ============ IN-PAGE BANNER ============ */
       'banner.scanningTitle': 'Analizando sitio…',
@@ -1407,6 +1516,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API e Inteligencia',
       'nav.settings': 'Ajustes',
       'nav.about': 'Acerca de',
+      'nav.analytics': 'Analítica',
 
       'view.overview': 'Resumen',
       'view.activity': 'Actividad e Inteligencia',
@@ -1416,6 +1526,31 @@ const CorsairI18n = (() => {
       'view.api': 'API e Inteligencia',
       'view.settings': 'Ajustes',
       'view.about': 'Acerca de Corsair Unbound',
+      'view.analytics': 'Analítica e Información',
+      'analytics.subtitle': 'Un desglose visual de la actividad de protección, basado en tu registro local de eventos.',
+      'analytics.range.7': '7 días',
+      'analytics.range.14': '14 días',
+      'analytics.range.30': '30 días',
+      'analytics.chart.timeline': 'Amenazas en el Tiempo',
+      'analytics.chart.severity': 'Desglose por Gravedad',
+      'analytics.chart.types': 'Tipos de Evento',
+      'analytics.chart.domains': 'Dominios Más Atacados',
+      'analytics.empty': 'Aún no hay datos — los eventos de protección aparecerán aquí a medida que Corsair funcione.',
+      'analytics.totalShown': 'Basado en los últimos {n} eventos registrados',
+      'analytics.severity.high': 'Alta',
+      'analytics.severity.medium': 'Media',
+      'analytics.severity.low': 'Baja',
+      'analytics.severity.info': 'Info',
+      'analytics.export': 'Exportar Informe',
+      'analytics.noDomains': 'Sin actividad de dominios en este rango.',
+      'notif.title': 'Notificaciones',
+      'notif.markAll': 'Marcar todo como leído',
+      'notif.viewAll': 'Ver toda la actividad →',
+      'notif.empty': 'Todo al día — sin alertas recientes.',
+      'notif.justNow': 'Justo ahora',
+      'notif.minutesAgo': 'hace {n}m',
+      'notif.hoursAgo': 'hace {n}h',
+      'notif.daysAgo': 'hace {n}d',
 
       'header.title': 'Corsair Unbound',
       'header.subtitle': 'Panel de seguridad • aislamiento determinista, inteligencia y recuperación',
@@ -1688,7 +1823,10 @@ const CorsairI18n = (() => {
     /* ============================================================
        GERMAN (DE)
        ============================================================ */
-    de: {      'about.privacyNote': 'Alle Daten lokal. Keine Telemetrie. Keine Cloud.',
+    de: {      'activity.type.clipboard_hijack': 'Zwischenablage entführt',
+      'activity.type.csp_violation': 'CSP-Verstoß',
+      'activity.type.form_jacking': 'Formular-Übermittlung blockiert',
+            'about.privacyNote': 'Alle Daten lokal. Keine Telemetrie. Keine Cloud.',
 
       /* ============ IN-PAGE BANNER ============ */
       'banner.scanningTitle': 'Website wird gescannt…',
@@ -1817,6 +1955,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API & Intelligenz',
       'nav.settings': 'Einstellungen',
       'nav.about': 'Über',
+      'nav.analytics': 'Analyse',
 
       'view.overview': 'Übersicht',
       'view.activity': 'Aktivität & Intelligenz',
@@ -1826,6 +1965,31 @@ const CorsairI18n = (() => {
       'view.api': 'API & Intelligenz',
       'view.settings': 'Einstellungen',
       'view.about': 'Über Corsair Unbound',
+      'view.analytics': 'Analyse & Einblicke',
+      'analytics.subtitle': 'Eine visuelle Aufschlüsselung der Schutzaktivität, basierend auf Ihrem lokalen Ereignisprotokoll.',
+      'analytics.range.7': '7 Tage',
+      'analytics.range.14': '14 Tage',
+      'analytics.range.30': '30 Tage',
+      'analytics.chart.timeline': 'Bedrohungen im Zeitverlauf',
+      'analytics.chart.severity': 'Aufschlüsselung nach Schweregrad',
+      'analytics.chart.types': 'Ereignistypen',
+      'analytics.chart.domains': 'Am häufigsten angegriffene Domains',
+      'analytics.empty': 'Noch keine Daten — Schutzereignisse erscheinen hier, sobald Corsair aktiv wird.',
+      'analytics.totalShown': 'Basierend auf den letzten {n} erfassten Ereignissen',
+      'analytics.severity.high': 'Hoch',
+      'analytics.severity.medium': 'Mittel',
+      'analytics.severity.low': 'Niedrig',
+      'analytics.severity.info': 'Info',
+      'analytics.export': 'Bericht exportieren',
+      'analytics.noDomains': 'Keine Domain-Aktivität in diesem Zeitraum.',
+      'notif.title': 'Benachrichtigungen',
+      'notif.markAll': 'Alle als gelesen markieren',
+      'notif.viewAll': 'Gesamte Aktivität anzeigen →',
+      'notif.empty': 'Alles erledigt — keine neuen Warnungen.',
+      'notif.justNow': 'Gerade eben',
+      'notif.minutesAgo': 'vor {n}m',
+      'notif.hoursAgo': 'vor {n}h',
+      'notif.daysAgo': 'vor {n}d',
 
       'header.title': 'Corsair Unbound',
       'header.subtitle': 'Sicherheits-Dashboard • deterministische Isolierung, Intelligenz & Wiederherstellung',
@@ -2098,7 +2262,10 @@ const CorsairI18n = (() => {
     /* ============================================================
        FRENCH (FR)
        ============================================================ */
-    fr: {      'about.privacyNote': 'Toutes les données en local. Pas de télémétrie. Pas de cloud.',
+    fr: {      'activity.type.clipboard_hijack': 'Presse-papiers détourné',
+      'activity.type.csp_violation': 'Violation de CSP',
+      'activity.type.form_jacking': 'Envoi de formulaire bloqué',
+            'about.privacyNote': 'Toutes les données en local. Pas de télémétrie. Pas de cloud.',
 
       /* ============ IN-PAGE BANNER ============ */
       'banner.scanningTitle': 'Analyse du site…',
@@ -2227,6 +2394,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API & Renseignement',
       'nav.settings': 'Paramètres',
       'nav.about': 'À propos',
+      'nav.analytics': 'Analytique',
 
       'view.overview': 'Vue d\'ensemble',
       'view.activity': 'Activité & Renseignement',
@@ -2236,6 +2404,31 @@ const CorsairI18n = (() => {
       'view.api': 'API & Renseignement',
       'view.settings': 'Paramètres',
       'view.about': 'À propos de Corsair Unbound',
+      'view.analytics': 'Analytique & Aperçus',
+      'analytics.subtitle': 'Un aperçu visuel de l’activité de protection, basé sur votre journal d’événements local.',
+      'analytics.range.7': '7 jours',
+      'analytics.range.14': '14 jours',
+      'analytics.range.30': '30 jours',
+      'analytics.chart.timeline': 'Menaces dans le Temps',
+      'analytics.chart.severity': 'Répartition par Gravité',
+      'analytics.chart.types': 'Types d’Événement',
+      'analytics.chart.domains': 'Domaines les Plus Ciblés',
+      'analytics.empty': 'Aucune donnée pour le moment — les événements de protection apparaîtront ici.',
+      'analytics.totalShown': 'Basé sur les {n} derniers événements enregistrés',
+      'analytics.severity.high': 'Élevée',
+      'analytics.severity.medium': 'Moyenne',
+      'analytics.severity.low': 'Faible',
+      'analytics.severity.info': 'Info',
+      'analytics.export': 'Exporter le Rapport',
+      'analytics.noDomains': 'Aucune activité de domaine sur cette période.',
+      'notif.title': 'Notifications',
+      'notif.markAll': 'Tout marquer comme lu',
+      'notif.viewAll': 'Voir toute l’activité →',
+      'notif.empty': 'Tout est à jour — aucune alerte récente.',
+      'notif.justNow': 'À l’instant',
+      'notif.minutesAgo': 'il y a {n}m',
+      'notif.hoursAgo': 'il y a {n}h',
+      'notif.daysAgo': 'il y a {n}j',
 
       'header.title': 'Corsair Unbound',
       'header.subtitle': 'Tableau de bord • isolation déterministe, renseignement & récupération',
@@ -2508,7 +2701,10 @@ const CorsairI18n = (() => {
     /* ============================================================
        RUSSIAN (RU)
        ============================================================ */
-    ru: {      'about.privacyNote': 'Все данные локально. Без телеметрии. Без облака.',
+    ru: {      'activity.type.clipboard_hijack': 'Буфер обмена подменён',
+      'activity.type.csp_violation': 'Нарушение CSP',
+      'activity.type.form_jacking': 'Отправка формы заблокирована',
+            'about.privacyNote': 'Все данные локально. Без телеметрии. Без облака.',
 
       /* ============ IN-PAGE BANNER ============ */
       'banner.scanningTitle': 'Сканирование сайта…',
@@ -2637,6 +2833,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API и разведка',
       'nav.settings': 'Настройки',
       'nav.about': 'О программе',
+      'nav.analytics': 'Аналитика',
 
       'view.overview': 'Обзор',
       'view.activity': 'Активность и разведка',
@@ -2646,6 +2843,31 @@ const CorsairI18n = (() => {
       'view.api': 'API и разведка',
       'view.settings': 'Настройки',
       'view.about': 'О Corsair Unbound',
+      'view.analytics': 'Аналитика и статистика',
+      'analytics.subtitle': 'Визуальная сводка защитной активности на основе локального журнала событий.',
+      'analytics.range.7': '7 дней',
+      'analytics.range.14': '14 дней',
+      'analytics.range.30': '30 дней',
+      'analytics.chart.timeline': 'Угрозы во времени',
+      'analytics.chart.severity': 'Распределение по важности',
+      'analytics.chart.types': 'Типы событий',
+      'analytics.chart.domains': 'Наиболее атакуемые домены',
+      'analytics.empty': 'Данных пока нет — события защиты появятся здесь по мере работы Corsair.',
+      'analytics.totalShown': 'На основе последних {n} записанных событий',
+      'analytics.severity.high': 'Высокая',
+      'analytics.severity.medium': 'Средняя',
+      'analytics.severity.low': 'Низкая',
+      'analytics.severity.info': 'Инфо',
+      'analytics.export': 'Экспорт отчёта',
+      'analytics.noDomains': 'Нет активности доменов за этот период.',
+      'notif.title': 'Уведомления',
+      'notif.markAll': 'Отметить всё как прочитанное',
+      'notif.viewAll': 'Смотреть всю активность →',
+      'notif.empty': 'Всё спокойно — новых оповещений нет.',
+      'notif.justNow': 'Только что',
+      'notif.minutesAgo': '{n} мин назад',
+      'notif.hoursAgo': '{n} ч назад',
+      'notif.daysAgo': '{n} дн назад',
 
       'header.title': 'Corsair Unbound',
       'header.subtitle': 'Панель безопасности • детерминированная изоляция, разведка и восстановление',
@@ -2918,7 +3140,10 @@ const CorsairI18n = (() => {
     /* ============================================================
        CHINESE (ZH)
        ============================================================ */
-    zh: {      'about.privacyNote': '所有数据本地存储。无遥测。无云。',
+    zh: {      'activity.type.clipboard_hijack': '剪贴板被篡改',
+      'activity.type.csp_violation': 'CSP 违规',
+      'activity.type.form_jacking': '表单提交已拦截',
+            'about.privacyNote': '所有数据本地存储。无遥测。无云。',
 
       /* ============ IN-PAGE BANNER ============ */
       'banner.scanningTitle': '正在扫描网站…',
@@ -3047,6 +3272,7 @@ const CorsairI18n = (() => {
       'nav.api': 'API 和情报',
       'nav.settings': '设置',
       'nav.about': '关于',
+      'nav.analytics': '数据分析',
 
       'view.overview': '概览',
       'view.activity': '活动和情报',
@@ -3056,6 +3282,31 @@ const CorsairI18n = (() => {
       'view.api': 'API 和情报',
       'view.settings': '设置',
       'view.about': '关于 Corsair Unbound',
+      'view.analytics': '数据分析与洞察',
+      'analytics.subtitle': '基于本地事件日志的防护活动可视化概览。',
+      'analytics.range.7': '7 天',
+      'analytics.range.14': '14 天',
+      'analytics.range.30': '30 天',
+      'analytics.chart.timeline': '威胁时间趋势',
+      'analytics.chart.severity': '严重程度分布',
+      'analytics.chart.types': '事件类型',
+      'analytics.chart.domains': '最常被攻击的域名',
+      'analytics.empty': '暂无数据 — Corsair 运行后防护事件将显示在这里。',
+      'analytics.totalShown': '基于最近 {n} 条记录的事件',
+      'analytics.severity.high': '高',
+      'analytics.severity.medium': '中',
+      'analytics.severity.low': '低',
+      'analytics.severity.info': '信息',
+      'analytics.export': '导出报告',
+      'analytics.noDomains': '此时间范围内没有域名活动。',
+      'notif.title': '通知',
+      'notif.markAll': '全部标记为已读',
+      'notif.viewAll': '查看全部活动 →',
+      'notif.empty': '一切正常 — 暂无新警报。',
+      'notif.justNow': '刚刚',
+      'notif.minutesAgo': '{n} 分钟前',
+      'notif.hoursAgo': '{n} 小时前',
+      'notif.daysAgo': '{n} 天前',
 
       'header.title': 'Corsair Unbound',
       'header.subtitle': '安全仪表板 • 确定性隔离、情报和恢复',
@@ -3364,7 +3615,44 @@ const CorsairI18n = (() => {
     applyDirection();
   }
 
+  /* ============================================================
+     CONTEXT GUARD — RTL regression fix
+     ------------------------------------------------------------
+     `core/i18n.js` is loaded BOTH as an extension-page script
+     (dashboard.html, popup.html, blocked.html) AND as a content
+     script on every http(s) page (see manifest.json, entry #3).
+
+     Previously applyDirection() and apply() mutated
+     document.documentElement and document.body unconditionally.
+     On an extension page that is correct — we own the DOM.
+     On a third-party site it corrupted the host page's own
+     direction / lang / class state. This was the root cause of
+     the "LTR site flips to RTL when the extension is on" bug:
+     setting lang="fa"/"ar" on <html> triggered site-level
+     `:lang()` selectors, and toggling .lang-rtl-text on <body>
+     triggered site-level class selectors.
+
+     The fix: both functions now short-circuit unless we are on a
+     page that is actually owned by the extension. Injected UI
+     (verdict banner, toasts, popup, blocked.html) either lives
+     inside Shadow DOM with `:host { all: initial }` or runs on a
+     chrome-extension:// page, so neither call site is affected.
+     ============================================================ */
+  function isExtensionContext() {
+    try {
+      const proto = String(location.protocol || '').toLowerCase();
+      return proto === 'chrome-extension:' ||
+             proto === 'moz-extension:' ||
+             proto === 'extension:' ||
+             proto === 'safari-web-extension:';
+    } catch {
+      return false;
+    }
+  }
+
   function applyDirection() {
+    // HARD STOP: never touch a third-party page's <html> / <body>.
+    if (!isExtensionContext()) return;
     try {
       const html = document.documentElement;
       const body = document.body;
@@ -3389,6 +3677,11 @@ const CorsairI18n = (() => {
   }
 
   function apply(root = document) {
+    // Only apply [data-i18n] rewrites on our own pages. The content
+    // script never calls this function, so guarding it costs nothing
+    // and prevents any accidental rewrite of a host-page element that
+    // happens to share the data-i18n attribute name.
+    if (!isExtensionContext()) return;
     try {
       root.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');

@@ -1,9 +1,12 @@
 import './core/security.js';
 import './core/i18n.js';
+import './core/bloom.js';
 import './core/storage.js';
 import './core/alarms.js';
 import './core/dnr.js';
 import './core/redirects.js';
+import './core/risk-aggregator.js';
+import './core/providers/urlhaus.js';
 import './core/threat-intel.js';
 import './core/heuristics.js';
 import './core/intelligence.js';
@@ -1178,6 +1181,7 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
         if (m.type !== 'page-observation' &&
             m.type !== 'content-popup-blocked' &&
             m.type !== 'content-link-allow' &&
+            m.type !== 'content-security-event' &&
             m.type !== 'trust-domain' &&
             m.type !== 'block-domain-global') {
           send({ ok: false, error: 'unauthorized-sender' });
@@ -1189,6 +1193,59 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
       }
 
       switch (m.type) {
+                /* ============ CONTENT SECURITY EVENTS ============ */
+        case 'content-security-event': {
+          const kind = String(m.kind || 'security_event').slice(0, 40);
+          const host = CorsairSecurity.normalizeHostname(m.host || '') || '';
+          const page = String(m.page || '').slice(0, 300);
+          const sev = ['high', 'medium', 'low', 'info'].includes(m.severity) ? m.severity : 'medium';
+          const data = (m.data && typeof m.data === 'object') ? m.data : {};
+
+          // Do not trust the payload blindly — normalize + bound it.
+          const safeData = CorsairSecurity.sanitizeObject(data) || {};
+
+          try {
+            await CorsairStorage.appendEvent({
+              type: kind,
+              domain: host,
+              destination: safeData.destinationHost || '',
+              reason: safeData.blockedURI || safeData.action || safeData.replacedPreview || '',
+              severity: sev
+            });
+          } catch {}
+
+          try {
+            await CorsairEvidence.add({
+              kind,
+              origin: host,
+              tabId: Number.isInteger(s?.tab?.id) ? s.tab.id : null,
+              data: { page, ...safeData }
+            });
+          } catch {}
+
+          // Notify only on high-severity events to keep the feed clean.
+          if (sev === 'high') {
+            try {
+              const settings = await CorsairStorage.getSettings();
+              if (settings.notifications === true && typeof chrome.notifications?.create === 'function') {
+                const titles = {
+                  clipboard_hijack: 'Corsair Shield — Clipboard Hijack Blocked',
+                  form_jacking: 'Corsair Shield — Form Jacking Detected'
+                };
+                const title = titles[kind] || 'Corsair Shield — Security Event';
+                chrome.notifications.create({
+                  type: 'basic',
+                  iconUrl: 'icons/icon128.png',
+                  title,
+                  message: `Detected on ${host || page || 'unknown host'}`
+                }).catch(() => {});
+              }
+            } catch {}
+          }
+
+          send({ ok: true });
+          break;
+        }
 
         /* ============ BLOCKED PAGE ============ */
         case 'blocked-page-escape': {
@@ -1304,7 +1361,7 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           const host = CorsairSecurity.normalizeHostname(m.domain || '');
           if (!host || !CorsairSecurity.isValidHostname(host)) { send({ ok: false, error: 'invalid-domain' }); break; }
           try {
-            const report = await CorsairThreatIntel.queryDomain(host, { force: m.force === true });
+            const report = await CorsairThreatIntel.queryDomainMultiSource(host, { force: m.force === true });
             const tabId = s?.tab?.id;
             if (Number.isInteger(tabId) && report && report.status !== 'error') {
               const settings = await CorsairStorage.getSettings();
@@ -1506,8 +1563,63 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
         }
         case 'set-api-key-secure': {
           try {
-            await CorsairStorage.setApiKeySecure(m.apiKey || '');
-            send({ ok: true });
+            const key = String(m.apiKey || '').trim();
+
+            // Clearing: no verification, just remove.
+            if (!key) {
+              await CorsairStorage.setApiKeySecure('');
+              send({ ok: true, cleared: true });
+              break;
+            }
+
+            // Format pre-check — fail fast without hitting the network.
+            // VT keys are documented as 64 chars.
+            if (key.length !== 64) {
+              send({ ok: false, error: 'invalid-key-format' });
+              break;
+            }
+
+            // Live verification. Do NOT persist until VT accepts it.
+            const verify = await CorsairThreatIntel.verifyApiKey(key);
+            if (!verify.ok) {
+              send({ ok: false, error: verify.error || 'verification-failed' });
+              break;
+            }
+
+            await CorsairStorage.setApiKeySecure(key);
+            send({ ok: true, verified: true, rateLimited: verify.rateLimited === true });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+
+        case 'set-urlhaus-key-secure': {
+          try {
+            const key = String(m.apiKey || '').trim();
+
+            if (!key) {
+              await CorsairStorage.patchSettings({ urlhausAuthKey: '' });
+              try { CorsairProviderUrlhaus.invalidateAuthKeyCache(); } catch {}
+              send({ ok: true, cleared: true });
+              break;
+            }
+
+            // abuse.ch Auth-Keys are hex-ish; length varies but is
+            // never shorter than ~16 chars. Be permissive: only reject
+            // obvious garbage.
+            if (key.length < 10 || key.length > 256) {
+              send({ ok: false, error: 'invalid-key-format' });
+              break;
+            }
+
+            const verify = await CorsairProviderUrlhaus.verifyAuthKey(key);
+            if (!verify.ok) {
+              send({ ok: false, error: verify.error || 'verification-failed' });
+              break;
+            }
+
+            await CorsairStorage.patchSettings({ urlhausAuthKey: key });
+            try { CorsairProviderUrlhaus.invalidateAuthKeyCache(); } catch {}
+            send({ ok: true, verified: true, rateLimited: verify.rateLimited === true });
           } catch (err) { send({ ok: false, error: err.message }); }
           break;
         }

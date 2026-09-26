@@ -2636,3 +2636,261 @@ body.tour-active {
   .tour-nav .btn-primary,
   .tour-nav .tool-btn { padding: 6px 10px; font-size: 11px; }
 }
+/* ============================================================
+   ANALYTICS VIEW
+   ============================================================ */
+.analytics-head-panel .panel-head { margin-bottom: 8px; }
+.analytics-shown-line { font-size: 12px; }
+
+.analytics-range-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.range-btn {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.range-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.range-btn.active {
+  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.analytics-grid { align-items: stretch; }
+
+.chart-card { display: flex; flex-direction: column; }
+.chart-body {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.chart-body-center { align-items: center; }
+
+.chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart-svg .grid-line { stroke: var(--border); stroke-width: 1; }
+.chart-svg .axis-label {
+  fill: var(--text-dim);
+  font-size: 10px;
+  font-family: var(--font-sans);
+}
+.chart-svg .area-fill { fill: url(#analyticsAreaGradient); opacity: 0.55; }
+.chart-svg .line-path {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.chart-svg .data-point {
+  fill: var(--bg-elevated);
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+.chart-svg .data-point:hover { r: 5; }
+.chart-svg .donut-seg { transition: opacity var(--transition-fast); cursor: default; }
+.chart-svg .donut-seg:hover { opacity: 0.8; }
+.chart-svg .donut-center-value { fill: var(--text); font-size: 22px; font-weight: 800; font-family: var(--font-sans); }
+.chart-svg .donut-center-label { fill: var(--text-dim); font-size: 10px; font-weight: 600; font-family: var(--font-sans); }
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  justify-content: center;
+  margin-top: 14px;
+}
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.chart-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bar-list { gap: 10px; }
+.bar-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.bar-row:last-child { margin-bottom: 0; }
+.bar-row-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  text-align: right;
+}
+body.lang-rtl-text .bar-row-label { text-align: left; }
+.bar-row-track {
+  height: 10px;
+  background: var(--card2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-row-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--purple));
+  transition: width var(--transition-base);
+}
+.bar-row-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+}
+body.lang-rtl-text .bar-row-count { text-align: left; }
+
+@media (max-width: 900px) {
+  .bar-row { grid-template-columns: 90px 1fr 32px; }
+}
+
+/* ============================================================
+   NOTIFICATION CENTER
+   ============================================================ */
+.notif-center { position: relative; display: inline-block; }
+
+.notif-bell { position: relative; font-size: 17px; }
+
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 9999;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.notif-panel.open { display: flex; animation: langSlideUp 0.15s ease; }
+
+.notif-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.notif-panel-head h3 { font-size: 13px; font-weight: 700; }
+
+.notif-list {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+.notif-item:hover { background: var(--card2); }
+.notif-item + .notif-item { margin-top: 2px; }
+
+.notif-item-icon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: var(--card2);
+}
+.notif-item.sev-high .notif-item-icon { background: var(--danger-glow); }
+.notif-item.sev-medium .notif-item-icon { background: var(--warn-glow); }
+.notif-item.sev-info .notif-item-icon,
+.notif-item.sev-low .notif-item-icon { background: var(--primary-glow); }
+
+.notif-item-body { min-width: 0; flex: 1; }
+.notif-item-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-item-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notif-viewall {
+  width: 100%;
+  padding: 10px;
+  background: var(--card2);
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.notif-viewall:hover { background: var(--card-hover); }
+
+@media (max-width: 500px) {
+  .notif-panel { position: fixed; top: var(--header-height); right: 8px; left: 8px; width: auto; }
+}
+/* Defensive: the [hidden] attribute from the UA stylesheet can be
+   overridden by any author rule that sets `display` on the element.
+   Force it with !important so the badge reliably hides when
+   .hidden = true is set from JS. */
+.notif-badge[hidden] {
+  display: none !important;
+}

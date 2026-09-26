@@ -59,6 +59,15 @@ const CorsairDNR = (() => {
     return h >>> 0;
   }
 
+  /* Chrome's DNR API expects fully-qualified domain names in
+     `initiatorDomains` / `requestDomains`. A single-label host like
+     "notahost" (no dot) is technically a valid hostname but would
+     silently produce a non-functional rule, so DNR-specific paths
+     require at least one dot. */
+  function isValidDnrDomain(host) {
+    return CorsairSecurity.isValidHostname(host) && host.includes('.');
+  }
+
   function findFreeId(base, span, key, usedIds) {
     const start = fnv1a(key) % span;
     for (let i = 0; i < span; i++) {
@@ -90,7 +99,7 @@ const CorsairDNR = (() => {
   function makeBlockRule({ source, destination, id = null, reason = 'auto-block' } = {}) {
     const src = CorsairSecurity.normalizeHostname(source);
     const dst = CorsairSecurity.normalizeHostname(destination);
-    if (!CorsairSecurity.isValidHostname(src) || !CorsairSecurity.isValidHostname(dst)) return null;
+    if (!isValidDnrDomain(src) || !isValidDnrDomain(dst)) return null;
     if (src === dst || CorsairSecurity.sameOrSubdomain(dst, src)) return null;
     const ruleId = Number(id);
     if (!Number.isInteger(ruleId) || ruleId <= BLOCK_BASE) return null;
@@ -148,6 +157,15 @@ const CorsairDNR = (() => {
     const wanted = new Set();
     for (const [host, prof] of Object.entries(profiles || {})) {
       if (prof && prof.protected === true && prof.mode === 'fortress') {
+        // Path-scoped Fortress: DNR session rules cannot filter on the
+        // initiator's path (only the initiator's domain), so if a
+        // profile declares pathScopes we DO NOT install a catch-all
+        // for it. Protection for those profiles is enforced entirely
+        // by the content-frame-guard at the page level. This avoids
+        // false-positive blocking of third-party navigations coming
+        // from non-fortress paths on the same host.
+        const pathScopes = Array.isArray(prof.pathScopes) ? prof.pathScopes : [];
+        if (pathScopes.length > 0) continue;
         const norm = CorsairSecurity.normalizeHostname(host);
         if (CorsairSecurity.isValidHostname(norm)) wanted.add(norm);
       }
@@ -283,7 +301,7 @@ const CorsairDNR = (() => {
     const wanted = new Set();
     for (const raw of (Array.isArray(domains) ? domains : [])) {
       const norm = CorsairSecurity.normalizeHostname(raw);
-      if (CorsairSecurity.isValidHostname(norm)) wanted.add(norm);
+      if (isValidDnrDomain(norm)) wanted.add(norm);
     }
 
     const current = await listUserBlockRules();

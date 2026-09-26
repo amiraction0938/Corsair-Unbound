@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test, lint & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # The repo does not ship a lockfile yet — use `npm install`
+        # so the first CI run can bootstrap one. On subsequent runs
+        # with a committed lockfile, npm ci is preferred but
+        # `npm install` is idempotent and safe.
+        run: npm install --no-audit --no-fund
+
+      - name: Lint (if configured)
+        run: npm run lint --if-present
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Verify build output includes the manifest
+        run: test -f dist/manifest.json
+
+      - name: Package extension as ZIP
+        run: |
+          cd dist
+          zip -r -q ../corsair-unbound-extension.zip .
+          cd ..
+          ls -la corsair-unbound-extension.zip
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: corsair-unbound-extension
+          path: corsair-unbound-extension.zip
+          if-no-files-found: error
+          retention-days: 30

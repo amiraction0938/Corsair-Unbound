@@ -25,10 +25,20 @@
        MAIN-world script    → reads & removes it, keeps in closure
        Both worlds          → every postMessage includes __nonce
        Both worlds          → reject any message whose nonce differs
+
+     Path-scoped Fortress (v1.8.0+):
+       A profile may declare `pathScopes: ['/admin', '/settings']`.
+       When non-empty, fortress protection is only ACTIVE on the
+       matching paths of that host. The check is done here, per
+       frame, using location.pathname. Cache key is host::path so
+       navigating between /admin and /blog re-evaluates state.
      ============================================================ */
 
   let _selfHost = '';
   try { _selfHost = String(location.hostname || '').toLowerCase(); } catch {}
+
+  let _selfPath = '/';
+  try { _selfPath = String(location.pathname || '/'); } catch {}
 
   /* ============================================================
      NONCE GENERATION + HANDOFF
@@ -59,6 +69,12 @@
      ------------------------------------------------------------
      Read once per frame from a small session cache to avoid
      hammering chrome.storage.local with every iframe on the page.
+
+     Path-scoped profiles:
+       A profile's pathScopes array, if non-empty, restricts
+       fortress activation to matching path prefixes. We compute
+       the effective "armed" state here, per frame, from the raw
+       profile + this frame's location.pathname.
      ============================================================ */
   let _fortressArmed = false;
   let _fortressChecked = false;
@@ -66,12 +82,43 @@
 
   const STATE_CACHE_KEY = 'corsairFortressStateCache';
 
+  /* Match location.pathname against a profile's pathScopes.
+     - No scopes       → active everywhere (backward-compatible).
+     - Exact match     → active (e.g. /admin for pathScopes ['/admin']).
+     - Prefix match    → active (e.g. /admin/users for ['/admin']).
+     - Trailing slash  → treated as equivalent (normalization done
+                         in normalizeProfile, but we defensively
+                         handle it here too). */
+  function pathMatchesScopes(profile, pathname) {
+    const scopes = Array.isArray(profile?.pathScopes) ? profile.pathScopes : [];
+    if (!scopes.length) return true;
+    let p = String(pathname || '/');
+    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+    for (const s of scopes) {
+      if (typeof s !== 'string' || !s) continue;
+      let sc = s;
+      if (sc.length > 1 && sc.endsWith('/')) sc = sc.slice(0, -1);
+      if (p === sc) return true;
+      if (p.startsWith(sc + '/')) return true;
+    }
+    return false;
+  }
+
+  function computeArmed(profile) {
+    if (!profile) return false;
+    if (profile.protected !== true) return false;
+    if (profile.mode !== 'fortress') return false;
+    return pathMatchesScopes(profile, _selfPath);
+  }
+
   const _stateReady = (async () => {
+    const cacheKey = _selfHost + '::' + _selfPath;
+
     try {
       const cached = await chrome.storage.session.get(STATE_CACHE_KEY).catch(() => ({}));
       const map = (cached && cached[STATE_CACHE_KEY]) || {};
-      if (map && Object.prototype.hasOwnProperty.call(map, _selfHost)) {
-        _fortressArmed = map[_selfHost] === true;
+      if (map && Object.prototype.hasOwnProperty.call(map, cacheKey)) {
+        _fortressArmed = map[cacheKey] === true;
         _fortressChecked = true;
         _stateLoaded = true;
         return;
@@ -82,12 +129,12 @@
       const res = await chrome.storage.local.get('domainProfiles');
       const profiles = res?.domainProfiles || {};
       const p = profiles[_selfHost];
-      _fortressArmed = Boolean(p && p.protected === true && p.mode === 'fortress');
+      _fortressArmed = computeArmed(p);
       _fortressChecked = true;
       _stateLoaded = true;
       try {
         const existing = (await chrome.storage.session.get(STATE_CACHE_KEY))[STATE_CACHE_KEY] || {};
-        existing[_selfHost] = _fortressArmed;
+        existing[cacheKey] = _fortressArmed;
         await chrome.storage.session.set({ [STATE_CACHE_KEY]: existing });
       } catch {}
     } catch {
@@ -101,14 +148,15 @@
       if (area !== 'local' || !changes.domainProfiles) return;
       const next = changes.domainProfiles.newValue || {};
       const p = next[_selfHost];
-      _fortressArmed = Boolean(p && p.protected === true && p.mode === 'fortress');
+      _fortressArmed = computeArmed(p);
       _fortressChecked = true;
       _stateLoaded = true;
       broadcastFortressState();
       try {
+        const cacheKey = _selfHost + '::' + _selfPath;
         chrome.storage.session.get(STATE_CACHE_KEY).then(c => {
           const map = (c && c[STATE_CACHE_KEY]) || {};
-          map[_selfHost] = _fortressArmed;
+          map[cacheKey] = _fortressArmed;
           chrome.storage.session.set({ [STATE_CACHE_KEY]: map }).catch(() => {});
         }).catch(() => {});
       } catch {}
@@ -258,6 +306,10 @@
 
      Now the guard intercepts the modifier-click itself and
      preventDefaults before the browser ever creates a tab.
+
+     NOTE: The handlers below only fire when _fortressArmed is
+     true for the CURRENT path. A profile scoped to /admin will
+     not interfere with the /blog area of the same host.
      ============================================================ */
 
   function blockAnchorPopup(e, anchor, reason) {

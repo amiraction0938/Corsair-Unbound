@@ -105,8 +105,31 @@ const CorsairSecurity = (() => {
         }
       }
     }
-
+    // ---- Path scopes (Fortress per-path) ----
+    // Empty array → Fortress applies to all paths (backward-compatible).
+    // Non-empty → Fortress is only active when location.pathname starts
+    // with one of these prefixes. Values are normalized to start with
+    // '/' and stripped of trailing slashes so `example.com/admin` and
+    // `example.com/admin/` compare equal.
+    const cleanPaths = [];
+    if (Array.isArray(prof.pathScopes)) {
+      for (const p of prof.pathScopes) {
+        if (typeof p !== 'string') continue;
+        let s = p.trim();
+        if (!s) continue;
+        if (!s.startsWith('/')) s = '/' + s;
+        // Collapse a single trailing slash (except root) so prefix
+        // matching is symmetric.
+        if (s.length > 1 && s.endsWith('/')) s = s.slice(0, -1);
+        if (s.length > 200) s = s.slice(0, 200);
+        // Reject obvious junk.
+        if (/[\x00-\x1f\x7f\s]/.test(s)) continue;
+        if (!cleanPaths.includes(s)) cleanPaths.push(s);
+        if (cleanPaths.length >= 50) break;
+      }
+    }
     const out = {
+      pathScopes: cleanPaths,
       mode: prof.mode === 'fortress' ? 'fortress' : 'standard',
       protected: Boolean(prof.protected),
       autoContainRedirects: prof.autoContainRedirects !== false,

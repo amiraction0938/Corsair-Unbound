@@ -41,6 +41,10 @@
           <span class="nav-icon">📊</span>
           <span class="nav-label" data-i18n="nav.overview">Overview</span>
         </button>
+        <button class="nav-item" data-view="analytics">
+          <span class="nav-icon">📈</span>
+          <span class="nav-label" data-i18n="nav.analytics">Analytics</span>
+        </button>
         <button class="nav-item" data-view="activity">
           <span class="nav-icon">📜</span>
           <span class="nav-label" data-i18n="nav.activity">Activity</span>
@@ -91,6 +95,20 @@
         <h1 class="view-title" id="viewTitle">Overview</h1>
         <div class="header-actions">
           <input id="configFile" type="file" accept=".json,.corsair.json,application/json" hidden>
+          <div class="notif-center" id="notifCenter">
+            <button id="notifBell" class="tool-btn icon-btn notif-bell" aria-label="Notifications" title="Notifications">
+              🔔
+              <span id="notifBadge" class="notif-badge" hidden>0</span>
+            </button>
+            <div class="notif-panel" id="notifPanel">
+              <div class="notif-panel-head">
+                <h3 data-i18n="notif.title">Notifications</h3>
+                <button id="notifMarkAll" class="link-btn" data-i18n="notif.markAll">Mark all read</button>
+              </div>
+              <div id="notifList" class="notif-list"></div>
+              <button id="notifViewAll" class="notif-viewall" data-navigate="activity" data-i18n="notif.viewAll">View all activity →</button>
+            </div>
+          </div>
           <button id="startTourBtn" class="tool-btn" title="Take a guided tour">
             <span>🎯</span> <span data-i18n="actions.tour">Take Tour</span>
           </button>
@@ -149,6 +167,55 @@
             <button class="link-btn" data-navigate="activity" data-i18n="actions.viewAll">View all →</button>
           </div>
           <div id="recentActivity" class="events"></div>
+        </div>
+      </section>
+
+      <!-- ============ VIEW: ANALYTICS ============ -->
+      <section class="view" id="view-analytics">
+        <div class="panel analytics-head-panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="view.analytics">Analytics &amp; Insights</h2>
+              <div class="muted" data-i18n="analytics.subtitle">A visual breakdown of protection activity, built from your local event log.</div>
+            </div>
+            <div class="analytics-range-group" id="analyticsRangeGroup" role="group" aria-label="Time range">
+              <button class="range-btn" data-range="7" data-i18n="analytics.range.7">7 Days</button>
+              <button class="range-btn active" data-range="14" data-i18n="analytics.range.14">14 Days</button>
+              <button class="range-btn" data-range="30" data-i18n="analytics.range.30">30 Days</button>
+              <button id="analyticsExportBtn" class="tool-btn" data-i18n="analytics.export">⬇ Export Report</button>
+            </div>
+          </div>
+          <div id="analyticsShown" class="muted analytics-shown-line"></div>
+        </div>
+
+        <div class="grid-2col analytics-grid">
+          <div class="panel chart-card">
+            <div class="panel-head">
+              <h2 data-i18n="analytics.chart.timeline">📈 Threats Over Time</h2>
+            </div>
+            <div id="analyticsTimeline" class="chart-body"></div>
+          </div>
+          <div class="panel chart-card">
+            <div class="panel-head">
+              <h2 data-i18n="analytics.chart.severity">🎯 Severity Breakdown</h2>
+            </div>
+            <div id="analyticsSeverity" class="chart-body chart-body-center"></div>
+          </div>
+        </div>
+
+        <div class="grid-2col analytics-grid">
+          <div class="panel chart-card">
+            <div class="panel-head">
+              <h2 data-i18n="analytics.chart.types">🧩 Event Types</h2>
+            </div>
+            <div id="analyticsTypes" class="chart-body bar-list"></div>
+          </div>
+          <div class="panel chart-card">
+            <div class="panel-head">
+              <h2 data-i18n="analytics.chart.domains">🌐 Most Targeted Domains</h2>
+            </div>
+            <div id="analyticsDomains" class="chart-body bar-list"></div>
+          </div>
         </div>
       </section>
 
@@ -360,6 +427,26 @@
               <span id="whitelistStatsInline" class="muted">loading…</span>
             </div>
           </div>
+        </div>
+
+        <!-- ================= URLHAUS (OPTIONAL) ================= -->
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>🛡 URLhaus Auth-Key (Optional)</h2>
+              <div class="muted">
+                abuse.ch requires an Auth-Key since late 2024. Get one free at
+                <a href="https://auth.abuse.ch/" target="_blank" rel="noopener">auth.abuse.ch</a>.
+                Leave empty to disable URLhaus entirely — no network call will be made.
+              </div>
+            </div>
+          </div>
+          <div class="api-input-row">
+            <input type="password" id="urlhausKeyField" placeholder="Paste your URLhaus Auth-Key (optional)" autocomplete="off" spellcheck="false">
+            <button id="urlhausKeyToggle" class="tool-btn" aria-label="Show or hide key">👁</button>
+            <button id="urlhausKeySave" class="btn-primary">Save</button>
+          </div>
+          <div id="urlhausStatusBox" class="muted" style="margin-top:8px;"></div>
         </div>
       </section>
 

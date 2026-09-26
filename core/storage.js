@@ -101,6 +101,7 @@ const CorsairStorage = (() => {
       autoArmFortress: true,
       autoArmFortressThreshold: 10,
       autoBlockThreshold: 75,
+      urlhausAuthKey: '',
       theme: 'dark',
       language: 'en',
       updatedAt: Date.now()

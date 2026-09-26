@@ -70,6 +70,50 @@ const CorsairThreatIntel = (() => {
 
   let _userTrustedCache = new Set();
 
+  /* Bloom filters for fast negative lookups. Built lazily the
+     first time a list is populated, rebuilt when the underlying
+     list changes. Only used to short-circuit the expensive full
+     iteration; the real Set lookup is still authoritative. */
+  let _builtinBloom = null;
+  let _remoteBloom = null;
+
+  function _buildBloom(iterable) {
+    if (typeof CorsairBloom === 'undefined') return null;
+    // 2^18 bits, 7 hashes → ~0.2% FP for 22k items.
+    const bf = CorsairBloom.create(1 << 18, 7);
+    bf.addAll(iterable);
+    return bf;
+  }
+
+  function _getBuiltinBloom() {
+    if (_builtinBloom === null) {
+      try { _builtinBloom = _buildBloom(BUILTIN_ALLOWLIST); }
+      catch { _builtinBloom = false; }
+    }
+    return _builtinBloom || null;
+  }
+
+  function _getRemoteBloom() {
+    if (!_remoteAllowlist) return null;
+    if (_remoteBloom === null) {
+      try { _remoteBloom = _buildBloom(_remoteAllowlist); }
+      catch { _remoteBloom = false; }
+    }
+    return _remoteBloom || null;
+  }
+
+  function _bloomMightContain(bloom, host) {
+    if (!bloom) return true;
+    if (bloom.has(host)) return true;
+    // Also probe the approximate registrable domain so subdomains of
+    // a base domain that IS on the list don't get short-circuited.
+    if (typeof CorsairBloom !== 'undefined') {
+      const reg = CorsairBloom.approximateRegistrableDomain(host);
+      if (reg && reg !== host && bloom.has(reg)) return true;
+    }
+    return false;
+  }
+
   async function refreshUserTrusted() {
     try {
       const list = await CorsairStorage.get('userTrustedDomains', []);
@@ -113,6 +157,7 @@ const CorsairThreatIntel = (() => {
         .slice(0, REMOTE_MAX_DOMAINS);
       _remoteAllowlist = new Set(domains);
       _remoteLoaded = true;
+      _remoteBloom = null;   // invalidate → next check rebuilds it
       await CorsairStorage.withPartitionLock('globalSettings', async () => {
         await CorsairStorage.set('remoteWhitelist', {
           domains,
@@ -130,6 +175,7 @@ const CorsairThreatIntel = (() => {
     const host = CorsairSecurity.normalizeHostname(rawHost);
     if (!host) return false;
 
+    // ---- User trusted (small Set, iterate directly) ----
     if (_userTrustedCache.size) {
       if (_userTrustedCache.has(host)) return true;
       for (const base of _userTrustedCache) {
@@ -137,23 +183,35 @@ const CorsairThreatIntel = (() => {
       }
     }
 
+    // ---- Local / private networks (regex, no list) ----
     if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') return true;
     if (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
     if (host.endsWith('.local') || host.endsWith('.lan') || host.endsWith('.internal')) return true;
 
-    if (BUILTIN_ALLOWLIST.has(host)) return true;
-    for (const base of BUILTIN_ALLOWLIST) {
-      if (CorsairSecurity.sameOrSubdomain(host, base)) return true;
-    }
-
-    if (_remoteAllowlist) {
-      if (_remoteAllowlist.has(host)) return true;
-      const parts = host.split('.');
-      if (parts.length > 2) {
-        const parent = parts.slice(-2).join('.');
-        if (_remoteAllowlist.has(parent)) return true;
+    // ---- Built-in allowlist ----
+    // Bloom pre-check: if the bloom says "definitely not present",
+    // we can skip the exact Set test AND the subdomain iteration.
+    const builtinBloom = _getBuiltinBloom();
+    if (_bloomMightContain(builtinBloom, host)) {
+      if (BUILTIN_ALLOWLIST.has(host)) return true;
+      for (const base of BUILTIN_ALLOWLIST) {
+        if (CorsairSecurity.sameOrSubdomain(host, base)) return true;
       }
     }
+
+    // ---- Remote allowlist (OpenDNS) ----
+    if (_remoteAllowlist) {
+      const remoteBloom = _getRemoteBloom();
+      if (_bloomMightContain(remoteBloom, host)) {
+        if (_remoteAllowlist.has(host)) return true;
+        const parts = host.split('.');
+        if (parts.length > 2) {
+          const parent = parts.slice(-2).join('.');
+          if (_remoteAllowlist.has(parent)) return true;
+        }
+      }
+    }
+
     return false;
   }
 
@@ -598,10 +656,237 @@ const CorsairThreatIntel = (() => {
     }
   }
 
+  /* ============================================================
+     MULTI-SOURCE AGGREGATED QUERY
+     ------------------------------------------------------------
+     Runs VirusTotal (existing) + URLhaus + local heuristics in
+     parallel, then feeds all of them to the risk aggregator.
+
+     The returned report keeps every field the existing consumers
+     (popup, verdict banner, analyzer) already use — verdict,
+     riskPercentage, stats, flaggedEngines, heuristicSignals —
+     PLUS new fields:
+       confidence    0..1
+       sources       array of {name, verdict, score, confidence, weight}
+       providerErrors  array of {name, error} for failed providers
+
+     Both new fields are optional; consumers that don't know about
+     them keep working unchanged.
+     ============================================================ */
+  function _vtToSource(vtReport) {
+    if (!vtReport) return { ok: false, error: 'no-report', weight: 0.50, source: 'virusTotal' };
+    if (vtReport.status === 'error') {
+      return { ok: false, error: vtReport.error || 'vt-error', weight: 0.50, source: 'virusTotal' };
+    }
+    if (vtReport.status === 'allowlisted') {
+      return {
+        ok: true, verdict: 'clean', score: 0, confidence: 0.85,
+        weight: 0.50, source: 'virusTotal',
+        evidence: { allowlisted: true }
+      };
+    }
+    return {
+      ok: true,
+      verdict: vtReport.verdict || 'unknown',
+      score: Number(vtReport.riskPercentage) || 0,
+      confidence: 0.85,
+      weight: 0.50,
+      source: 'virusTotal',
+      evidence: {
+        stats: vtReport.stats || null,
+        flaggedCount: Array.isArray(vtReport.flaggedEngines) ? vtReport.flaggedEngines.length : 0
+      }
+    };
+  }
+
+  function _heuristicsToSource(analysis) {
+    if (!analysis) return { ok: false, error: 'no-heuristics', weight: 0.25, source: 'heuristics' };
+    const risk = Number(analysis.risk) || 0;
+    let verdict = 'clean';
+    if (risk >= 80) verdict = 'malicious';
+    else if (risk >= 45) verdict = 'suspicious';
+    return {
+      ok: true,
+      verdict,
+      score: risk,
+      // Signal count drives confidence. Fewer signals → less certain.
+      confidence: Array.isArray(analysis.signals) && analysis.signals.length > 0 ? 0.6 : 0.3,
+      weight: 0.25,
+      source: 'heuristics',
+      evidence: { signalKinds: (analysis.signals || []).map(s => s.kind).slice(0, 5) }
+    };
+  }
+
+  async function queryDomainMultiSource(rawHost, { force = false } = {}) {
+    const host = CorsairSecurity.normalizeHostname(rawHost);
+    if (!host || !CorsairSecurity.isValidHostname(host)) {
+      throw new Error('invalid-hostname');
+    }
+
+    // Allowlisted domains are always clean — no need to query anyone.
+    if (isAllowlisted(host)) {
+      return {
+        host, status: 'allowlisted', verdict: 'clean',
+        riskPercentage: 0, confidence: 0.95, flaggedEngines: [],
+        stats: { harmless: 85, malicious: 0, suspicious: 0, undetected: 0 },
+        sources: [{ name: 'allowlist', verdict: 'clean', score: 0, confidence: 0.95, weight: 1 }],
+        lastChecked: Date.now()
+      };
+    }
+
+    // Fresh cache hit → no network activity.
+    if (!force) {
+      const cached = await getCachedReport(host);
+      if (cached && !cached.stale) return cached;
+    }
+
+    // Non-allowlisted domains REQUIRE a VirusTotal API key. Without
+    // one there is no point in running URLhaus + heuristics alone —
+    // the aggregated verdict would be misleading (it would say "clean"
+    // when we actually have no signal). Throw early so the caller can
+    // surface a clear "no-api-key" message instead of a fake success.
+    const apiKey = await getApiKey();
+    if (!apiKey) {
+      throw new Error('no-api-key');
+    }
+
+    // Fire all sources in parallel. Any individual failure degrades
+    // to a source-level error and does not abort the whole query.
+    const [vtReport, urlhausSource, heuristicAnalysis] = await Promise.all([
+      queryDomain(host, { force }).catch(err => ({ status: 'error', error: err.message })),
+      (typeof CorsairProviderUrlhaus !== 'undefined')
+        ? CorsairProviderUrlhaus.lookup(host).catch(err => ({ ok: false, error: err.message, source: 'urlhaus' }))
+        : Promise.resolve({ ok: false, error: 'provider-unavailable', source: 'urlhaus' }),
+      Promise.resolve().then(() => {
+        try {
+          if (typeof CorsairHeuristics === 'undefined') return null;
+          return CorsairHeuristics.analyze(host, { creationDate: (vtReport && vtReport.creationDate) || null });
+        } catch { return null; }
+      })
+    ]);
+
+    const aggregated = CorsairRiskAggregator.aggregate({
+      virusTotal: _vtToSource(vtReport),
+      urlhaus: urlhausSource,
+      heuristics: _heuristicsToSource(heuristicAnalysis)
+    });
+
+    // Compose a report that carries forward every field downstream
+    // consumers expect, plus the new aggregation fields.
+    const finalReport = {
+      host,
+      status: 'analyzed',
+      verdict: aggregated.verdict,
+      riskPercentage: aggregated.risk,
+      confidence: aggregated.confidence,
+      sources: aggregated.sources.map(s => ({
+        name: s.name,
+        verdict: s.verdict,
+        score: s.score,
+        confidence: s.confidence,
+        weight: Math.round(s.weight * 100) / 100,
+        error: s.error || undefined
+      })),
+
+      // Carry forward VT's rich fields (analyzer/popup UI uses them)
+      stats: (vtReport && vtReport.stats) || { harmless: 0, malicious: 0, suspicious: 0, undetected: 0 },
+      flaggedEngines: (vtReport && Array.isArray(vtReport.flaggedEngines)) ? vtReport.flaggedEngines : [],
+      reputation: (vtReport && vtReport.reputation) || 0,
+      categories: (vtReport && vtReport.categories) || {},
+      lastAnalysisDate: (vtReport && vtReport.lastAnalysisDate) || null,
+      creationDate: (vtReport && vtReport.creationDate) || null,
+      popularityRanks: (vtReport && vtReport.popularityRanks) || {},
+      bestPopularityRank: (vtReport && vtReport.bestPopularityRank) || null,
+      totalVotes: (vtReport && vtReport.totalVotes) || { harmless: 0, malicious: 0 },
+      tags: (vtReport && vtReport.tags) || [],
+      certIssuer: (vtReport && vtReport.certIssuer) || null,
+      certValidTo: (vtReport && vtReport.certValidTo) || null,
+      dnsRecords: (vtReport && vtReport.dnsRecords) || [],
+
+      // Carry forward heuristics
+      heuristicSignals: (heuristicAnalysis && heuristicAnalysis.signals) || [],
+      heuristicRisk: (heuristicAnalysis && heuristicAnalysis.risk) || 0,
+
+      // URLhaus evidence
+      urlhaus: urlhausSource && urlhausSource.ok
+        ? {
+            verdict: urlhausSource.verdict,
+            score: urlhausSource.score,
+            evidence: urlhausSource.evidence
+          }
+        : { error: urlhausSource?.error || 'unavailable' },
+
+      // Keep the raw VT report accessible for deep scan / debug
+      vtStatus: vtReport && vtReport.status,
+      lastChecked: Date.now()
+    };
+
+    // Cache the composed report so getCachedReport() serves it next time.
+    try { await saveReport(host, finalReport); } catch {}
+
+    return finalReport;
+  }
+
+  /* ============================================================
+     API KEY VERIFICATION
+     ------------------------------------------------------------
+     Before we persist a user-supplied key, we make ONE real
+     request to VirusTotal. If the endpoint returns 401/403, the
+     key is rejected by the server and we refuse to save it. This
+     prevents the "silent useless key" failure mode where the user
+     thinks protection is active but no queries ever work.
+
+     Rate-limit notes:
+       • 429 means the key was accepted but we're over quota. We
+         still consider it VALID — the key works, the user just
+         needs to wait. The dashboard shows a "rate-limited but
+         saved" notice.
+       • 404 means the key was accepted but the sample domain is
+         not indexed. Also valid.
+       • Any network failure → NOT verified. We don't want to
+         silently accept a key just because our network is down.
+
+     We use `example.com` because it's a stable, cached, well-known
+     domain — the request is cheap and never rate-limits the user.
+     ============================================================ */
+  async function verifyApiKey(rawKey) {
+    const key = String(rawKey || '').trim();
+    if (!key) return { ok: false, error: 'empty-key' };
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => { try { ctrl.abort(); } catch {} }, 10000);
+
+    try {
+      const res = await fetch('https://www.virustotal.com/api/v3/domains/example.com', {
+        headers: { 'x-apikey': key, 'Accept': 'application/json' },
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, error: 'invalid-api-key' };
+      }
+      if (res.status === 429) {
+        // Key was authenticated (429 comes after auth), we're just
+        // over quota. Treat the key as valid.
+        return { ok: true, rateLimited: true };
+      }
+      // 200 (OK) and 404 (not indexed) both mean the key was accepted.
+      return { ok: true };
+    } catch (err) {
+      clearTimeout(timer);
+      if (err && err.name === 'AbortError') {
+        return { ok: false, error: 'network-timeout' };
+      }
+      return { ok: false, error: 'network-error' };
+    }
+  }
+
   return {
     isAllowlisted,
     getCachedReport,
     queryDomain,
+    queryDomainMultiSource,
     autoScan,
     scanUrl,
     deepScan,
@@ -609,6 +894,7 @@ const CorsairThreatIntel = (() => {
     refreshRemoteAllowlist,
     loadRemoteAllowlist,
     refreshUserTrusted,
+    verifyApiKey,
     getAllowlistSize: () => ({
       builtin: BUILTIN_ALLOWLIST.size,
       remote: _remoteAllowlist ? _remoteAllowlist.size : 0,

@@ -28,7 +28,8 @@ const state = {
   editingScript: null,
   activeView: 'overview',
   apiKeyVisible: false,
-  updateInfo: null
+  updateInfo: null,
+  analyticsRange: 14
 };
 
 const $ = id => document.getElementById(id);
@@ -85,6 +86,7 @@ function formatBytes(b) {
    ============================================================ */
 const VIEW_KEYS = {
   overview: 'view.overview',
+  analytics: 'view.analytics',
   activity: 'view.activity',
   domains: 'view.domains',
   security: 'view.security',
@@ -242,6 +244,8 @@ function buildLangMenu() {
       renderBlockedList();
       renderSettings();
       renderRecentActivity();
+      renderAnalytics();
+      renderNotifications();
       renderApiStatus();
       const titleEl = $('viewTitle');
       if (titleEl) titleEl.textContent = getViewTitle(state.activeView);
@@ -276,6 +280,155 @@ document.addEventListener('click', (e) => {
   if (e.target.closest && e.target.closest('#langSelector')) return;
   menu.classList.remove('open');
 });
+
+/* ============================================================
+   NOTIFICATION CENTER
+   Real-time-ish alert feed built from the same activity log the
+   Activity view uses. Lives entirely in local storage — no
+   network call, no new background message types.
+   ============================================================ */
+const NOTIF_LAST_SEEN_KEY = 'notifCenterLastSeen';
+let _notifLastSeen = 0;
+
+async function loadNotifLastSeen() {
+  try {
+    const res = await chrome.storage.local.get(NOTIF_LAST_SEEN_KEY);
+    _notifLastSeen = Number(res?.[NOTIF_LAST_SEEN_KEY]) || 0;
+  } catch { _notifLastSeen = 0; }
+}
+
+function saveNotifLastSeen(ts) {
+  _notifLastSeen = ts;
+  try { chrome.storage.local.set({ [NOTIF_LAST_SEEN_KEY]: ts }); } catch {}
+}
+
+function notifRelativeTime(ts) {
+  const diffMs = Date.now() - Number(ts || 0);
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return t('notif.justNow', 'Just now');
+  if (min < 60) return t('notif.minutesAgo', '{n}m ago').replace('{n}', String(min));
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return t('notif.hoursAgo', '{n}h ago').replace('{n}', String(hr));
+  const day = Math.floor(hr / 24);
+  return t('notif.daysAgo', '{n}d ago').replace('{n}', String(day));
+}
+
+function notifNotableEvents() {
+  return state.events
+    .filter(e => e.severity === 'high' || e.severity === 'medium')
+    .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+}
+
+function renderNotifications() {
+  const notable = notifNotableEvents();
+  const unread = notable.filter(e => Number(e.timestamp) > _notifLastSeen).length;
+
+  const badge = $('notifBadge');
+  if (badge) {
+    if (unread > 0) {
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      badge.hidden = false;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.hidden = true;
+      badge.style.display = 'none';
+    }
+  }
+
+  const list = $('notifList');
+  if (!list) return;
+  const top = notable.slice(0, 20);
+  if (!top.length) {
+    list.innerHTML = `<div class="empty" style="padding:20px 10px;">${escapeHtml(t('notif.empty', "You're all caught up — no recent alerts."))}</div>`;
+    return;
+  }
+  list.innerHTML = top.map(e => {
+    const sev = e.severity || 'info';
+    const icon = TYPE_ICONS[e.type] || (sev === 'high' ? '⚠️' : '🔔');
+    const title = `${analyticsTypeLabel(e.type)}${e.domain ? ` · ${e.domain}` : ''}`;
+    const meta = `${notifRelativeTime(e.timestamp)}${e.destination ? ` → ${e.destination}` : ''}`;
+    return `
+      <div class="notif-item sev-${escapeHtml(sev)}">
+        <div class="notif-item-icon">${icon}</div>
+        <div class="notif-item-body">
+          <div class="notif-item-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+          <div class="notif-item-meta" title="${escapeHtml(meta)}">${escapeHtml(meta)}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function closeNotifPanel() {
+  const panel = $('notifPanel');
+  if (panel) panel.classList.remove('open');
+}
+
+function markNotificationsRead() {
+  // Use `now + 1` rather than `now` so that a batch of events that
+  // landed on the exact same millisecond as the user's click is also
+  // considered "read". Without the +1, the badge would sometimes show
+  // "1 unread" right after the user opened the panel, when a fresh
+  // high/medium event was written in the same tick.
+  saveNotifLastSeen(Date.now() + 1);
+  renderNotifications();
+}
+
+safeOn('notifBell', 'click', (e) => {
+  e.stopPropagation();
+  const panel = $('notifPanel');
+  if (!panel) return;
+  const opening = !panel.classList.contains('open');
+  panel.classList.toggle('open', opening);
+  if (opening) markNotificationsRead();
+});
+
+safeOn('notifMarkAll', 'click', (e) => {
+  e.stopPropagation();
+  markNotificationsRead();
+  // Debug: confirm the handler actually fired and the badge state
+  // was updated. Harmless in production but visible in DevTools.
+  try {
+    console.debug('[Corsair notif] marked read; _notifLastSeen =',
+      _notifLastSeen,
+      '| events =', state.events.length,
+      '| notable =', notifNotableEvents().length);
+  } catch {}
+});
+
+safeOn('notifViewAll', 'click', (e) => {
+  try { e.preventDefault(); } catch {}
+  try { e.stopPropagation(); } catch {}
+  closeNotifPanel();
+  // Explicitly switch to the Activity view. The general
+  // [data-navigate] handler in initNavigation() *should* already
+  // do this, but we call switchView here too so the button works
+  // even if the general handler failed to attach for any reason
+  // (e.g. element was not present when initNavigation ran).
+  switchView('activity');
+});
+
+document.addEventListener('click', (e) => {
+  const panel = $('notifPanel');
+  if (!panel || !panel.classList.contains('open')) return;
+  if (e.target.closest && e.target.closest('#notifCenter')) return;
+  closeNotifPanel();
+});
+
+// Live updates: react the moment the background service worker logs a
+// new event, without waiting for the next manual refresh().
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener(async (changes, area) => {
+    if (area !== 'local' || !changes.activityLog) return;
+    try {
+      const res = await send({ type: 'get-events', limit: 300 });
+      state.events = res?.events || [];
+      renderRecentActivity();
+      renderEvents();
+      renderAnalytics();
+      renderNotifications();
+    } catch {}
+  });
+}
 
 /* ============================================================
    PROFILES
@@ -793,16 +946,28 @@ function renderApiStatus() {
 }
 
 safeOn('apiKeyToggle', 'click', () => {
-  state.apiKeyVisible = !state.apiKeyVisible;
   const field = $('vtApiKeyField');
   if (!field) return;
-  if (state.apiKeyVisible) {
-    field.type = 'text';
-    field.value = state.currentApiKey || '';
-  } else {
-    field.type = 'password';
-    field.value = state.currentApiKey ? '•'.repeat(Math.min(64, state.currentApiKey.length)) : '';
+
+  // Snapshot BEFORE we change anything. If the user has typed an
+  // unsaved value, we MUST NOT overwrite it with state.currentApiKey
+  // (which is empty until they press Save).
+  const currentValue = field.value;
+  const wasMasked = /^•+$/.test(currentValue);
+
+  state.apiKeyVisible = !state.apiKeyVisible;
+  field.type = state.apiKeyVisible ? 'text' : 'password';
+
+  if (state.apiKeyVisible && wasMasked && state.currentApiKey) {
+    // Revealing: field was showing dots from a saved key → swap in
+    // the real value.
+    field.value = state.currentApiKey;
+  } else if (!state.apiKeyVisible && currentValue === state.currentApiKey && state.currentApiKey) {
+    // Hiding: field was showing the real saved key → put dots back.
+    field.value = '•'.repeat(Math.min(64, state.currentApiKey.length));
   }
+  // In every other case (user typed a new unsaved value) → leave the
+  // value untouched, only the input type flipped.
 });
 
 safeOn('apiKeySave', 'click', async () => {
@@ -811,16 +976,206 @@ safeOn('apiKeySave', 'click', async () => {
 
   const rawValue = field.value.trim();
   const isMasked = /^•+$/.test(rawValue);
-  const newKey = isMasked ? state.currentApiKey : rawValue;
+
+  // --- Clear path ---
+  if (!rawValue) {
+    try {
+      await send({ type: 'set-api-key-secure', apiKey: '' });
+      state.currentApiKey = '';
+      state.apiKeyVisible = false;
+      renderApiStatus();
+      showToast(t('api.cleared', 'API key cleared.'));
+    } catch (err) {
+      showToast(err.message || 'Failed', 'error');
+    }
+    return;
+  }
+
+  // --- Field is still masked → nothing new to save ---
+  if (isMasked) {
+    showToast(t('api.alreadySaved', 'Key already saved and verified.'), 'success');
+    return;
+  }
+
+  // --- Format pre-check (fast, no network) ---
+  if (rawValue.length !== 64) {
+    showToast(t('api.invalidLength',
+      '⚠ VirusTotal API keys are 64 characters (yours is {n}).')
+      .replace('{n}', String(rawValue.length)), 'error');
+    return;
+  }
+
+  // --- Live verification via background. Only saves if VT accepts it. ---
+  const btn = $('apiKeySave');
+  const originalText = btn ? btn.textContent : 'Save & Verify';
+  if (btn) { btn.disabled = true; btn.textContent = t('api.verifying', 'Verifying…'); }
 
   try {
-    await send({ type: 'set-api-key-secure', apiKey: newKey });
-    state.currentApiKey = newKey;
+    const res = await send({ type: 'set-api-key-secure', apiKey: rawValue });
+
+    if (!res?.ok) {
+      const errMap = {
+        'invalid-api-key': t('api.invalidKey',
+          '⚠ VirusTotal rejected this key. It may be expired, revoked, or mistyped.'),
+        'invalid-key-format': t('api.invalidLength',
+          '⚠ VirusTotal API keys are 64 characters.'),
+        'network-error': t('api.networkError',
+          '⚠ Could not reach VirusTotal. Check your internet connection.'),
+        'network-timeout': t('api.networkError',
+          '⚠ VirusTotal did not respond in time. Try again.'),
+        'empty-key': t('api.emptyKey', '⚠ Please paste your API key first.')
+      };
+      showToast(errMap[res?.error] || res?.error || t('api.verifyFailed', 'Key verification failed.'), 'error');
+      return;
+    }
+
+    // --- Verified successfully ---
+    state.currentApiKey = rawValue;
     state.apiKeyVisible = false;
     renderApiStatus();
-    showToast(newKey ? t('api.saved', 'API key saved.') : t('api.cleared', 'API key cleared.'));
+
+    if (res.rateLimited) {
+      showToast(t('api.savedRateLimited',
+        '✓ Key verified — you are currently rate-limited by VirusTotal.'), 'success');
+    } else {
+      showToast(t('api.savedVerified', '✓ API key saved and verified.'), 'success');
+    }
   } catch (err) {
     showToast(err.message || t('api.saveFailed', 'Failed to save API key'), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
+  }
+});
+
+let _urlhausKeyVisible = false;
+// Mirror of what's actually persisted in settings. The toggle handler
+// needs this to reveal the saved key without re-reading settings on
+// every click, and the save handler uses it to distinguish "user
+// pressed eye to reveal" from "user typed a new value".
+let _urlhausKeyStored = '';
+
+async function renderUrlhausStatus() {
+  try {
+    const s = await send({ type: 'get-settings' });
+    const settings = s?.settings || {};
+    const key = typeof settings.urlhausAuthKey === 'string'
+      ? settings.urlhausAuthKey.trim()
+      : '';
+
+    _urlhausKeyStored = key;
+
+    const field = $('urlhausKeyField');
+    if (field && document.activeElement !== field) {
+      field.value = key
+        ? (_urlhausKeyVisible ? key : '•'.repeat(Math.min(64, key.length)))
+        : '';
+    }
+
+    const box = $('urlhausStatusBox');
+    if (box) {
+      if (key) {
+        box.textContent = '✓ URLhaus is enabled — host queries will be sent to abuse.ch.';
+        box.style.color = '#34d399';
+      } else {
+        box.textContent = 'URLhaus is disabled. Optional — leave empty for a fully local-only setup.';
+        box.style.color = '';
+      }
+    }
+  } catch {}
+}
+
+safeOn('urlhausKeyToggle', 'click', () => {
+  const field = $('urlhausKeyField');
+  if (!field) return;
+
+  const currentValue = field.value;
+  const wasMasked = /^•+$/.test(currentValue);
+
+  _urlhausKeyVisible = !_urlhausKeyVisible;
+  field.type = _urlhausKeyVisible ? 'text' : 'password';
+
+  if (_urlhausKeyVisible && wasMasked && _urlhausKeyStored) {
+    field.value = _urlhausKeyStored;
+  } else if (!_urlhausKeyVisible && currentValue === _urlhausKeyStored && _urlhausKeyStored) {
+    field.value = '•'.repeat(Math.min(64, _urlhausKeyStored.length));
+  }
+  // Otherwise: user typed a new unsaved value — leave it alone.
+  // NOTE: we deliberately do NOT call renderUrlhausStatus() here,
+  // because that would overwrite the field from settings.
+});
+
+safeOn('urlhausKeySave', 'click', async () => {
+  const field = $('urlhausKeyField');
+  if (!field) return;
+
+  const raw = field.value.trim();
+  const isMasked = /^•+$/.test(raw);
+
+  // --- Clear path ---
+  if (!raw) {
+    try {
+      await send({ type: 'set-urlhaus-key-secure', apiKey: '' });
+      _urlhausKeyStored = '';
+      _urlhausKeyVisible = false;
+      field.type = 'password';
+      await renderUrlhausStatus();
+      showToast(t('urlhaus.disabled', 'URLhaus disabled.'));
+    } catch (err) {
+      showToast(err?.message || 'Failed', 'error');
+    }
+    return;
+  }
+
+  // --- Field is still masked → nothing new to save ---
+  if (isMasked) {
+    showToast(t('urlhaus.alreadySaved', 'Key already saved and verified.'), 'success');
+    return;
+  }
+
+  // --- Format pre-check ---
+  if (raw.length < 10) {
+    showToast(t('urlhaus.invalidLength', '⚠ Auth-Key looks too short.'), 'error');
+    return;
+  }
+
+  // --- Live verification ---
+  const btn = $('urlhausKeySave');
+  const originalText = btn ? btn.textContent : 'Save';
+  if (btn) { btn.disabled = true; btn.textContent = t('urlhaus.verifying', 'Verifying…'); }
+
+  try {
+    const res = await send({ type: 'set-urlhaus-key-secure', apiKey: raw });
+
+    if (!res?.ok) {
+      const errMap = {
+        'invalid-auth-key': t('urlhaus.invalidKey',
+          '⚠ abuse.ch rejected this Auth-Key. Check that you copied the full key.'),
+        'invalid-key-format': t('urlhaus.invalidLength', '⚠ Auth-Key looks too short.'),
+        'network-error': t('urlhaus.networkError',
+          '⚠ Could not reach abuse.ch. Check your internet connection.'),
+        'network-timeout': t('urlhaus.networkError',
+          '⚠ abuse.ch did not respond in time. Try again.'),
+        'empty-key': t('urlhaus.emptyKey', '⚠ Please paste your Auth-Key first.')
+      };
+      showToast(errMap[res?.error] || res?.error || t('urlhaus.verifyFailed', 'Key verification failed.'), 'error');
+      return;
+    }
+
+    _urlhausKeyStored = raw;
+    _urlhausKeyVisible = false;
+    field.type = 'password';
+    await renderUrlhausStatus();
+
+    if (res.rateLimited) {
+      showToast(t('urlhaus.savedRateLimited',
+        '✓ Key verified — you are currently rate-limited by abuse.ch.'), 'success');
+    } else {
+      showToast(t('urlhaus.savedVerified', '✓ URLhaus key saved and verified.'), 'success');
+    }
+  } catch (err) {
+    showToast(err?.message || 'Failed to save URLhaus key', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
 });
 
@@ -1103,6 +1458,271 @@ function renderRecentActivity() {
     row.append(main, sev);
     box.appendChild(row);
   }
+}
+
+/* ============================================================
+   ANALYTICS — lightweight, dependency-free SVG charts
+   Built entirely from the locally-stored event log (state.events).
+   No external chart library, no network calls, no CDN.
+   ============================================================ */
+const SEVERITY_COLORS = {
+  high: 'var(--danger)',
+  medium: 'var(--warn)',
+  low: 'var(--primary)',
+  info: 'var(--text-dim)'
+};
+
+const TYPE_ICONS = {
+  auto_block: '🚫',
+  auto_fortress_armed: '🛡️',
+  popup_blocked: '🪟',
+  navigation_contained: '🧯',
+  download_blocked: '⬇️',
+  domain_removed: '🗑️',
+  extension_updated: '🔄'
+};
+
+function analyticsSeverityLabel(sev) {
+  const key = `analytics.severity.${sev}`;
+  const fb = sev.charAt(0).toUpperCase() + sev.slice(1);
+  return t(key, fb);
+}
+
+function analyticsTypeLabel(type) {
+  const fb = String(type || 'event').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return t(`activity.type.${type}`, fb);
+}
+
+function dayKey(ts) {
+  const d = new Date(Number(ts) || Date.now());
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function shortDayLabel(ts) {
+  const d = new Date(Number(ts) || Date.now());
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Builds a self-contained line/area SVG chart. No dependencies —
+ * pure path math so it renders instantly and matches the theme
+ * via CSS variables (works in both light & dark mode).
+ */
+function buildTimelineChartSVG(points) {
+  const W = 560, H = 200, padL = 8, padR = 8, padT = 16, padB = 24;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const max = Math.max(1, ...points.map(p => p.count));
+  const n = points.length;
+  const stepX = n > 1 ? innerW / (n - 1) : 0;
+
+  const coords = points.map((p, i) => {
+    const x = padL + i * stepX;
+    const y = padT + innerH - (p.count / max) * innerH;
+    return { x, y, ...p };
+  });
+
+  const linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L${coords[coords.length - 1].x.toFixed(1)},${padT + innerH} L${coords[0].x.toFixed(1)},${padT + innerH} Z`;
+
+  const gridLines = [0, 0.5, 1].map(f => {
+    const y = padT + innerH * f;
+    return `<line class="grid-line" x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke-dasharray="3,4"/>`;
+  }).join('');
+
+  // Show at most ~6 evenly-spaced day labels so it never overlaps.
+  const labelEvery = Math.max(1, Math.ceil(n / 6));
+  const labels = coords.map((c, i) => {
+    if (i % labelEvery !== 0 && i !== n - 1) return '';
+    return `<text class="axis-label" x="${c.x.toFixed(1)}" y="${H - 6}" text-anchor="middle">${escapeHtml(c.label)}</text>`;
+  }).join('');
+
+  const dots = coords.map(c =>
+    `<circle class="data-point" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3"><title>${escapeHtml(c.label)}: ${c.count}</title></circle>`
+  ).join('');
+
+  return `
+    <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="analyticsAreaGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.45"/>
+          <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      <path class="area-fill" d="${areaPath}"/>
+      <path class="line-path" d="${linePath}"/>
+      ${dots}
+      ${labels}
+    </svg>`;
+}
+
+/**
+ * Builds a donut chart from {label, value, color} segments.
+ */
+function buildDonutChartSVG(segments, centerValue, centerLabel) {
+  const size = 180, cx = size / 2, cy = size / 2, r = 62, sw = 26;
+  const total = Math.max(1, segments.reduce((s, x) => s + x.value, 0));
+  const circumference = 2 * Math.PI * r;
+  let offset = 0;
+
+  const arcs = segments.filter(s => s.value > 0).map(s => {
+    const frac = s.value / total;
+    const dash = frac * circumference;
+    const gap = circumference - dash;
+    const rotation = (offset / total) * 360 - 90;
+    offset += s.value;
+    return `<circle class="donut-seg" cx="${cx}" cy="${cy}" r="${r}" fill="none"
+      stroke="${s.color}" stroke-width="${sw}"
+      stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}"
+      transform="rotate(${rotation.toFixed(1)} ${cx} ${cy})">
+      <title>${escapeHtml(s.label)}: ${s.value}</title>
+    </circle>`;
+  }).join('');
+
+  return `
+    <svg class="chart-svg" viewBox="0 0 ${size} ${size}" style="max-width:200px;margin:0 auto;">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+      ${arcs}
+      <text class="donut-center-value" x="${cx}" y="${cy - 2}" text-anchor="middle">${centerValue}</text>
+      <text class="donut-center-label" x="${cx}" y="${cy + 16}" text-anchor="middle">${escapeHtml(centerLabel)}</text>
+    </svg>`;
+}
+
+function buildChartLegend(segments) {
+  return `<div class="chart-legend">${segments.map(s =>
+    `<div class="chart-legend-item"><span class="chart-legend-dot" style="background:${s.color}"></span>${escapeHtml(s.label)} · ${s.value}</div>`
+  ).join('')}</div>`;
+}
+
+function buildBarList(entries, opts = {}) {
+  if (!entries.length) {
+    return `<div class="empty">${escapeHtml(opts.emptyText || '—')}</div>`;
+  }
+  const max = Math.max(1, ...entries.map(e => e.count));
+  return entries.map(e => `
+    <div class="bar-row">
+      <div class="bar-row-label" title="${escapeHtml(e.label)}">${opts.icon ? (TYPE_ICONS[e.key] || '•') + ' ' : ''}${escapeHtml(e.label)}</div>
+      <div class="bar-row-track"><div class="bar-row-fill" style="width:${Math.max(4, (e.count / max) * 100).toFixed(0)}%"></div></div>
+      <div class="bar-row-count">${e.count}</div>
+    </div>`).join('');
+}
+
+function renderAnalytics() {
+  const rangeDays = state.analyticsRange || 14;
+  const cutoff = Date.now() - rangeDays * 24 * 60 * 60 * 1000;
+  const events = state.events.filter(e => Number(e.timestamp) >= cutoff);
+
+  const shownEl = $('analyticsShown');
+  if (shownEl) shownEl.textContent = t('analytics.totalShown', 'Based on the last {n} recorded events').replace('{n}', String(state.events.length));
+
+  // ---- Timeline (events per day) ----
+  const dayBuckets = new Map();
+  for (let i = rangeDays - 1; i >= 0; i--) {
+    const ts = Date.now() - i * 24 * 60 * 60 * 1000;
+    dayBuckets.set(dayKey(ts), { ts, count: 0 });
+  }
+  for (const e of events) {
+    const k = dayKey(e.timestamp);
+    if (dayBuckets.has(k)) dayBuckets.get(k).count++;
+  }
+  const points = [...dayBuckets.values()].map(b => ({ count: b.count, label: shortDayLabel(b.ts) }));
+  const timelineEl = $('analyticsTimeline');
+  if (timelineEl) {
+    timelineEl.innerHTML = events.length
+      ? buildTimelineChartSVG(points)
+      : `<div class="empty">${escapeHtml(t('analytics.empty', 'No data yet.'))}</div>`;
+  }
+
+  // ---- Severity donut ----
+  const sevCounts = { high: 0, medium: 0, low: 0, info: 0 };
+  for (const e of events) {
+    const s = (e.severity || 'info').toLowerCase();
+    if (s in sevCounts) sevCounts[s]++; else sevCounts.info++;
+  }
+  const sevSegments = Object.entries(sevCounts)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ label: analyticsSeverityLabel(k), value: v, color: SEVERITY_COLORS[k] }));
+  const severityEl = $('analyticsSeverity');
+  if (severityEl) {
+    severityEl.innerHTML = events.length
+      ? buildDonutChartSVG(sevSegments, events.length, t('stats.totalEvents', 'Events'))
+        + buildChartLegend(sevSegments)
+      : `<div class="empty">${escapeHtml(t('analytics.empty', 'No data yet.'))}</div>`;
+  }
+
+  // ---- Event types ----
+  const typeCounts = new Map();
+  for (const e of events) {
+    const k = e.type || 'event';
+    typeCounts.set(k, (typeCounts.get(k) || 0) + 1);
+  }
+  const typeEntries = [...typeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([k, v]) => ({ key: k, label: analyticsTypeLabel(k), count: v }));
+  const typesEl = $('analyticsTypes');
+  if (typesEl) typesEl.innerHTML = buildBarList(typeEntries, { icon: true, emptyText: t('analytics.empty', 'No data yet.') });
+
+  // ---- Most targeted domains ----
+  const domainCounts = new Map();
+  for (const e of events) {
+    for (const host of [e.domain, e.destination]) {
+      const h = String(host || '').trim();
+      if (!h) continue;
+      domainCounts.set(h, (domainCounts.get(h) || 0) + 1);
+    }
+  }
+  const domainEntries = [...domainCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([k, v]) => ({ key: k, label: k, count: v }));
+  const domainsEl = $('analyticsDomains');
+  if (domainsEl) domainsEl.innerHTML = buildBarList(domainEntries, { emptyText: t('analytics.noDomains', 'No domain activity in this range.') });
+}
+
+function exportAnalyticsReport() {
+  const rangeDays = state.analyticsRange || 14;
+  const cutoff = Date.now() - rangeDays * 24 * 60 * 60 * 1000;
+  const events = state.events.filter(e => Number(e.timestamp) >= cutoff);
+  const sevCounts = { high: 0, medium: 0, low: 0, info: 0 };
+  const typeCounts = {};
+  const domainCounts = {};
+  for (const e of events) {
+    const s = (e.severity || 'info').toLowerCase();
+    sevCounts[s in sevCounts ? s : 'info']++;
+    const ty = e.type || 'event';
+    typeCounts[ty] = (typeCounts[ty] || 0) + 1;
+    for (const host of [e.domain, e.destination]) {
+      if (!host) continue;
+      domainCounts[host] = (domainCounts[host] || 0) + 1;
+    }
+  }
+  downloadJSON(`corsair-analytics-${rangeDays}d-${Date.now()}.json`, {
+    generatedAt: new Date().toISOString(),
+    rangeDays,
+    totalEvents: events.length,
+    bySeverity: sevCounts,
+    byType: typeCounts,
+    byDomain: domainCounts,
+    events
+  });
+  showToast(t('analytics.export', 'Export Report'), 'success');
+}
+
+function initAnalytics() {
+  const group = $('analyticsRangeGroup');
+  if (group) {
+    group.querySelectorAll('.range-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        group.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.analyticsRange = Number(btn.dataset.range) || 14;
+        renderAnalytics();
+      });
+    });
+  }
+  safeOn('analyticsExportBtn', 'click', exportAnalyticsReport);
 }
 
 function renderEvidence() {
@@ -1588,11 +2208,14 @@ async function refresh() {
   else restoreSettingsForm(settingsSnapshot);
   renderNewStats();
   renderRecentActivity();
+  renderAnalytics();
+  renderNotifications();
   renderEvents();
   renderEvidence();
   renderRisk();
   renderStorageStats();
   renderApiStatus();
+  renderUrlhausStatus();
 
   if (window.CorsairI18n) CorsairI18n.apply(document);
   const titleEl = $('viewTitle');
@@ -2167,13 +2790,13 @@ const ONBOARDING_STEPS = [
       }
 
       try {
-        await send({ type: 'set-api-key-secure', apiKey: key });
-        state.currentApiKey = key;
-
-        const test = await send({ type: 'query-threat-intel', domain: 'example.com', force: false });
-        if (!test?.ok && test?.error === 'invalid-api-key') {
-          throw new Error(t('onboarding.step4.errInvalid', 'Invalid API key — VirusTotal rejected it.'));
+        const setRes = await send({ type: 'set-api-key-secure', apiKey: key });
+        if (!setRes?.ok) {
+          throw new Error(setRes?.error === 'invalid-api-key'
+            ? t('onboarding.step4.errInvalid', 'Invalid API key — VirusTotal rejected it.')
+            : (setRes?.error || 'Failed to save key'));
         }
+        state.currentApiKey = key;
 
         if (status) {
           status.className = 'onboarding-status success';
@@ -2925,6 +3548,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
    ============================================================ */
 (async () => {
   initNavigation();
+  initAnalytics();
+  await loadNotifLastSeen();
   await initLanguage();
   await initTheme();
   await refresh();

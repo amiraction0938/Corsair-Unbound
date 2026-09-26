@@ -380,6 +380,7 @@ const CorsairMigration = (() => {
     const safeSettings = { ...settings };
     delete safeSettings.vtApiKey;
     delete safeSettings.apiKey;
+    delete safeSettings.urlhausAuthKey;
 
     // Build a human-readable summary so the user knows exactly what
     // they're about to download and can verify after restore.
