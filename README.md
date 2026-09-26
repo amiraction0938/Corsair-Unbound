@@ -116,7 +116,6 @@ Use **Dashboard → Privacy & Data → Wipe ALL Local Data** to fully reset.
 See [SECURITY.md](SECURITY.md) for credential-handling guidance.
 
 ---
----
 
 ## 🔒 Why does the extension request access to all websites?
 
@@ -129,25 +128,34 @@ Corsair Unbound requests:
 ]
 ```
 
-This permission is intentional and is required for the extension's protection model.
+This permission is intentional and is required by the extension's protection model.
 
-Corsair Unbound operates directly inside web pages and across frames, so broad host access is necessary for features such as:
+Corsair Unbound operates directly inside web pages and across frames. Broad host access is therefore necessary for features such as:
 
 - Frame-level popup interception
 - MAIN-world `window.open()` protection
 - Navigation and redirect containment
-- In-page verdict banner
+- In-page verdict banners
 - Per-domain Fortress enforcement
 
-### Security model
+### Security considerations
+
+Broad host permissions are inherently high-impact: an extension with access to arbitrary `http` and `https` pages can potentially observe or modify page content within the scope allowed by its content scripts.
+
+Corsair Unbound limits its exposure by design:
 
 - No telemetry or account system
 - No remote code loading
 - No external runtime dependencies
-- All protection logic ships with the extension
-- Source code is fully inspectable
+- Protection logic ships with the extension
+- Source code is publicly inspectable
+- Optional VirusTotal access uses the user's own API key (BYOK)
 
-Like any browser extension with broad host permissions, a compromised extension would become a high-impact browser component. Keeping the project local-first, dependency-light, and fully open source helps reduce that risk by allowing users to inspect exactly what is shipped.
+A compromise of the extension itself — for example through a malicious code change, compromised publishing account, or compromised future dependency — could turn that broad access into a significant browser security risk. Users should review release changes and install only versions they trust.
+
+### Permission scope
+
+The extension requests access only to standard `http://` and `https://` web pages. Chrome-internal pages and other restricted browser surfaces are not covered by these host patterns.
 
 ## 🏗️ Architecture
 
