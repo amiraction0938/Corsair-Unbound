@@ -102,6 +102,7 @@ Corsair Unbound is a local-first Chrome Manifest V3 browser shield focused on de
 
 ## 🔐 Privacy and API credentials
 
+
 Corsair Unbound follows a **local-first** model.
 
 - The source tree does **not** contain a hard-coded VirusTotal API key or any personal credential.
@@ -115,6 +116,38 @@ Use **Dashboard → Privacy & Data → Wipe ALL Local Data** to fully reset.
 See [SECURITY.md](SECURITY.md) for credential-handling guidance.
 
 ---
+---
+
+## 🔒 Why does the extension request access to all websites?
+
+Corsair Unbound requests:
+
+```json
+"host_permissions": [
+  "http://*/*",
+  "https://*/*"
+]
+```
+
+This permission is intentional and is required for the extension's protection model.
+
+Corsair Unbound operates directly inside web pages and across frames, so broad host access is necessary for features such as:
+
+- Frame-level popup interception
+- MAIN-world `window.open()` protection
+- Navigation and redirect containment
+- In-page verdict banner
+- Per-domain Fortress enforcement
+
+### Security model
+
+- No telemetry or account system
+- No remote code loading
+- No external runtime dependencies
+- All protection logic ships with the extension
+- Source code is fully inspectable
+
+Like any browser extension with broad host permissions, a compromised extension would become a high-impact browser component. Keeping the project local-first, dependency-light, and fully open source helps reduce that risk by allowing users to inspect exactly what is shipped.
 
 ## 🏗️ Architecture
 
