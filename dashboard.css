@@ -2894,3 +2894,37 @@ body.lang-rtl-text .bar-row-count { text-align: left; }
 .notif-badge[hidden] {
   display: none !important;
 }
+
+/* ============================================================
+   ACTIVITY FILTER BAR
+   ============================================================ */
+.activity-filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.activity-filter-bar .search-input {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.activity-filter-bar select.search-input {
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 130px;
+}
+
+.activity-filter-bar #activityCount {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+  .activity-filter-bar { flex-direction: column; align-items: stretch; }
+  .activity-filter-bar .search-input { width: 100%; }
+  .activity-filter-bar #activityCount { margin-left: 0; text-align: right; }
+}

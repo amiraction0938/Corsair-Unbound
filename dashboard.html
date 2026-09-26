@@ -245,6 +245,22 @@
               <button id="clearTelemetry" class="tool-btn" data-i18n="actions.clearGraph">Clear graph</button>
             </div>
           </div>
+          <div class="activity-filter-bar">
+            <input id="activitySearch" class="search-input"
+                   placeholder="Search events..."
+                   autocomplete="off" spellcheck="false">
+            <select id="activitySeverityFilter" class="search-input">
+              <option value="all">All severities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+              <option value="info">Info</option>
+            </select>
+            <select id="activityTypeFilter" class="search-input">
+              <option value="all">All types</option>
+            </select>
+            <span id="activityCount" class="muted"></span>
+          </div>
           <div id="activity" class="events"></div>
         </div>
       </section>
@@ -679,6 +695,7 @@
 
   <script src="core/security.js"></script>
   <script src="core/i18n.js"></script>
+  <script src="core/event-filter.js"></script>
   <script src="core/updater.js"></script>
   <script src="dashboard.js"></script>
 </body>

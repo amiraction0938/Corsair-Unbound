@@ -29,7 +29,12 @@ const state = {
   activeView: 'overview',
   apiKeyVisible: false,
   updateInfo: null,
-  analyticsRange: 14
+  analyticsRange: 14,
+  activityFilters: {
+    search: '',
+    severity: 'all',
+    type: 'all'
+  }
 };
 
 const $ = id => document.getElementById(id);
@@ -1410,8 +1415,42 @@ function renderEvents() {
   const box = $('activity');
   if (!box) return;
   box.innerHTML = '';
-  if (!state.events.length) { box.innerHTML = '<div class="empty">—</div>'; return; }
-  for (const e of state.events.slice(0, 200)) {
+
+  const countEl = $('activityCount');
+
+  if (typeof CorsairEventFilter === 'undefined') {
+    box.innerHTML = '<div class="empty">—</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  if (!state.events.length) {
+    box.innerHTML = '<div class="empty">—</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  const filtered = CorsairEventFilter.filterEvents(state.events, {
+    search: state.activityFilters.search,
+    severity: state.activityFilters.severity,
+    type: state.activityFilters.type,
+    limit: 200
+  });
+
+  if (countEl) {
+    if (filtered.length === state.events.length) {
+      countEl.textContent = `${filtered.length} events`;
+    } else {
+      countEl.textContent = `${filtered.length} / ${state.events.length} events`;
+    }
+  }
+
+  if (!filtered.length) {
+    box.innerHTML = '<div class="empty">No events match the current filters.</div>';
+    return;
+  }
+
+  for (const e of filtered) {
     const row = document.createElement('div');
     row.className = 'event';
     const main = document.createElement('div');
@@ -1428,6 +1467,34 @@ function renderEvents() {
     sev.textContent = String(e.severity || 'low').toUpperCase();
     row.append(main, sev);
     box.appendChild(row);
+  }
+}
+
+function refreshActivityTypeFilter() {
+  const sel = $('activityTypeFilter');
+  if (!sel || typeof CorsairEventFilter === 'undefined') return;
+
+  const prevValue = state.activityFilters.type;
+  const types = CorsairEventFilter.collectEventTypes(state.events);
+
+  sel.innerHTML = '';
+  const allOpt = document.createElement('option');
+  allOpt.value = 'all';
+  allOpt.textContent = 'All types';
+  sel.appendChild(allOpt);
+
+  for (const ty of types) {
+    const opt = document.createElement('option');
+    opt.value = ty;
+    opt.textContent = ty;
+    sel.appendChild(opt);
+  }
+
+  if (types.includes(prevValue)) {
+    sel.value = prevValue;
+  } else {
+    sel.value = 'all';
+    state.activityFilters.type = 'all';
   }
 }
 
@@ -2210,6 +2277,7 @@ async function refresh() {
   renderRecentActivity();
   renderAnalytics();
   renderNotifications();
+  refreshActivityTypeFilter();
   renderEvents();
   renderEvidence();
   renderRisk();
@@ -3122,11 +3190,21 @@ safeOn('wipeAllData', 'click', async () => {
   else showToast(r?.error || 'Failed', 'error');
 });
 
-safeOn('clearEvents', 'click', async () => {
-  await send({ type: 'clear-events' });
-  await refresh();
-  showToast('Events cleared');
+safeOn('activitySearch', 'input', () => {
+  state.activityFilters.search = $('activitySearch')?.value || '';
+  renderEvents();
 });
+
+safeOn('activitySeverityFilter', 'change', () => {
+  state.activityFilters.severity = $('activitySeverityFilter')?.value || 'all';
+  renderEvents();
+});
+
+safeOn('activityTypeFilter', 'change', () => {
+  state.activityFilters.type = $('activityTypeFilter')?.value || 'all';
+  renderEvents();
+});
+
 
 safeOn('clearTelemetry', 'click', async () => {
   await send({ type: 'clear-telemetry' });
