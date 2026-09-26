@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.8.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Verify manifest
+        run: test -f dist/manifest.json
+
+      - name: Package extension as ZIP
+        run: |
+          cd dist
+          zip -r -q ../corsair-unbound-extension.zip .
+          cd ..
+          ls -la corsair-unbound-extension.zip
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Corsair Unbound ${{ steps.tag.outputs.tag }}
+          body: |
+            ## Corsair Unbound ${{ steps.tag.outputs.tag }}
+
+            ### 🚀 Quick Install
+
+            1. **Download** `corsair-unbound-extension.zip` from the Assets below
+            2. **Extract** the ZIP to a folder you'll keep (don't delete it later)
+            3. Open `chrome://extensions`
+            4. Enable **Developer mode** (top-right toggle)
+            5. Click **Load unpacked** and select the extracted folder
+
+            Full instructions: [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/INSTALL.md)
+
+            ### 📋 What's in this release
+
+            - Deterministic DNR enforcement (Fortress catch-all)
+            - Multi-source threat intelligence (VirusTotal + URLhaus + heuristics)
+            - Notification Center with real-time updates
+            - Content security guard (clipboard / CSP / form-jacking)
+            - Multi-language UI (8 languages, full RTL support)
+            - Custom domain scripts
+            - Backup & restore
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: |
+            corsair-unbound-extension.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
