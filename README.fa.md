@@ -1,95 +1,135 @@
-# 🏴‍☠️ Corsair Unbound
+<div dir="rtl" align="center">
 
-<p align="center" dir="rtl">
-  <strong>نسخه فعلی: v1.8.0</strong>
+# 🏴☠️ Corsair Unbound
+
+<strong>سپر مرورگر Local-first برای Chrome (Manifest V3)</strong>
+
+<p>
+  <a href="README.md">🇬🇧 English</a> ·
+  <a href="SECURITY.md">🔒 Security</a> ·
+  <a href="docs/SECURITY-AUDIT.md">🧪 Security Audit</a> ·
+  <a href="docs/UPDATE-POLICY.md">🔄 Update Policy</a>
 </p>
 
-<p align="center">
-  <img src="assets/corsair-unbound-hero.png" alt="Corsair Unbound" width="100%">
-</p>
+<img src="assets/corsair-unbound-hero.png" alt="Corsair Unbound" width="100%">
 
-<h2 align="center">امنیت • آزادی • حق همه است</h2>
-<p align="center"><strong>هیچ چیزی ما را محدود نمی‌کند.</strong></p>
+<strong>نسخه فعلی: v1.8.1</strong>
 
-<p align="center">
-  <a href="README.md"><strong>🇬🇧 English Documentation</strong></a>
-</p>
+</div>
 
-<div dir="rtl">
+Corsair Unbound یک سپر مرورگر **Local-first** برای Chrome Manifest V3 است که روی حفاظت قطعی ناوبری، اجرای Fortress، مهار redirect، تحلیل heuristic، هوش تهدید اختیاری و یک داشبورد کامل محلی تمرکز دارد.
 
-Corsair Unbound یک سپر مرورگر **Local-first** برای Chrome (MV3) است که روی حفاظت قطعی ناوبری، اجرای Fortress، مهار redirect، تحلیل heuristic، هوش تهدید اختیاری و یک داشبورد کامل محلی تمرکز دارد. همه‌چیز روی دستگاه خود شما اجرا می‌شود — بدون حساب کاربری، بدون ابر، بدون تلمتری.
+هسته افزونه طوری طراحی شده که منطق حفاظتی و داده‌های کاربر تا حد ممکن روی خود دستگاه باقی بمانند. اتصال اختیاری VirusTotal به‌صورت **BYOK** است؛ یعنی کلید را خود کاربر وارد می‌کند و درخواست‌های مربوط به reputation و analysis مستقیماً به VirusTotal ارسال می‌شوند.
 
 ---
 
-## ✨ نگاه کلی
+## ✨ قابلیت‌ها
 
-- **حالت Fortress** — قفل‌گذاری روی هر دامنه با قوانین DNR
-- **گارد ناوبری در سطح فریم** — مهار popup در تمام فریم‌ها، حتی iframeهای تبلیغاتی شخص ثالث
-- **مهار Popup** — تشخیص حمله‌ی انبوه + cooldown
-- **مهار طوفان Redirect** — بلاک خودکار بر اساس هوش تهدید
-- **محافظ دانلود** — بلاک دانلود از منابع مخرب
-- **موتور Heuristic** — تشخیص typosquatting، homograph، TLD مشکوک، دامنه‌های تازه ثبت‌شده
-- **VirusTotal اختیاری (BYOK)** — ۴ درخواست در دقیقه، صف با محدودیت نرخ
-- **وایت‌لیست هوشمند** — بیش از ۵۰۰ دامنه داخلی + سینک با Cisco OpenDNS
-- **رابط چندزبانه** — ۸ زبان با پشتیبانی کامل RTL (فارسی، العربية)
-- **داشبورد کامل** — آنالایزر، لیست امن، کنترل‌های حریم خصوصی، تغییر زبان
-- **پشتیبان‌گیری و بازیابی** — خروجی/ورودی کامل تنظیمات، مهاجرت نسخه‌بندی‌شده
-- **بررسی‌کننده داخلی آپدیت** — نوتیفیکیشن دسکتاپ + دانلود با یک کلیک
+### 🛡️ حفاظت
 
----
+- **Fortress Mode** — قفل‌گذاری روی هر دامنه با قوانین DNR session
+- **گارد ناوبری در سطح فریم** — اجرا در همه فریم‌های منطبق، حتی iframeهای شخص ثالث
+- **مهار Popup** — تشخیص burst و اعمال cooldown
+- **مهار طوفان Redirect** — containment بر پایه سیگنال‌های هوش تهدید
+- **محافظ دانلود** — مهار دانلودهای مرتبط با منابع مخرب
+- **حذف External Meta Refresh** — جلوگیری از ناوبری خارجی با meta-refresh
+- **Content Security Guard** — پوشش سیگنال‌های clipboard، CSP و form-jacking
 
-## 🛡️ حفاظت
+### 🧠 هوش تهدید
 
-| قابلیت | توضیح |
-|---|---|
-| **حالت Fortress** | قفل‌گذاری روی هر دامنه با قوانین DNR session |
-| **گارد ناوبری در سطح فریم** | یک اسکریپت اختصاصی در *همه‌ی* فریم‌های صفحه (شامل iframeهای تبلیغاتی شخص ثالث) اجرا می‌شود تا فراخوانی‌های مخرب `window.open()` و لینک‌های popup-shaped را در اولین لحظه‌ی ممکن مهار کند |
-| **مهار Popup** | تشخیص حمله‌ی انبوه + cooldown |
-| **مهار طوفان Redirect** | بلاک خودکار بر اساس هوش تهدید |
-| **محافظ دانلود** | بلاک دانلود از منابع مخرب |
-| **حذف Meta Refresh خارجی** | حذف `<meta http-equiv="refresh">` به دامنه‌های خارجی |
+- **VirusTotal BYOK** — اتصال اختیاری با صف و محدودیت نرخ
+- **Heuristic Engine** — تشخیص typosquatting، homograph، TLD مشکوک، دامنه‌های تازه‌ثبت‌شده و برند در subdomain
+- **Smart Allowlist** — دامنه‌های مورداعتماد داخلی + همگام‌سازی allowlist از راه دور
+- **دامنه‌های مورد اعتماد کاربر** — اعتماد با یک کلیک از بنر داخل صفحه
+- **Behavior Intelligence** — طبقه‌بندی سیگنال‌ها و تجمیع ریسک در زمان اجرا
+- **هوش چندمنبعی** — ترکیب heuristic محلی با providerهای پشتیبانی‌شده
 
-## 🧠 هوش تهدید
+### 🎨 تجربه کاربری
 
-| قابلیت | توضیح |
-|---|---|
-| **VirusTotal BYOK** | ۴ درخواست در دقیقه، صف با محدودیت نرخ |
-| **موتور Heuristic** | typosquatting، homograph، TLD مشکوک، دامنه‌های تازه ثبت‌شده، تشخیص برند در زیر‌دامنه |
-| **وایت‌لیست هوشمند** | بیش از ۵۰۰ دامنه داخلی + سینک با Cisco OpenDNS |
-| **دامنه‌های مورد اعتماد کاربر** | اعتماد با یک کلیک از روی بنر |
-| **هوش رفتاری** | طبقه‌بندی سیگنال‌ها در زمان واقعی |
-
-## 🎨 تجربه کاربری
-
-- **رابط چندزبانه** — English، فارسی، العربية، Español، Deutsch، Français، Русский، 中文 — با پشتیبانی کامل RTL برای فارسی و عربی
-- **بنر نتیجه درون صفحه** — گوشه‌ی بالا-راست هر سایت غیر وایت‌لیست، **کاملاً محلی‌سازی‌شده**
-- **نشان افزونه** — وضعیت رنگی سبز/زرد/قرمز/آبی برای هر تب
-- **کلیدهای میانبر** — `Ctrl+Shift+F` (Fortress)، `Ctrl+Shift+E` (داشبورد)
-- **داشبورد کامل** — آنالایزر، لیست امن، کنترل‌های حریم خصوصی، تنظیمات، تغییر زبان
+- **رابط چندزبانه** — English، فارسی، العربية، Español، Deutsch، Français، Русский، 中文
+- **پشتیبانی کامل RTL** — چینش راست‌به‌چپ برای فارسی و عربی
+- **بنر نتیجه درون صفحه** — نمایش verdict محلی‌سازی‌شده
+- **Badge افزونه** — نمایش وضعیت امنیتی هر تب
+- **کلیدهای میانبر** — Ctrl+Shift+F برای Fortress و Ctrl+Shift+E برای Dashboard
+- **داشبورد کامل** — analyzer، Safe List، حریم خصوصی، تنظیمات، API & Intelligence و انتخاب زبان
 - **تم روشن/تاریک**
-- **بررسی‌کننده داخلی آپدیت** — بررسی دوره‌ای مخزن GitHub، نوتیفیکیشن دسکتاپ، دانلود با یک کلیک، و راهنمای نصب گام‌به‌گام
+- **بررسی‌کننده داخلی آپدیت** — بررسی نسخه، اعلان دسکتاپ، دانلود ZIP و راهنمای نصب دستی
 
-## 💾 داده‌ها
+### 💾 داده و پایداری
 
-- **دامنه‌های اسکن‌شده امن** — کش محلی با جستجو + عملیات گروهی
-- **پشتیبان‌گیری و بازیابی** — خروجی/ورودی کامل تنظیمات به JSON، مهاجرت نسخه‌بندی‌شده
-- **خروجی/ورودی لیست امن** — فایل جداگانه برای جابه‌جایی
-- **کنترل‌های حریم خصوصی** — آمار فضای مصرفی + پاک‌سازی کامل
-- **مجموعه Regression** — بازپخش قطعی
+- **Safe Scanned Domains** — کش محلی با جست‌وجو و عملیات گروهی
+- **Backup & Restore** — JSON نسخه‌بندی‌شده با حذف فیلدهای حساس
+- **Safe List Export/Import** — فایل جداگانه برای جابه‌جایی
+- **Privacy Controls** — آمار storage و پاک‌سازی کامل
+- **Regression Suite** — تست‌های deterministic replay
+- **Security Audit** — بررسی credentialهای واضح و تنظیمات پرریسک manifest
 
 ---
 
 ## 📦 نصب
 
-۱. `chrome://extensions` را باز کنید
-۲. **Developer mode** را فعال کنید (کلید بالا-راست)
-۳. روی **Load unpacked** کلیک کنید
-۴. **ریشه‌ی repository** را انتخاب کنید (پوشه‌ای که `manifest.json` در آن است)
-۵. پاپ‌آپ افزونه را باز کنید و **داشبورد** را اجرا کنید
-۶. *(اختیاری)* یک کلید رایگان VirusTotal از https://www.virustotal.com/gui/my-apikey بگیرید و در **داشبورد → API و هوش** وارد کنید
-۷. زبان مورد نظرتان را از تغییردهنده‌ی زبان در داشبورد انتخاب کنید
+### Load unpacked
 
-> **نکته:** بعد از آپدیت از نسخه‌ی قدیمی، روی دکمه‌ی ↻ **Reload** در `chrome://extensions` کلیک کنید — پروفایل‌ها، تنظیمات و کش شما حفظ می‌شوند.
+۱. <code>chrome://extensions</code> را باز کنید  
+۲. **Developer mode** را فعال کنید  
+۳. روی **Load unpacked** بزنید  
+۴. ریشه repository را انتخاب کنید؛ همان پوشه‌ای که <code>manifest.json</code> داخل آن است  
+۵. Popup افزونه را باز کنید و وارد Dashboard شوید  
+۶. *(اختیاری)* از https://www.virustotal.com/gui/my-apikey یک VirusTotal API Key رایگان بگیرید  
+۷. کلید را در **Dashboard → API & Intelligence** وارد کنید  
+۸. در صورت نیاز **VirusTotal Threat Intelligence** و **Auto-Scan** را فعال کنید  
+۹. زبان موردنظر را انتخاب کنید
+
+> **بعد از آپدیت:** فایل‌های نسخه جدید را جایگزین کنید و سپس در <code>chrome://extensions</code> روی **Reload** بزنید. storage داخلی افزونه حفظ می‌شود.
+
+---
+
+## 🔑 API Key و حریم خصوصی
+
+Corsair Unbound هیچ VirusTotal API Key واقعی را به‌صورت hard-code داخل سورس منتشر نمی‌کند.
+
+### مدل BYOK
+
+- کلید را خود کاربر به‌صورت محلی وارد می‌کند
+- هیچ سرور Corsair Unbound کلید را دریافت نمی‌کند
+- درخواست‌های VirusTotal در صورت فعال بودن قابلیت مستقیماً به VirusTotal ارسال می‌شوند
+- دامنه‌های allowlisted عمداً برای lookup به VirusTotal فرستاده نمی‌شوند
+- backup/export فیلدهای قدیمی plaintext API key را حذف می‌کند
+- سیاست امنیتی پروژه commit کردن API key، token، password، cookie و private key را ممنوع می‌کند
+
+### نکته مهم درباره storage
+
+کلید فعال خارج از payload معمول settings و با مکانیزم application-level encrypted/obfuscated ذخیره می‌شود.
+
+این کار برای جلوگیری از باقی‌ماندن کلید به شکل plaintext معمولی مفید است، اما **password vault نیست** و در برابر compromise خود افزونه یا مهاجم بسیار قدرتمند روی browser profile مرز امنیتی مطلق ایجاد نمی‌کند؛ چون افزونه باید بتواند کلید را در زمان اجرا بازیابی کند.
+
+برای پاک‌سازی کامل: **Dashboard → Privacy & Data → Wipe ALL Local Data**
+
+جزئیات بیشتر در [SECURITY.md](SECURITY.md) و [Security Audit](docs/SECURITY-AUDIT.md) قرار دارد.
+
+---
+
+## 🔄 سیستم آپدیت
+
+Corsair Unbound برای نصب unpacked یک update checker داخلی دارد.
+
+این سیستم:
+
+۱. <code>manifest.json</code> عمومی repository را برای مقایسه نسخه می‌خواند  
+۲. در صورت وجود نسخه جدید اعلان می‌دهد  
+۳. ZIP repository را دانلود می‌کند  
+۴. مراحل جایگزینی فایل‌های افزونه را نشان می‌دهد  
+۵. storage داخلی افزونه را حفظ می‌کند
+
+### مدل امنیتی آپدیت
+
+Updater فعلی شاخه قابل‌تغییر <code>main</code> را دنبال می‌کند و قبل از دانلود یا نصب **امضای release یا commit hash را به‌صورت cryptographic verify نمی‌کند**.
+
+بنابراین updater فعلی را باید یک **ابزار راحتی** دانست، نه یک کانال cryptographically verified برای توزیع نرم‌افزار.
+
+برای نصب‌های حساس، commit یا release مقصد را قبل از جایگزینی فایل‌ها بررسی کنید.
+
+راهنمای کامل در [docs/UPDATE-POLICY.md](docs/UPDATE-POLICY.md) است.
 
 ---
 
@@ -97,102 +137,88 @@ Corsair Unbound یک سپر مرورگر **Local-first** برای Chrome (MV3) �
 
 | میانبر | عملکرد |
 |---|---|
-| `Ctrl+Shift+F` | فعال/غیرفعال کردن Fortress روی تب فعلی |
-| `Ctrl+Shift+E` | باز کردن داشبورد Corsair |
+| Ctrl+Shift+F | فعال/غیرفعال کردن Fortress روی تب فعلی |
+| Ctrl+Shift+E | باز کردن Dashboard |
 
 ---
 
-## 🔐 حریم خصوصی و اعتبارنامه‌های API
+## 🏗️ معماری پروژه
 
-Corsair Unbound از مدل **Local-first** پیروی می‌کند.
-
-- در سورس پروژه **هیچ** VirusTotal API Key یا credential شخصی به‌صورت hard-code وجود ندارد.
-- پشتیبانی VirusTotal به‌صورت **BYOK** (کلید خودت رو بیار) است: افزونه کلید وارد شده در تنظیمات محلی را می‌خواند و کوئری‌های پشتیبانی‌شده را **مستقیماً** به VirusTotal ارسال می‌کند.
-- پروفایل‌ها، تنظیمات، مشاهدات، شواهد و تلمتری در **حافظه‌ی افزونه** باقی می‌مانند؛ مگر اینکه کاربر خودش آن‌ها را export کند.
-- **دامنه‌های وایت‌لیست** هرگز به VirusTotal فرستاده نمی‌شوند (صرفه‌جویی در سهمیه).
-- **بررسی آپدیت** فقط یک خواندن `manifest.json` از مخزن عمومی GitHub است — هیچ تلمتری ارسال نمی‌شود.
-
-برای پاک‌سازی کامل: **داشبورد → حریم خصوصی و داده‌ها → پاک کردن کامل داده‌های لوکال**
-
-راهنمای امنیتی بیشتر در [SECURITY.md](SECURITY.md).
+    .
+    ├── assets/
+    │   └── corsair-unbound-hero.png
+    ├── core/
+    │   ├── security.js            پاک‌سازی، normalize و validation
+    │   ├── storage.js             storage تراکنشی + مدیریت API Key
+    │   ├── alarms.js              wrapper برای chrome.alarms
+    │   ├── dnr.js                 اجرای declarativeNetRequest
+    │   ├── redirects.js           ردیابی redirect chain
+    │   ├── threat-intel.js        VirusTotal + allowlist intelligence
+    │   ├── heuristics.js          heuristicهای typosquat/homograph
+    │   ├── intelligence.js        طبقه‌بندی سیگنال
+    │   ├── verifier.js            منطق containment
+    │   ├── observation.js         مشاهده شبکه
+    │   ├── evidence.js            ذخیره شواهد
+    │   ├── migration.js           backup/restore نسخه‌بندی‌شده
+    │   ├── tool-router.js         API داخلی محدود
+    │   ├── replay.js              regression fixtureها
+    │   ├── i18n.js                ترجمه ۸ زبان + RTL
+    │   └── updater.js             update checker بر پایه GitHub
+    ├── icons/
+    ├── background.js              service worker
+    ├── content-frame-guard.js     گارد popup در سطح فریم
+    ├── content-main-world.js      محافظ window.open در MAIN world
+    ├── content-security-guard.js  گارد clipboard/CSP/form-jacking
+    ├── content.js                 بنر و مشاهده در top frame
+    ├── popup.html / popup.css / popup.js
+    ├── dashboard.html / dashboard.css / dashboard.js
+    ├── blocked.html / blocked.js
+    ├── manifest.json
+    ├── scripts/
+    │   ├── build.mjs
+    │   └── security-audit.mjs
+    ├── tests/
+    ├── CHANGELOG.md
+    ├── INSTALL.md
+    ├── LICENSE
+    ├── SECURITY.md
+    └── README.md / README.fa.md
 
 ---
+
+## 🧪 تست و بررسی
+
+اجرای تست‌های موجود:
+
+    npm ci
+    npm test
+
+اجرای security audit:
+
+    node scripts/security-audit.mjs
+
+بررسی blobهای قابل‌دسترسی در تاریخچه Git:
+
+    node scripts/security-audit.mjs --history
+
+اسکریپت audit مقدار secret را چاپ نمی‌کند و فقط نام فایل و نوع finding را گزارش می‌دهد.
+
 ---
 
-## 🔒 چرا افزونه به همه‌ی وب‌سایت‌ها دسترسی می‌خواهد؟
+## 📚 مستندات
 
-Corsair Unbound این دسترسی را درخواست می‌کند:
+- [English README](README.md)
+- [README فارسی](README.fa.md)
+- [Security Policy](SECURITY.md)
+- [Security Audit](docs/SECURITY-AUDIT.md)
+- [Update Policy](docs/UPDATE-POLICY.md)
+- [Install Guide](INSTALL.md)
+- [Changelog](CHANGELOG.md)
 
-```json
-"host_permissions": [
-  "http://*/*",
-  "https://*/*"
-]
-```
+---
 
-این دسترسی عمدی است و بخشی از مدل حفاظتی افزونه محسوب می‌شود.
+## 📜 مجوز
 
-Corsair Unbound مستقیماً داخل صفحات وب و فریم‌های آن‌ها فعالیت می‌کند. به همین دلیل برای قابلیت‌هایی مثل موارد زیر به دسترسی گسترده‌ی میزبان نیاز دارد:
+MIT — [LICENSE](LICENSE)
 
-- مهار Popup در سطح فریم
-- محافظت از `window.open()` در MAIN World
-- مهار ناوبری و زنجیره‌های Redirect
-- نمایش بنر نتیجه داخل صفحه
-- اجرای Fortress برای هر دامنه
-
-### ملاحظات امنیتی
-
-دسترسی گسترده به میزبان‌ها ذاتاً دسترسی پرقدرتی است؛ یعنی افزونه‌ای که به صفحات `http` و `https` دسترسی دارد، بسته به محدوده‌ی content scriptهای خود می‌تواند روی محتوای صفحات تعامل داشته باشد.
-
-Corsair Unbound برای کاهش سطح ریسک، به‌صورت طراحی‌شده این موارد را رعایت می‌کند:
-
-- بدون تلمتری یا سیستم حساب کاربری
-- بدون بارگذاری کد از راه دور
-- بدون وابستگی خارجی در زمان اجرا
-- تمام منطق حفاظتی همراه خود افزونه ارائه می‌شود
-- سورس پروژه به‌صورت عمومی قابل بررسی است
-- دسترسی اختیاری VirusTotal با کلید خود کاربر (BYOK) انجام می‌شود
-
-اگر خود افزونه به خطر بیفتد — مثلاً از طریق تغییر کد مخرب، هک شدن حساب انتشار، یا یک وابستگی آینده که compromise شده باشد — همین دسترسی گسترده می‌تواند به یک ریسک امنیتی جدی برای مرورگر تبدیل شود. بهتر است کاربران تغییرات هر نسخه را بررسی کنند و فقط نسخه‌هایی را نصب کنند که به آن‌ها اعتماد دارند.
-
-### محدوده‌ی دسترسی
-
-این افزونه فقط برای صفحات استاندارد `http://` و `https://` دسترسی میزبان درخواست می‌کند. صفحات داخلی Chrome و سایر سطوح محدودشده‌ی مرورگر با این الگوهای میزبان پوشش داده نمی‌شوند.
-
-## 🏗️ ساختار پروژه
-
-```text
-.
-├── assets/
-│   └── corsair-unbound-hero.png
-├── core/
-│   ├── security.js            پاک‌سازی، normalize
-│   ├── storage.js             حافظه تراکنشی
-│   ├── alarms.js              wrapper برای chrome.alarms
-│   ├── dnr.js                 declarativeNetRequest
-│   ├── redirects.js           ردیابی زنجیره
-│   ├── threat-intel.js        VirusTotal + وایت‌لیست
-│   ├── heuristics.js          typosquat/homograph
-│   ├── intelligence.js        طبقه‌بندی سیگنال
-│   ├── verifier.js            تصمیم مهار
-│   ├── observation.js         مشاهده‌ی شبکه
-│   ├── evidence.js            مخزن شواهد
-│   ├── migration.js           پشتیبان/بازیابی (نسخه‌بندی‌شده)
-│   ├── tool-router.js         API محدود ابزارها
-│   ├── replay.js              فیکسچرهای regression
-│   ├── i18n.js                ترجمه ۸ زبان + پشتیبانی RTL
-│   └── updater.js             بررسی‌کننده آپدیت از GitHub
-├── icons/
-├── background.js              service worker
-├── content-frame-guard.js     مهار popup در هر فریم (ISOLATED world)
-├── content-main-world.js      override برای window.open (MAIN world با nonce)
-├── content.js                 بنر و مشاهده‌ی فریم اصلی (با i18n)
-├── popup.html / popup.css / popup.js
-├── dashboard.html / dashboard.css / dashboard.js
-├── blocked.html / blocked.js  مقصد redirect DNR (با i18n)
-├── manifest.json
-├── CHANGELOG.md
-├── LICENSE
-├── SECURITY.md
-├── README.md
-└── README.fa.md
+</div>
