@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Documentation
+- Updated `README.md` and `README.fa.md` with a clear explanation of the broad `http://*/*` and `https://*/*` host permissions and their security implications
+- Refreshed `SECURITY.md` to match the current v1.8.0 architecture and remove the obsolete reference to the old 1.6.5 validation workflow
+- Clarified release hygiene, runtime self-containment, and future dependency/supply-chain expectations
+
 ## [1.8.0]
 
 ### Fixed
