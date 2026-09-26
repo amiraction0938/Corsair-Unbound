@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Corsair Unbound",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "Local-first browser shield with deterministic DNR enforcement, fortress catch-all, heuristics, custom scripts, and navigation isolation.",
   "minimum_chrome_version": "111",
   "permissions": [

@@ -1,6 +1,6 @@
 {
   "name": "corsair-unbound",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "Local-first browser shield with deterministic DNR enforcement, fortress catch-all, heuristics, custom scripts, and navigation isolation.",
   "private": true,
   "type": "module",

@@ -1,7 +1,6 @@
 # Changelog
 
-## [1.8.0]
-All notable changes to Corsair Unbound are documented here.
+## [1.8.2]
 
 ### Fixed
 - **Activity Log filter limit clamp** — `core/event-filter.js` treated `limit: 0` as "no preference" and silently fell back to the default of 200, which contradicted the documented "clamped to [1, 1000]" contract. `0` is now correctly clamped to `1`.
@@ -25,7 +24,6 @@ All notable changes to Corsair Unbound are documented here.
 - Only an asset named exactly `corsair-unbound-extension.zip` is ever selected from a release.
 
 ## [1.8.0]
-
 ## [Unreleased] — Security & Repository Hardening
 
 ### Added
