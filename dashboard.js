@@ -2448,7 +2448,7 @@ function applyUpdateResult(result) {
     banner.hidden = false;
   } else if (banner) {
     banner.hidden = true;
-  }
+  } 
 
   const statusBox = $('aboutUpdateStatus');
   const statusText = $('aboutCheckUpdateText');
@@ -2625,20 +2625,25 @@ safeOn('updateSkipVersion', 'click', () => {
 safeOn('updateDownloadBtn', 'click', async () => {
   const btn = $('updateDownloadBtn');
   const status = $('updateDownloadStatus');
+  const revealBtn = $('updateRevealBtn');
   if (btn) btn.disabled = true;
+  if (revealBtn) revealBtn.hidden = true;
   if (status) {
     status.hidden = false;
     status.className = 'update-download-status';
     status.textContent = t('update.download.starting', '⏳ Starting download…');
   }
 
-  const r = await send({ type: 'download-update' });
+  const r = await send({ type: 'download-update', url: state.updateInfo?.zipUrl || null });
   if (r?.ok) {
+    state.updateInfo.downloadedFileId = r.downloadId;
     if (status) {
       status.className = 'update-download-status success';
-      status.textContent = t('update.download.success', '✅ Downloaded! Check your Downloads folder, then follow steps 2–4.');
+      status.textContent = t('update.download.success',
+        '✅ Downloaded! Use "Show in Folder", extract the ZIP, then replace your extension files.');
     }
-    showToast(t('update.download.success', 'Update ZIP downloaded.'));
+    if (revealBtn) revealBtn.hidden = false;
+    showToast(t('update.download.successShort', 'Update ZIP downloaded.'));
   } else {
     if (status) {
       status.className = 'update-download-status error';
@@ -2647,6 +2652,22 @@ safeOn('updateDownloadBtn', 'click', async () => {
     showToast(t('update.download.failed', 'Download failed.').replace('{error}', r?.error || '?'), 'error');
   }
   if (btn) btn.disabled = false;
+});
+safeOn('updateRevealBtn', 'click', async () => {
+  const id = state.updateInfo?.downloadedFileId;
+  const status = $('updateDownloadStatus');
+  if (!Number.isInteger(id)) {
+    if (status) {
+      status.className = 'update-download-status error';
+      status.textContent = t('update.reveal.noFile', '⚠ No file to reveal yet.');
+    }
+    return;
+  }
+  const r = await send({ type: 'reveal-downloaded-file', downloadId: id });
+  if (!r?.ok && status) {
+    status.className = 'update-download-status error';
+    status.textContent = t('update.reveal.failed', '⚠ Could not open the folder.');
+  }
 });
 
 safeOn('updateCopyPathBtn', 'click', async () => {

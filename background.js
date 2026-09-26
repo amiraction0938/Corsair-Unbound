@@ -1766,7 +1766,25 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
         }
         case 'download-update': {
           try {
-            const r = await CorsairUpdater.downloadUpdateZip();
+            const r = await CorsairUpdater.downloadUpdateZip(m.url || null);
+            send(r);
+          } catch (err) {
+            send({ ok: false, error: err.message });
+          }
+          break;
+        }
+        case 'reveal-downloaded-file': {
+          try {
+            const r = await CorsairUpdater.revealDownloadedFile(m.downloadId);
+            send(r);
+          } catch (err) {
+            send({ ok: false, error: err.message });
+          }
+          break;
+        }
+        case 'open-downloads-folder': {
+          try {
+            const r = await CorsairUpdater.openDownloadsFolder();
             send(r);
           } catch (err) {
             send({ ok: false, error: err.message });
