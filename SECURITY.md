@@ -1,70 +1,116 @@
-# Security
+# Security Policy
 
 ## Scope
 
-Corsair Unbound is a local-first Chrome Manifest V3 extension that operates on web pages and uses broad `http` and `https` host permissions as part of its protection model.
+Corsair Unbound is a local-first Chrome Manifest V3 extension. Its current protection model requires broad HTTP and HTTPS host access so that page and frame protection can run at navigation time.
 
-Because the extension runs in page contexts and can inspect or influence navigation-related events, a compromised release could have a high security impact. The project therefore treats source integrity, release hygiene, and credential handling as security-sensitive concerns.
+This is a high-impact permission model. A compromised build could therefore have meaningful access to web-page contexts.
 
 ## Credential policy
 
-Corsair Unbound is intended to keep credentials out of the source tree.
+The repository must never contain live credentials.
 
-- Do not commit VirusTotal API keys, OAuth tokens, cookies, passwords, private keys, or other credentials.
-- VirusTotal support is BYOK: the key is supplied by the user at runtime and stored in extension storage.
-- Do not paste personal credentials into Issues, Pull Requests, or documentation.
-- Before publishing a release, review the complete diff and verify that no credentials or unintended files were added.
-- Keep the packaged extension self-contained and avoid introducing unnecessary runtime dependencies.
+Do not commit:
+
+- VirusTotal API keys
+- OAuth or access tokens
+- cookies or session credentials
+- passwords
+- private keys or certificates
+- service-account credentials
+- personal authentication material
+
+Do not place secrets in logs, tests, fixtures, screenshots, issues, pull requests, documentation, or generated release payloads.
+
+VirusTotal support is BYOK: the user supplies the key at runtime.
+
+## Current API-key design
+
+The active VirusTotal key is stored outside the ordinary settings payload and uses an application-level encrypted/obfuscated representation.
+
+This reduces ordinary plaintext storage exposure, but it is not a password-manager-grade vault. The extension must recover the key at runtime, so a compromised extension build or highly privileged local attacker may still recover or misuse it.
+
+Backup/export paths remove legacy plaintext fields such as vtApiKey before writing portable settings.
+
+## Message boundary
+
+The background service worker classifies incoming message senders into capability levels.
+
+The current design distinguishes:
+
+- privileged internal extension pages
+- page-observation contexts
+- untrusted senders
+
+Privileged API-key read/write operations are behind the privileged capability path. Page-observation messages are restricted to the smaller observation message set.
 
 ## Host permissions
 
-The manifest requests:
+The current manifest requests:
 
-```json
-"host_permissions": [
-  "http://*/*",
-  "https://*/*"
-]
-```
+    http://*/*
+    https://*/*
 
-This is required for the current protection model, including frame-level popup interception, MAIN-world `window.open()` protection, navigation and redirect containment, in-page verdict banners, and per-domain Fortress enforcement.
+These permissions are intentional for frame-level protection, navigation observation, in-page verdicts, and Fortress enforcement.
 
-This permission is high-impact. Anyone distributing a modified or compromised build could potentially use the same host scope for malicious page access. Users should install releases from trusted sources and review release changes when practical.
+They also define the primary blast-radius consideration if the extension source or release process is compromised.
 
-## Runtime and supply-chain considerations
+## Remote inputs and update risk
 
-The project is designed to remain local-first and self-contained:
+The project uses external network inputs for optional threat intelligence and for its built-in updater.
 
-- No telemetry or account system is required.
-- Protection logic ships with the extension.
-- No remote JavaScript is loaded as part of the extension runtime.
-- The repository contains no hard-coded personal credentials.
-- Optional third-party threat intelligence is explicit and user-controlled through BYOK.
+The current updater:
 
-If dependencies are introduced in the future, they should be pinned and reviewed before release, with special attention to code that can execute inside content scripts or the extension service worker.
+- reads the public GitHub manifest.json
+- compares versions locally
+- downloads the mutable main branch ZIP
+- does not verify a signed release or immutable commit digest before download
 
-## Reporting
+It must therefore be treated as a convenience update path, not as a cryptographically verified software supply-chain channel.
 
-For a suspected security issue, use GitHub's private security reporting features where available rather than posting a secret publicly.
+## Remote code
 
-When reporting, include the affected version, a clear description of the issue, reproduction steps, and the minimum evidence needed to validate the report. Do not include credentials or other secrets.
+The extension should remain self-contained at runtime.
+
+Do not introduce:
+
+- remote JavaScript execution
+- remotely hosted extension scripts
+- dynamic code loading without explicit security review
+- unnecessary third-party runtime dependencies
+
+## Dependency hygiene
+
+Before adding or upgrading a dependency:
+
+1. review package provenance
+2. review the lockfile diff
+3. review code execution surface
+4. run the full test suite
+5. run scripts/security-audit.mjs
+6. review the complete Git diff
 
 ## Release hygiene
 
-Before creating a release:
+Before publishing:
 
-1. Review the full source diff since the previous release.
-2. Verify `manifest.json` permissions and host permissions are intentional.
-3. Check for accidentally added credentials, tokens, private keys, or sensitive local files.
-4. Syntax-check JavaScript and exercise the relevant regression checks available in the repository.
-5. Review any newly introduced dependencies or remote endpoints.
-6. Test the packaged extension in Chrome before distribution.
+1. inspect the complete source diff
+2. verify manifest permissions
+3. run the test suite
+4. run the security audit
+5. check for credentials and sensitive local files
+6. review newly introduced network endpoints
+7. review workflow and release changes
+8. inspect final package contents
 
-Security-sensitive changes should be reviewed with particular care because this extension has broad page access.
+## Reporting a vulnerability
 
-## User data and privacy
+Do not publish secrets or exploit details in a public issue.
 
-Corsair Unbound follows a local-first model. Extension settings, profiles, observations, evidence, and related state are kept in extension storage unless the user explicitly exports them.
+Use GitHub private security reporting features when available. Include the affected version, impact description, reproduction steps, and only the minimum evidence needed to validate the report.
 
-Optional VirusTotal lookups are sent directly to VirusTotal using the user's own API key. Whitelisted domains are intentionally excluded from VirusTotal lookups.
+## Audit transparency
 
+The repository includes static security-audit tooling and CI checks.
+
+A passing static audit does not prove that the extension is vulnerability-free. It is a guardrail against common repository mistakes, not a substitute for a full security assessment.
