@@ -102,6 +102,13 @@ const CorsairStorage = (() => {
       autoArmFortressThreshold: 10,
       autoBlockThreshold: 75,
       urlhausAuthKey: '',
+      // When true (default), the VirusTotal API key is stored in
+      // chrome.storage.local (encrypted) so it survives browser
+      // restarts. When false, it is stored in chrome.storage.session
+      // and is cleared whenever the browser closes — more secure
+      // against local attackers, but the user must re-enter the key
+      // after every restart.
+      persistApiKey: true,
       theme: 'dark',
       language: 'en',
       updatedAt: Date.now()
@@ -652,6 +659,7 @@ const CorsairStorage = (() => {
   // SECURE API KEY STORAGE
   // ============================================================
   const SECURE_KEY_STORAGE_KEY = 'vtApiKeySecure';
+  const SECURE_KEY_META_KEY = 'vtApiKeyMeta';
   const LEGACY_SETTINGS_API_KEY = 'vtApiKey';
   let _aesKeyPromise = null;
 
@@ -723,19 +731,149 @@ const CorsairStorage = (() => {
     }
   }
 
+  /**
+   * Persist the VT API key.
+   *
+   * Storage routing:
+   *   • `persistApiKey: true` (default)  → chrome.storage.local
+   *   • `persistApiKey: false`           → chrome.storage.session
+   *
+   * The key is AES-GCM "wrapped" before storage — see the note in
+   * _deriveAesKey() about the strength of this protection. In
+   * short: it is obfuscation, not real cryptographic protection,
+   * because the derived key is not secret. It does, however, keep
+   * the key from sitting in plaintext in the Chrome profile.
+   *
+   * We ALWAYS remove the key from the other store first, so
+   * switching the setting never leaves a stale copy behind.
+   */
   async function setApiKeySecure(rawKey) {
     const key = (rawKey || '').trim();
-    const runtimeId = (typeof chrome !== 'undefined' && chrome.runtime?.id) || 'corsair-fallback-key';
 
-    if (_hasSessionStorage()) {
-      if (!key) { await chrome.storage.session.remove(SECURE_KEY_STORAGE_KEY); return true; }
-      const enc = await _encryptString(key);
-      await chrome.storage.session.set({ [SECURE_KEY_STORAGE_KEY]: enc });
+    // Read the user's persistence preference (default: persistent).
+    let persist = true;
+    try {
+      await ensureReady();
+      persist = _settingsCache?.persistApiKey !== false;
+    } catch {}
+
+    const useSession = !persist && _hasSessionStorage();
+
+    // --- Clear any previous copy from BOTH stores (migration safe) ---
+    try {
+      if (_hasSessionStorage()) await chrome.storage.session.remove(SECURE_KEY_STORAGE_KEY);
+    } catch {}
+    try {
+      await chrome.storage.local.remove(SECURE_KEY_STORAGE_KEY);
+    } catch {}
+
+    // --- Empty key: clear meta too, nothing to store ---
+    if (!key) {
+      try { await chrome.storage.local.remove(SECURE_KEY_META_KEY); } catch {}
       return true;
     }
-    if (!key) { await chrome.storage.local.remove(SECURE_KEY_STORAGE_KEY); return true; }
-    await chrome.storage.local.set({ [SECURE_KEY_STORAGE_KEY]: _xorObfuscate(key, runtimeId) });
+
+    // --- Encrypt and store in the chosen location ---
+    const enc = await _encryptString(key);
+
+    if (useSession) {
+      await chrome.storage.session.set({ [SECURE_KEY_STORAGE_KEY]: enc });
+    } else {
+      await chrome.storage.local.set({ [SECURE_KEY_STORAGE_KEY]: enc });
+    }
+
+    // --- Record metadata so we can warn if the key later disappears ---
+    try {
+      await chrome.storage.local.set({
+        [SECURE_KEY_META_KEY]: {
+          lastSetAt: Date.now(),
+          storage: useSession ? 'session' : 'local',
+          everSet: true
+        }
+      });
+    } catch {}
+
     return true;
+  }
+
+  /**
+   * Retrieve the VT API key from whichever store has it.
+   *
+   * Order:
+   *   1. chrome.storage.session  (if the user chose session mode)
+   *   2. chrome.storage.local    (default mode, and legacy fallback)
+   *   3. Legacy plaintext in globalSettings (very old installs)
+   *
+   * If (2) contains a legacy XOR-obfuscated payload from a build
+   * before AES-GCM was introduced, we transparently decode it.
+   */
+  async function getApiKeySecure() {
+    const runtimeId = (typeof chrome !== 'undefined' && chrome.runtime?.id) || 'corsair-fallback-key';
+
+    // ---- 1. Session store ----
+    if (_hasSessionStorage()) {
+      try {
+        const res = await chrome.storage.session.get(SECURE_KEY_STORAGE_KEY);
+        const payload = res?.[SECURE_KEY_STORAGE_KEY];
+        if (payload) {
+          const decrypted = await _decryptString(payload);
+          if (decrypted) return decrypted;
+        }
+      } catch {}
+    }
+
+    // ---- 2. Local store (AES-GCM, then legacy XOR fallback) ----
+    try {
+      const resLocal = await chrome.storage.local.get(SECURE_KEY_STORAGE_KEY);
+      const payloadLocal = resLocal?.[SECURE_KEY_STORAGE_KEY];
+      if (payloadLocal) {
+        const decrypted = await _decryptString(payloadLocal);
+        if (decrypted) return decrypted;
+        // Legacy XOR (pre-AES-GCM builds)
+        if (typeof payloadLocal === 'string') {
+          const xorDecoded = _xorDeobfuscate(payloadLocal, runtimeId);
+          if (xorDecoded) return xorDecoded;
+        }
+      }
+    } catch {}
+
+    // ---- 3. Legacy plaintext inside globalSettings ----
+    return _migrateLegacyApiKeyIfPresent();
+  }
+
+  /**
+   * Return a small status object about the VT API key so the UI
+   * can warn the user when the key has silently disappeared.
+   */
+  async function getApiKeyStatus() {
+    const hasKey = Boolean(await getApiKeySecure());
+
+    let meta = null;
+    try {
+      const r = await chrome.storage.local.get(SECURE_KEY_META_KEY);
+      meta = r?.[SECURE_KEY_META_KEY] || null;
+    } catch {}
+
+    const wasEverSet = meta?.everSet === true;
+    const expectedStorage = meta?.storage || 'local';
+    const lastSetAt = Number(meta?.lastSetAt) || 0;
+
+    // Warn ONLY when the user expected the key to persist (local
+    // storage mode) but it is now missing. Session mode users
+    // already expect to re-enter the key after every restart, so
+    // warning them would just be noise.
+    const shouldWarn =
+      wasEverSet &&
+      !hasKey &&
+      expectedStorage === 'local';
+
+    return {
+      hasKey,
+      wasEverSet,
+      expectedStorage,
+      lastSetAt,
+      shouldWarn
+    };
   }
 
   async function _migrateLegacyApiKeyIfPresent() {
@@ -752,26 +890,6 @@ const CorsairStorage = (() => {
     } catch {
       return '';
     }
-  }
-
-  async function getApiKeySecure() {
-    const runtimeId = (typeof chrome !== 'undefined' && chrome.runtime?.id) || 'corsair-fallback-key';
-
-    if (_hasSessionStorage()) {
-      const res = await chrome.storage.session.get(SECURE_KEY_STORAGE_KEY);
-      const payload = res?.[SECURE_KEY_STORAGE_KEY];
-      if (payload) {
-        const decrypted = await _decryptString(payload);
-        if (decrypted) return decrypted;
-      }
-      return _migrateLegacyApiKeyIfPresent();
-    }
-    const res = await chrome.storage.local.get(SECURE_KEY_STORAGE_KEY);
-    if (res?.[SECURE_KEY_STORAGE_KEY]) {
-      const val = _xorDeobfuscate(res[SECURE_KEY_STORAGE_KEY], runtimeId);
-      if (val) return val;
-    }
-    return _migrateLegacyApiKeyIfPresent();
   }
 
   async function getSettings() {
@@ -1263,6 +1381,7 @@ const CorsairStorage = (() => {
     patchSettings,
     getApiKeySecure,
     setApiKeySecure,
+    getApiKeyStatus,
     getEvents,
     appendEvent,
     appendEventUnlocked,

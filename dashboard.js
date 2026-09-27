@@ -933,6 +933,12 @@ function renderApiStatus() {
 
   const hasKey = Boolean(state.currentApiKey && state.currentApiKey.length > 0);
 
+  // Reflect the persist preference
+  const persistToggle = $('persistApiKeyToggle');
+  if (persistToggle) {
+    persistToggle.checked = state.settings.persistApiKey !== false;
+  }
+
   box.classList.remove('connected', 'error');
   if (hasKey) {
     box.classList.add('connected');
@@ -947,6 +953,21 @@ function renderApiStatus() {
     title.textContent = t('api.notConfigured', 'Not configured');
     detail.textContent = t('api.notConfiguredDetail', 'Paste your 64-character VirusTotal API key below to enable threat intelligence.');
     if (field) field.value = '';
+  }
+}
+
+async function renderApiKeyWarning() {
+  const warnEl = $('apiKeyMissingWarning');
+  if (!warnEl) return;
+  try {
+    const r = await send({ type: 'get-api-key-status' });
+    if (r?.ok && r.status?.shouldWarn === true) {
+      warnEl.hidden = false;
+    } else {
+      warnEl.hidden = true;
+    }
+  } catch {
+    warnEl.hidden = true;
   }
 }
 
@@ -973,6 +994,20 @@ safeOn('apiKeyToggle', 'click', () => {
   }
   // In every other case (user typed a new unsaved value) → leave the
   // value untouched, only the input type flipped.
+});
+
+safeOn('persistApiKeyToggle', 'change', async () => {
+  const cb = $('persistApiKeyToggle');
+  if (!cb) return;
+  try {
+    await send({ type: 'patch-settings', patch: { persistApiKey: cb.checked } });
+    showToast(cb.checked
+      ? t('api.persistOn', 'API key will be kept after browser restart.')
+      : t('api.persistOff', 'API key will be cleared when the browser closes.'));
+  } catch {
+    cb.checked = !cb.checked;
+    showToast('Failed to save preference', 'error');
+  }
 });
 
 safeOn('apiKeySave', 'click', async () => {
@@ -2284,6 +2319,7 @@ async function refresh() {
   renderStorageStats();
   renderApiStatus();
   renderUrlhausStatus();
+  renderApiKeyWarning();
 
   if (window.CorsairI18n) CorsairI18n.apply(document);
   const titleEl = $('viewTitle');

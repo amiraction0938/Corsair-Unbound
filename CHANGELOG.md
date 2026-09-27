@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.8.3]
+
+### Fixed
+- **VirusTotal API key now survives browser restarts** — the key was previously stored in `chrome.storage.session`, which Chrome clears when the browser closes. Users would restart their machine and unknowingly lose threat intelligence protection. The default is now `chrome.storage.local` (AES-GCM wrapped), with an opt-in "session only" toggle in the API view. A warning banner also appears if the key disappears when it was expected to persist.
+
+### Changed
+- `core/storage.js` — new `persistApiKey` setting (default `true`); new `getApiKeyStatus()` for detecting silently missing keys; `setApiKeySecure` clears both stores before writing so switching modes never leaves a stale copy.
+- `background.js` — added `get-api-key-status` message handler.
+- `dashboard.html` — added the persist toggle and missing-key warning UI.
+- `dashboard.js` — new `renderApiKeyWarning()` and persist toggle listener.
+
 ## [1.8.2]
 
 ### Fixed

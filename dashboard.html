@@ -438,9 +438,19 @@
               <li><span data-i18n="vt.step2">Open your API key page:</span> <a href="https://www.virustotal.com/gui/my-apikey" target="_blank" rel="noopener">virustotal.com/gui/my-apikey ↗</a></li>
               <li><span data-i18n="vt.step3">Copy the 64-character key, paste it above, click Save &amp; Verify.</span></li>
             </ol>
-            <div class="whitelist-row">
-              <button id="syncWhitelistInline" class="tool-btn" data-i18n="vt.refreshWhitelist">🔄 Refresh Whitelist</button>
-              <span id="whitelistStatsInline" class="muted">loading…</span>
+            <label class="custom-switch-label" style="margin-top:16px; display:flex; align-items:center; gap:10px;">
+              <input type="checkbox" id="persistApiKeyToggle">
+              <span class="slider-track"></span>
+              <span class="switch-caption">
+                Keep API key after browser restart
+                <span class="muted" style="display:block; margin-top:2px;">
+                  When off, the key lives in memory only and must be re-entered after every restart.
+                </span>
+              </span>
+            </label>
+
+            <div id="apiKeyMissingWarning" class="about-update-status error" style="margin-top:14px;" hidden>
+              ⚠ Your VirusTotal API key has disappeared. Threat intelligence is not active. Please re-enter the key above.
             </div>
           </div>
         </div>

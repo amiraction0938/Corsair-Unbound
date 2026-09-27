@@ -1561,6 +1561,11 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           catch (err) { send({ ok: false, error: err.message }); }
           break;
         }
+        case 'get-api-key-status': {
+          try { send({ ok: true, status: await CorsairStorage.getApiKeyStatus() }); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
         case 'set-api-key-secure': {
           try {
             const key = String(m.apiKey || '').trim();
