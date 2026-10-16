@@ -83,7 +83,6 @@ const CorsairStorage = (() => {
     return {
       _version: 13,
       resolverEnabled: true,
-      notifications: true,
       siteVerdictBanner: true,
       notifyOnSafeSites: true,
       logEvents: true,

@@ -1,6 +1,21 @@
 # Changelog
 
-## [1.8.3]
+All notable changes to Corsair Unbound are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Planned
+- Optional local blocklist import from uBlock Origin / AdGuard / hosts files
+- Redirect-chain visualizer in the dashboard
+- Rule playground (dry-run DNR + heuristics without enforcement)
+- Additional threat-intelligence providers (URLhaus, PhishTank, Safe Browsing)
+
+---
+
+## [1.8.3] — 2025
 
 ### Fixed
 - **VirusTotal API key now survives browser restarts** — the key was previously stored in `chrome.storage.session`, which Chrome clears when the browser closes. Users would restart their machine and unknowingly lose threat intelligence protection. The default is now `chrome.storage.local` (AES-GCM wrapped), with an opt-in "session only" toggle in the API view. A warning banner also appears if the key disappears when it was expected to persist.
@@ -11,7 +26,9 @@
 - `dashboard.html` — added the persist toggle and missing-key warning UI.
 - `dashboard.js` — new `renderApiKeyWarning()` and persist toggle listener.
 
-## [1.8.2]
+---
+
+## [1.8.2] — 2025
 
 ### Fixed
 - **Activity Log filter limit clamp** — `core/event-filter.js` treated `limit: 0` as "no preference" and silently fell back to the default of 200, which contradicted the documented "clamped to [1, 1000]" contract. `0` is now correctly clamped to `1`.
@@ -34,41 +51,132 @@
 - The updater now refuses to download from any URL that does not match `https://github.com/amiraction0938/Corsair-Unbound/...`, `https://objects.githubusercontent.com/`, or `https://codeload.github.com/...`. This blocks a hostile release asset from pointing the download at an unrelated host.
 - Only an asset named exactly `corsair-unbound-extension.zip` is ever selected from a release.
 
-## [1.8.0]
-## [Unreleased] — Security & Repository Hardening
+---
+
+## [1.8.1] — 2025
+
+### Fixed
+- **RTL regression** — `core/i18n.js` is loaded both as an extension-page script (dashboard, popup, blocked) AND as a content script on every http(s) page. `applyDirection()` and `apply()` mutated `document.documentElement` unconditionally, which corrupted third-party pages' own `lang` / `dir` / class state when a Persian or Arabic language was active. Both functions now short-circuit unless running on an extension-owned page.
+- **Custom script injection on CSP-restricted sites** — removed the `eval()` and `Function` constructor fallbacks. Only inline `<script>` tag injection is used, which is the only method that reliably survives Content Security Policy on modern sites. Added a hard lint pre-check (`CorsairSecurity.lintCustomScript`) that rejects scripts containing dangerous patterns before they are stored.
+- **Custom script hierarchical host matching** — registering a script for `expl.com` now applies to all subdomains (`mp.expl.com`, `cdn.expl.com`, etc.) via a parent-domain walk, instead of only matching the exact host.
+- **Custom script SPA navigation** — added a top-level `chrome.webNavigation.onHistoryStateUpdated` listener so scripts re-inject on `pushState` / `replaceState` route changes (React Router, Vue Router, Next.js, etc.). Previously they only ran on full page loads.
+- **Custom script iframe injection** — `allFrames: true` is now used so scripts can reach elements that sites render inside iframes.
+- **Custom script deduplication** — replaced exact-URL comparison with a 400ms timestamped window, so revisiting the same URL re-injects instead of skipping.
+- **Memory leak** — `onHistoryStateUpdated` was previously registered *inside* `onCommitted`, stacking a new listener on every navigation. Moved to top-level registration.
 
 ### Added
-
-- Security audit documentation with explicit threat-model and update-channel limitations
-- Update policy documentation for unpacked installations
-- Local credential and secret scanning at scripts/security-audit.mjs
-- Dedicated GitHub Actions security-audit workflow
-- Expanded ignore rules for credentials, certificates, archives, environment files, and release payloads
+- **`content-frame-guard.js`** — isolated-world frame guard that runs at `document_start` in every frame, generates a per-page nonce, and relays popup-block events from the MAIN world to the background service worker. The nonce handshake prevents a page from spoofing a "fortress disarmed" message.
+- **`content-main-world.js`** — MAIN-world guard that overrides `window.open` synchronously before any page script can grab it. Fails closed until the first authenticated state broadcast arrives.
+- **`content-security-guard.js`** — passive detection layers for clipboard hijacking, CSP violations, and form-jacking (sensitive form data posted to a cross-registrable-domain host).
+- **Path-scoped Fortress** — profiles can declare `pathScopes` to restrict fortress activation to specific URL prefixes (`/admin`, `/settings`). DNR catch-all is skipped for path-scoped profiles and enforcement is done at the content-frame level.
+- **Bloom filter** (`core/bloom.js`) — fast negative lookups for the allowlist. Skips the O(n) iteration over 20,000+ remote domains for hosts that are definitely not on the list.
+- **User blocklist** (`syncUserBlocklist`) — manually blocked domains install session DNR rules that redirect `main_frame` requests to `blocked.html`.
 
 ### Changed
+- `background.js` — the `notify()` and `notifyContainment()` helpers were removed. Context-menu actions and containment events now log to the activity feed instead of firing desktop notifications on every action.
 
-- Refreshed the English and Persian READMEs to match v1.8.1
-- Clarified the difference between application-level API-key protection and a real password vault
-- Documented the current mutable-main-branch updater limitation
-- Improved repository hygiene without changing the extension core protection logic
+---
 
-### Security
+## [1.8.0] — 2025
 
-- Current-tree review found no hard-coded VirusTotal API key
-- Privileged API-key messaging is separated from page-observation messaging
-- Backup/export removes legacy plaintext API-key fields
+### Added
+- **Multi-language interface** — English, فارسی, العربية, Español, Deutsch, Français, Русский, 中文.
+- **Full RTL support** for Persian and Arabic (text-only; layout stays LTR for consistency).
+- **Localized in-page verdict banner** — verdict, reasons, and action buttons all use the active language.
+- **In-extension update checker** — periodic GitHub version check, dashboard banner, ZIP download helper, and a manual install guide modal.
+- **Per-frame popup interception** — popup defense now runs at both the `tabs.onCreated` layer and the `webNavigation.onCreatedNavigationTarget` layer, plus content-script `window.open` override and anchor modifier-click interception.
+- **Additional navigation and content security controls** — clipboard hijack detection, CSP violation monitoring, form-jacking detection.
 
-> Audit note: the current-source review is bounded. It is not a cryptographic guarantee that every historical Git object or future release is clean.
+### Changed
+- Sidebar-based dashboard layout replaces the previous single-column scroll.
+- Update banner and modal replace the old raw-JSON update notification.
 
-## [1.8.1] — Current
+---
 
-See repository history for the current 1.8.1 feature changes.
+## [1.5.0] — 2025
 
-## [1.8.0]
+### Added
+- **Heuristic Analysis Engine** (`core/heuristics.js`)
+  - Typosquatting detection (digit substitution, hyphens, Levenshtein distance)
+  - Suspicious TLD list (Freenom, `.top`, `.xyz`, `.zip`, etc.)
+  - Homograph attack detection (mixed scripts)
+  - Punycode / IDN detection
+  - Recently-registered domain detection (from VT)
+  - Brand-in-subdomain detection
+- **Alarm-based TTL** (`core/alarms.js`) — replaces unreliable `setTimeout`
+  - Fortress-allow rule expiry now survives service worker restarts
+  - Scheduled whitelist sync (weekly)
+  - Scheduled cache cleanup (every 6 hours)
+- **Extension Badge** — colored icon per tab (green/yellow/red/blue)
+- **Trust Button** on verdict banner — one-click whitelist
+- **User Trusted Domains** — separate list from safe-scanned cache
+- **Download Guard** — blocks downloads from malicious sources
+- **Keyboard Shortcuts** (`Ctrl+Shift+F`, `Ctrl+Shift+E`)
+- **Dashboard: Search + Bulk actions** for safe-scanned domains
+- **Dashboard: Theme Toggle** (light/dark)
+- **Dashboard: Privacy & Data panel** — storage usage + wipe-all
+- **Export/Import separate Safe List** (as `.json`)
+- **Incognito mode** — split mode
+- **2-second auto-dismiss** for all in-page banners (except VT loading)
 
-- Multi-language interface
-- RTL support for Persian and Arabic
-- Localized in-page verdict banner
-- In-extension update checker
-- Per-frame popup interception
-- Additional navigation and content security controls
+### Changed
+- Version bumped from 1.4.0 to 1.5.0
+- `manifest.json` — added `alarms` permission, `commands`, `incognito: split`
+- Dashboard header — removed top-level Export/Import (moved to Backup section)
+- Safe-scanned domains panel moved above guide
+- Behavior Intelligence and Evidence Store moved above Domain Profiles
+- Network Observation panel moved to bottom
+
+### Fixed
+- Fortress-allow TTL now survives service worker restarts
+- Settings defaults now consistently applied on first install
+- `maxRedirectHops` now respects dashboard setting
+- Popup auto-dismiss timing unified at 2 seconds
+
+---
+
+## [1.4.0] — 2025
+
+### Added
+- Fortress catch-all with DNR session rules
+- VirusTotal BYOK integration with rate-limited request queue
+- Smart whitelist (Cisco OpenDNS weekly sync)
+- Auto threat scan on navigation
+- Domain analyzer dashboard view
+
+---
+
+## [1.3.0] — 2025
+
+### Added
+- Fortress popup lockdown with burst detection
+- Redirect storm containment
+- Auto-scan with desktop notifications (later removed in 1.8.1)
+
+---
+
+## [1.2.0] — 2025
+
+### Added
+- Initial deterministic DNR enforcement
+- Redirect chain tracking
+
+---
+
+## [1.1.0] — 2025
+
+### Added
+- First public release
+
+---
+
+[Unreleased]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.3...HEAD
+[1.8.3]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.2...v1.8.3
+[1.8.2]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.1...v1.8.2
+[1.8.1]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.0...v1.8.1
+[1.8.0]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.5.0...v1.8.0
+[1.5.0]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/amiraction0938/Corsair-Unbound/releases/tag/v1.1.0

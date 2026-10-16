@@ -46,7 +46,7 @@
       "all_frames": true,
       "match_about_blank": false
     },
-        {
+    {
       "matches": ["http://*/*", "https://*/*"],
       "js": ["content-security-guard.js"],
       "run_at": "document_start",

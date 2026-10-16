@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏴☠️ Corsair Unbound
+# 🏴‍☠️ Corsair Unbound
 
 <strong>Local-first browser shield for Chrome (Manifest V3)</strong>
 
@@ -43,13 +43,15 @@ The extension is designed to keep its core logic and user data on the device. Op
 ### 🎨 User Experience
 
 - **Multi-Language Interface** — English, فارسی, العربية, Español, Deutsch, Français, Русский, 中文
-- **Full RTL Support** — dedicated right-to-left layout support for Persian and Arabic
+- **Full RTL Support** — dedicated right-to-left text rendering for Persian and Arabic
 - **In-Page Verdict Banner** — localized verdicts for non-allowlisted sites
 - **Extension Badge** — per-tab security status
 - **Keyboard Shortcuts** — Ctrl+Shift+F for Fortress, Ctrl+Shift+E for Dashboard
 - **Full Dashboard** — analyzer, safe list, privacy controls, settings, API & intelligence, and language switching
 - **Light/Dark Theme**
 - **Built-in Update Checker** — periodic GitHub version check, desktop notification, ZIP download helper, and manual install guide
+- **Onboarding Wizard** — first-run guided setup with language choice, API key entry, and preference selection
+- **Guided Product Tour** — 7-step overlay tour of the dashboard's main areas
 
 ### 💾 Data & Reliability
 
@@ -105,17 +107,17 @@ Corsair Unbound includes a convenience updater for unpacked installations.
 
 The current updater:
 
-1. Reads the public repository <code>manifest.json</code> to compare versions
-2. Notifies you when a newer version is detected
-3. Downloads the repository ZIP
+1. Queries the GitHub Releases API for the latest published release
+2. Notifies you via a dashboard banner and desktop notification when a newer version is detected
+3. Downloads the release ZIP asset (`corsair-unbound-extension.zip`) to your Downloads folder
 4. Guides you through replacing the unpacked extension files
 5. Keeps browser-side extension storage intact
 
 ### Update security
 
-The current updater follows the mutable <code>main</code> branch and does **not** cryptographically verify a release signature or immutable commit hash before download.
+The updater only downloads from URLs matching `https://github.com/amiraction0938/Corsair-Unbound/...`, `https://objects.githubusercontent.com/`, or `https://codeload.github.com/...`. Only an asset named exactly `corsair-unbound-extension.zip` is selected from a release.
 
-Treat it as a convenience mechanism, not a cryptographically verified software-update channel.
+It does **not** cryptographically verify a release signature or immutable commit hash before download. Treat it as a convenience mechanism, not a cryptographically verified software-update channel.
 
 For security-sensitive deployments, review the target GitHub commit or release before replacing the unpacked extension.
 
@@ -137,8 +139,12 @@ See [docs/UPDATE-POLICY.md](docs/UPDATE-POLICY.md).
     │   ├── security.js            sanitization, normalization, validation
     │   ├── storage.js             transactional storage + API-key handling
     │   ├── alarms.js              chrome.alarms wrapper
+    │   ├── bloom.js               fast allowlist negative lookups
     │   ├── dnr.js                 declarativeNetRequest enforcement
     │   ├── redirects.js           redirect-chain tracking
+    │   ├── risk-aggregator.js     weighted multi-source risk scoring
+    │   ├── providers/
+    │   │   └── urlhaus.js         abuse.ch URLhaus provider (opt-in)
     │   ├── threat-intel.js        VirusTotal + allowlist intelligence
     │   ├── heuristics.js          typosquat/homograph heuristics
     │   ├── intelligence.js        signal classification
@@ -148,8 +154,9 @@ See [docs/UPDATE-POLICY.md](docs/UPDATE-POLICY.md).
     │   ├── migration.js           versioned backup/restore migration
     │   ├── tool-router.js         bounded internal tool API
     │   ├── replay.js              regression fixtures
+    │   ├── event-filter.js        pure activity-log filter helpers
     │   ├── i18n.js                8-language translations + RTL support
-    │   └── updater.js             GitHub-based update checker
+    │   └── updater.js             GitHub Releases-based update checker
     ├── icons/
     ├── background.js              service worker
     ├── content-frame-guard.js     frame-level popup interception

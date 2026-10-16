@@ -164,7 +164,6 @@ async function maybeAutoArmFortress(host, report) {
     ]);
     const isAlreadyBlocked = Array.isArray(blockedList) && blockedList.includes(host);
 
-    /* ============ BLOCK PATH ============ */
     if (shouldBlock) {
       if (!isAlreadyBlocked) {
         try {
@@ -209,7 +208,6 @@ async function maybeAutoArmFortress(host, report) {
       return;
     }
 
-    /* ============ ARM-ONLY PATH ============ */
     if (existing && existing.autoArmed !== true) return;
     if (existing && existing.autoArmed === true && existing.protected === true) return;
 
@@ -297,6 +295,32 @@ async function maybeAutoScan(tabId, url) {
    CUSTOM DOMAIN SCRIPTS
    ============================================================ */
 const _scriptedTabs = new Map();
+const SCRIPT_DEDUPE_WINDOW_MS = 400;
+
+async function findScriptForHost(host) {
+  if (!host || typeof host !== 'string') return null;
+  const h = CorsairSecurity.normalizeHostname(host);
+  if (!h) return null;
+
+  const scripts = await CorsairStorage.get('customDomainScripts', {});
+  if (!scripts || typeof scripts !== 'object') return null;
+
+  const exact = scripts[h];
+  if (exact && exact.enabled !== false && exact.code) {
+    return { entry: exact, matchedHost: h };
+  }
+
+  const parts = h.split('.');
+  for (let i = 1; i < parts.length - 1; i++) {
+    const parent = parts.slice(i).join('.');
+    const entry = scripts[parent];
+    if (entry && entry.enabled !== false && entry.code) {
+      return { entry, matchedHost: parent };
+    }
+  }
+
+  return null;
+}
 
 async function runCustomScriptForTab(tabId, host, url) {
   if (!Number.isInteger(tabId) || !host) return;
@@ -307,24 +331,32 @@ async function runCustomScriptForTab(tabId, host, url) {
   }
 
   try {
-    const scripts = await CorsairStorage.get('customDomainScripts', {});
-    const entry = scripts[host];
-    if (!entry || entry.enabled === false || !entry.code) return;
+    const match = await findScriptForHost(host);
+    if (!match) return;
+    const { entry, matchedHost } = match;
 
     const lint = CorsairSecurity.lintCustomScript(entry.code);
     if (!lint.ok) {
-      console.warn(`[Corsair CS] ⛔ refusing to inject "${host}": ${lint.error}`);
+      console.warn(`[Corsair CS] ⛔ refusing to inject "${matchedHost}": ${lint.error}`);
       return;
     }
 
-    const urlKey = String(url || ('host::' + host));
-    if (_scriptedTabs.get(tabId) === urlKey) return;
-    _scriptedTabs.set(tabId, urlKey);
+    const now = Date.now();
+    const prev = _scriptedTabs.get(tabId);
+    if (
+      prev &&
+      prev.host === matchedHost &&
+      prev.url === url &&
+      now - prev.ts < SCRIPT_DEDUPE_WINDOW_MS
+    ) {
+      return;
+    }
+    _scriptedTabs.set(tabId, { host: matchedHost, url, ts: now });
 
-    console.log(`[Corsair CS] ▶ injecting "${host}" into tab ${tabId} (url=${urlKey})`);
+    console.log(`[Corsair CS] ▶ injecting "${matchedHost}" into tab ${tabId} (matched for ${host}, url=${url})`);
 
     const results = await chrome.scripting.executeScript({
-      target: { tabId, allFrames: false },
+      target: { tabId, allFrames: true },
       world: 'MAIN',
       func: (userCode) => {
         console.log('[Corsair CS] ▶ page-side func reached:', location.href);
@@ -352,8 +384,7 @@ async function runCustomScriptForTab(tabId, host, url) {
       args: [String(entry.code)]
     });
 
-    const r = results && results[0] && results[0].result;
-    console.log('[Corsair CS] ✓ result:', r);
+    console.log('[Corsair CS] ✓ injected into', results?.length || 0, 'frame(s)');
   } catch (err) {
     console.error('[Corsair CS] ❌ executeScript threw:', err && err.message, err);
   }
@@ -618,13 +649,6 @@ async function initUpdater() {
   try {
     if (typeof CorsairUpdater === 'undefined') return;
 
-    // Detect if this is a post-update launch.
-    // recordInstalledVersion() returns { changed, from, to } where
-    // `from` is null on the very first install (no previous version
-    // recorded yet). We only log an "extension_updated" event when we
-    // actually transitioned from one concrete version to another —
-    // otherwise the activity feed would receive a misleading
-    // "Updated from vunknown to v1.7.0" entry on every fresh install.
     const installInfo = await CorsairUpdater.recordInstalledVersion();
     if (installInfo.changed && installInfo.from) {
       try {
@@ -637,14 +661,11 @@ async function initUpdater() {
       } catch {}
     }
 
-    // Schedule periodic background check (fires every 6h)
     await CorsairUpdater.scheduleBackgroundCheck();
 
-    // One immediate check on startup
-    const result = await CorsairUpdater.checkForUpdates({ force: false });
-    if (result && result.hasUpdate) {
-      await CorsairUpdater.notifyIfUpdateAvailable(result);
-    }
+    // NOTE: notifications removed — update check still runs silently.
+    // Users can see the latest version in the dashboard.
+    await CorsairUpdater.checkForUpdates({ force: false });
   } catch {}
 }
 
@@ -655,38 +676,6 @@ try {
       try {
         if (alarm?.name !== CorsairUpdater?.ALARM_NAME) return;
         await CorsairUpdater.runBackgroundCheck();
-      } catch {}
-    });
-  }
-} catch {}
-
-/* Handle notification clicks and buttons */
-try {
-  if (typeof chrome !== 'undefined' && chrome.notifications?.onClicked) {
-    chrome.notifications.onClicked.addListener(async (notificationId) => {
-      try {
-        if (!notificationId || !notificationId.startsWith('corsair-update-')) return;
-        // Open the dashboard with the update modal flag
-        await chrome.tabs.create({
-          url: chrome.runtime.getURL('dashboard.html?update=1')
-        });
-        try { chrome.notifications.clear(notificationId); } catch {}
-      } catch {}
-    });
-  }
-} catch {}
-
-try {
-  if (typeof chrome !== 'undefined' && chrome.notifications?.onButtonClicked) {
-    chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
-      try {
-        if (!notificationId || !notificationId.startsWith('corsair-update-')) return;
-        if (buttonIndex === 0) {
-          await chrome.tabs.create({
-            url: chrome.runtime.getURL('dashboard.html?update=1')
-          });
-        }
-        try { chrome.notifications.clear(notificationId); } catch {}
       } catch {}
     });
   }
@@ -778,41 +767,44 @@ async function setupContextMenus() {
   }
 }
 
-function notify(title, message) {
-  try {
-    if (typeof chrome.notifications?.create === 'function') {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon128.png',
-        title,
-        message
-      });
-    }
-  } catch {}
-}
-
+// Context-menu handler — notifications removed, errors surface via event log.
 try {
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     try {
       if (info.menuItemId === 'corsair-scan-link' || info.menuItemId === 'corsair-scan-page') {
         const targetUrl = info.menuItemId === 'corsair-scan-link' ? info.linkUrl : (info.pageUrl || tab?.url);
         if (!targetUrl) return;
-        notify('Corsair Unbound', 'Submitting to VirusTotal…');
         const result = await CorsairThreatIntel.scanUrl(targetUrl);
         const v = String(result.verdict || result.status || 'unknown').toUpperCase();
         const detail = result.status === 'pending'
           ? 'Still analyzing — check the dashboard analyzer in a moment.'
           : (result.flaggedEngines?.length ? `Flagged by ${result.flaggedEngines.length} engine(s).` : 'No engines flagged this URL.');
-        notify(`Corsair scan: ${v}`, `${targetUrl}\n${detail}`);
+        await CorsairStorage.appendEvent({
+          type: 'context_scan',
+          domain: CorsairSecurity.extractHostname(targetUrl) || '',
+          destination: targetUrl,
+          reason: `${v} — ${detail}`,
+          severity: result.verdict === 'malicious' ? 'high' : 'info'
+        }).catch(() => {});
       } else if (info.menuItemId === 'corsair-block-domain') {
         const targetUrl = info.linkUrl || info.pageUrl || tab?.url;
         const host = CorsairSecurity.extractHostname(targetUrl || '');
         if (!host) return;
         const r = await blockDomainGlobally(host);
-        notify('Corsair Unbound', r.ok ? `🚫 ${host} is now blocked everywhere.` : `Could not block ${host}: ${r.error || 'unknown error'}`);
+        await CorsairStorage.appendEvent({
+          type: 'context_block',
+          domain: host,
+          reason: r.ok ? 'blocked from context menu' : `block failed: ${r.error || 'unknown'}`,
+          severity: r.ok ? 'medium' : 'high'
+        }).catch(() => {});
       }
     } catch (err) {
-      notify('Corsair Unbound', `Scan failed: ${err.message}`);
+      await CorsairStorage.appendEvent({
+        type: 'context_error',
+        domain: '',
+        reason: `Context menu action failed: ${err.message}`,
+        severity: 'low'
+      }).catch(() => {});
     }
   });
 } catch {}
@@ -841,13 +833,6 @@ try {
         kind: 'download_blocked', origin: host, tabId: null,
         data: { filename: item.filename || '', url: item.url }
       });
-      if (settings.notifications === true && typeof chrome.notifications?.create === 'function') {
-        chrome.notifications.create({
-          type: 'basic', iconUrl: 'icons/icon128.png',
-          title: 'Corsair Shield — Download Blocked',
-          message: `Blocked malicious download from ${host}`
-        }).catch(() => {});
-      }
     } catch {}
   });
 } catch {}
@@ -875,41 +860,8 @@ async function logContainment({ type, sourceHost, destinationHost, reason, tabId
   } catch {}
 }
 
-async function notifyContainment(reason, sourceHost, destinationHost) {
-  try {
-    const settings = await CorsairStorage.getSettings();
-    if (settings.notifications !== true) return;
-    if (typeof chrome.notifications?.create === 'function') {
-      chrome.notifications.create({
-        type: 'basic', iconUrl: 'icons/icon128.png',
-        title: 'Corsair Shield — Contained',
-        message: `${reason}: ${sourceHost} → ${destinationHost || '?'}`
-      }).catch(() => {});
-    }
-  } catch {}
-}
-
 /* ============================================================
-   POPUP DEFENSE — unified handler
-   ------------------------------------------------------------
-   With `incognito: "spanning"` (see manifest.json), all tabs —
-   regular AND incognito — are visible to this single service
-   worker. We handle containment at the `tabs.onCreated` layer
-   because "Open link in private window" from the context menu
-   is a BROWSER action that never fires webNavigation events.
-
-   Containment signals (any one is enough):
-     • the destination is on the source profile's blocklist
-     • a popup burst was detected (>3 in 2.5s)
-     • we are inside a burst cooldown
-     • openerTabId points to an armed Fortress page AND the new
-       tab's URL is cross-origin AND the tab was NOT user-initiated
-
-   User-initiated tabs are recognized by NOT having an
-   openerTabId, OR by arriving without a preceding right-click
-   heuristic. Context-menu tabs DO have an openerTabId, so we
-   cannot rely on that alone; the burst/cooldown signal is what
-   protects legitimate right-click usage.
+   POPUP DEFENSE — tabs.onCreated layer
    ============================================================ */
 chrome.tabs.onCreated.addListener(async tab => {
   try {
@@ -917,16 +869,13 @@ chrome.tabs.onCreated.addListener(async tab => {
     if (!Number.isInteger(newTabId)) return;
 
     let openerId = tab.openerTabId;
-    // If there's no opener, the user opened this tab themselves
-    // (address bar, bookmark, new window). Leave it alone.
     if (!Number.isInteger(openerId)) return;
 
-    // Wait a tick for the tab's URL to be populated.
     let destUrl = tab.pendingUrl || tab.url || '';
     if (!destUrl) {
       await new Promise(r => setTimeout(r, 150));
       const fresh = await chrome.tabs.get(newTabId).catch(() => null);
-      if (!fresh) return; // tab already gone
+      if (!fresh) return;
       destUrl = fresh.pendingUrl || fresh.url || '';
     }
 
@@ -940,11 +889,8 @@ chrome.tabs.onCreated.addListener(async tab => {
     if (!profile || profile.protected !== true || profile.mode !== 'fortress') return;
 
     const destHost = CorsairSecurity.extractHostname(destUrl);
-
-    // Same-origin new tabs are legitimate.
     if (destHost && CorsairSecurity.sameOrSubdomain(destHost, originHost)) return;
 
-    // Is the destination on the profile's explicit blocklist?
     const blockedList = Array.isArray(profile.blockedDestinationDomains)
       ? profile.blockedDestinationDomains
       : [];
@@ -952,27 +898,14 @@ chrome.tabs.onCreated.addListener(async tab => {
       destHost && blockedList.some(d => destHost === d || CorsairSecurity.sameOrSubdomain(destHost, d))
     );
 
-    // Burst / cooldown signal.
     const burstCount = recordPopupBurst(originHost);
     const burstDetected = burstCount >= POPUP_BURST_THRESHOLD;
     const cooldownActive = isInCooldown(originHost);
 
-    // A single blank tab from an armed source is ambiguous — could
-    // be a legitimate "Open in new tab" that then navigates. Only
-    // contain it when we ALSO have a burst or cooldown signal.
     const isBlank = !destUrl || destUrl === 'about:blank';
+    if (isBlank && !burstDetected && !cooldownActive) return;
 
-    if (isBlank && !burstDetected && !cooldownActive) {
-      // Give the page a moment to fill the URL in. If it stays
-      // blank AND the user did not navigate, we leave it.
-      return;
-    }
-
-    const shouldContain =
-      isExplicitlyBlocked ||
-      burstDetected ||
-      cooldownActive;
-
+    const shouldContain = isExplicitlyBlocked || burstDetected || cooldownActive;
     if (!shouldContain) return;
 
     if (burstDetected || cooldownActive) setCooldown(originHost);
@@ -991,16 +924,11 @@ chrome.tabs.onCreated.addListener(async tab => {
       reason,
       tabId: newTabId
     });
-    await notifyContainment('Popup blocked', originHost, destHost);
   } catch {}
 });
 
 /* ============================================================
    POPUP DEFENSE — webNavigation layer
-   ------------------------------------------------------------
-   Still useful for cases where the popup goes through the
-   standard navigation pipeline (script-driven window.open).
-   Same containment rules as above.
    ============================================================ */
 chrome.webNavigation.onCreatedNavigationTarget.addListener(async details => {
   try {
@@ -1047,9 +975,9 @@ chrome.webNavigation.onCreatedNavigationTarget.addListener(async details => {
       destinationHost: destHost || 'about:blank',
       reason, tabId: newTabId
     });
-    await notifyContainment('Popup blocked', originHost, destHost);
   } catch {}
 });
+
 /* ============================================================
    NAVIGATION — onBeforeNavigate
    ============================================================ */
@@ -1133,6 +1061,27 @@ chrome.webNavigation.onCommitted.addListener(async details => {
 });
 
 /* ============================================================
+   SPA NAVIGATION — pushState / replaceState
+   ============================================================ */
+chrome.webNavigation.onHistoryStateUpdated.addListener(async details => {
+  if (details.frameId !== 0) return;
+  const tabId = details.tabId;
+  if (!Number.isInteger(tabId)) return;
+
+  try {
+    const url = CorsairSecurity.normalizeUrl(details.url);
+    const host = CorsairSecurity.extractHostname(url);
+    if (!host) return;
+
+    setTimeout(() => {
+      runCustomScriptForTab(tabId, host, url).catch(() => {});
+    }, 250);
+
+    maybeAutoScan(tabId, url).catch(() => {});
+  } catch {}
+});
+
+/* ============================================================
    TABS UPDATED
    ============================================================ */
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
@@ -1140,6 +1089,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
     clearBadge(tabId);
     _scriptedTabs.delete(tabId);
+    _autoScannedTabs.delete(tabId);
   }
 });
 
@@ -1193,15 +1143,13 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
       }
 
       switch (m.type) {
-                /* ============ CONTENT SECURITY EVENTS ============ */
+        /* ============ CONTENT SECURITY EVENTS ============ */
         case 'content-security-event': {
           const kind = String(m.kind || 'security_event').slice(0, 40);
           const host = CorsairSecurity.normalizeHostname(m.host || '') || '';
           const page = String(m.page || '').slice(0, 300);
           const sev = ['high', 'medium', 'low', 'info'].includes(m.severity) ? m.severity : 'medium';
           const data = (m.data && typeof m.data === 'object') ? m.data : {};
-
-          // Do not trust the payload blindly — normalize + bound it.
           const safeData = CorsairSecurity.sanitizeObject(data) || {};
 
           try {
@@ -1222,26 +1170,6 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
               data: { page, ...safeData }
             });
           } catch {}
-
-          // Notify only on high-severity events to keep the feed clean.
-          if (sev === 'high') {
-            try {
-              const settings = await CorsairStorage.getSettings();
-              if (settings.notifications === true && typeof chrome.notifications?.create === 'function') {
-                const titles = {
-                  clipboard_hijack: 'Corsair Shield — Clipboard Hijack Blocked',
-                  form_jacking: 'Corsair Shield — Form Jacking Detected'
-                };
-                const title = titles[kind] || 'Corsair Shield — Security Event';
-                chrome.notifications.create({
-                  type: 'basic',
-                  iconUrl: 'icons/icon128.png',
-                  title,
-                  message: `Detected on ${host || page || 'unknown host'}`
-                }).catch(() => {});
-              }
-            } catch {}
-          }
 
           send({ ok: true });
           break;
@@ -1570,21 +1498,17 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           try {
             const key = String(m.apiKey || '').trim();
 
-            // Clearing: no verification, just remove.
             if (!key) {
               await CorsairStorage.setApiKeySecure('');
               send({ ok: true, cleared: true });
               break;
             }
 
-            // Format pre-check — fail fast without hitting the network.
-            // VT keys are documented as 64 chars.
             if (key.length !== 64) {
               send({ ok: false, error: 'invalid-key-format' });
               break;
             }
 
-            // Live verification. Do NOT persist until VT accepts it.
             const verify = await CorsairThreatIntel.verifyApiKey(key);
             if (!verify.ok) {
               send({ ok: false, error: verify.error || 'verification-failed' });
@@ -1608,9 +1532,6 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
               break;
             }
 
-            // abuse.ch Auth-Keys are hex-ish; length varies but is
-            // never shorter than ~16 chars. Be permissive: only reject
-            // obvious garbage.
             if (key.length < 10 || key.length > 256) {
               send({ ok: false, error: 'invalid-key-format' });
               break;

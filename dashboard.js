@@ -1248,7 +1248,6 @@ function renderSettings() {
 
   const bools = [
     ['resolverEnabled',            'setting.resolverEnabled'],
-    ['notifications',              'setting.notifications'],
     ['siteVerdictBanner',          'setting.siteVerdictBanner'],
     ['notifyOnSafeSites',          'setting.notifyOnSafeSites'],
     ['logEvents',                  'setting.logEvents'],
