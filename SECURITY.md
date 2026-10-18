@@ -59,14 +59,15 @@ They also define the primary blast-radius consideration if the extension source 
 
 The project uses external network inputs for optional threat intelligence and for its built-in updater.
 
-The current updater:
+The current updater model (Path A) is designed to mitigate supply-chain risks:
 
-- reads the public GitHub manifest.json
-- compares versions locally
-- downloads the mutable main branch ZIP
-- does not verify a signed release or immutable commit digest before download
+- The extension reads a dedicated `latest.json` file from GitHub Releases.
+- The extension DOES NOT download or execute update payloads.
+- Update installation is delegated to a standalone Windows launcher (`updater.ps1`).
+- The launcher verifies the downloaded archive against the **SHA-256 hash** declared in `latest.json` before extraction or installation.
+- The launcher creates a backup before replacing files and refuses to modify files outside the designated extension directory.
 
-It must therefore be treated as a convenience update path, not as a cryptographically verified software supply-chain channel.
+While this does not implement cryptographic release signing, the SHA-256 verification ensures that the downloaded file matches the published metadata, preventing silent corruption or basic man-in-the-middle tampering.
 
 ## Remote code
 

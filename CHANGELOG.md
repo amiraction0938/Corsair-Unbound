@@ -15,6 +15,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.1] — 2026
+
+### Added
+- **Direct Release Button** — the update modal now features a button that takes the user directly to the GitHub Releases page to download the launcher.
+- **Bilingual Release Notes** — GitHub Actions now automatically generates release notes in both English and Persian to help non-technical users update safely.
+
+### Fixed
+- **Safety Fix in Updater** — the PowerShell launcher previously attempted to remove empty directories during cleanup, causing a dangerous prompt. It now strictly targets files and ignores directories.
+
+---
+
+## [1.9.0] — 2026
+
+### Added
+- **"Path A" Secure Updater Architecture** — completely replaced the old raw ZIP download method. Updates are now managed by a standalone, SHA-256 verified PowerShell launcher (`launcher/updater.ps1`).
+- **`latest.json` Metadata** — releases now include a secure metadata file that validates versions, download URLs, and SHA-256 hashes before any update attempt.
+- **CI Release Workflow** — GitHub Actions now rigorously tests, packages, hashes, and publishes releases automatically upon tagging.
+
+### Changed
+- **`core/updater.js`** — completely rewritten to only fetch and validate `latest.json` without downloading the ZIP payload.
+- **Dashboard UI** — redesigned the update modal to guide users through the new launcher-based update flow.
+- **Documentation** — fully updated README and SECURITY.md to reflect the new threat model.
+
+### Fixed
+- **Select Dropdown Visibility** — fixed a CSS bug where activity filter dropdowns appeared white on white in dark mode.
+- **Trusted/Blocked Domains Scrolling** — fixed a flexbox layout issue preventing lists from scrolling properly when they exceeded screen height.
+- **Take Tour Bug** — fixed an issue where starting the guided tour from the onboarding screen would occasionally fail to highlight the correct panel.
+
+---
+
 ## [1.8.3] — 2025
 
 ### Fixed
@@ -170,7 +200,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.3...HEAD
+[Unreleased]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.9.0...v1.9.1
+[1.9.0]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.3...v1.9.0
 [1.8.3]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/amiraction0938/Corsair-Unbound/compare/v1.8.0...v1.8.1

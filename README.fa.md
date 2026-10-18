@@ -2,7 +2,7 @@
 
 # 🏴☠️ Corsair Unbound
 
-<strong>سپر مرورگر Local-first برای Chrome (Manifest V3)</strong>
+<strong>سپر مرورگر Local برای Chrome (Manifest V3)</strong>
 
 <p>
   <a href="README.md">🇬🇧 English</a> ·
@@ -13,7 +13,7 @@
 
 <img src="assets/corsair-unbound-hero.png" alt="Corsair Unbound" width="100%">
 
-<strong>نسخه فعلی: v1.8.1</strong>
+<strong>نسخه فعلی: v1.9.1</strong>
 
 </div>
 
@@ -53,7 +53,7 @@ Corsair Unbound یک سپر مرورگر **Local-first** برای Chrome Manifes
 - **کلیدهای میانبر** — Ctrl+Shift+F برای Fortress و Ctrl+Shift+E برای Dashboard
 - **داشبورد کامل** — analyzer، Safe List، حریم خصوصی، تنظیمات، API & Intelligence و انتخاب زبان
 - **تم روشن/تاریک**
-- **بررسی‌کننده داخلی آپدیت** — بررسی نسخه، اعلان دسکتاپ، دانلود ZIP و راهنمای نصب دستی
+- **بررسی‌کننده داخلی آپدیت** — بررسی امن نسخه در گیت‌هاب، اعلان، و لانچر اختصاصی ویندوز برای آپدیت یک‌کلیکی با تایید هش SHA-256.
 
 ### 💾 داده و پایداری
 
@@ -111,25 +111,20 @@ Corsair Unbound هیچ VirusTotal API Key واقعی را به‌صورت hard-c
 
 ## 🔄 سیستم آپدیت
 
-Corsair Unbound برای نصب unpacked یک update checker داخلی دارد.
+Corsair Unbound دارای یک سیستم آپدیت امن و دو مرحله‌ای است که مخصوص نصب‌های unpacked (بدون نیاز به Chrome Web Store) طراحی شده است.
 
-این سیستم:
+### نحوه کار
+۱. **افزونه** به صورت دوره‌ای یک فایل امن به نام `latest.json` را در صفحه Releases گیت‌هاب بررسی می‌کند.
+۲. وقتی نسخه جدیدی پیدا شود، داشبورد به شما اطلاع می‌دهد و لینک صفحه آپدیت را نمایش می‌دهد.
+۳. **آپدیتر ویندوز (`updater.ps1`)** کارهای اصلی را انجام می‌دهد. شما آن را یک بار دانلود می‌کنید و این اسکریپت:
+   - جدیدترین فایل ZIP افزونه را مستقیماً از گیت‌هاب دانلود می‌کند.
+   - هش **SHA-256** فایل را با اطلاعات رسمی مقایسه می‌کند تا از دستکاری نشدن آن مطمئن شود.
+   - به طور خودکار یک نسخه پشتیبان (Backup) از افزونه فعلی شما می‌گیرد.
+   - فایل‌های افزونه را با امنیت کامل جایگزین می‌کند و به داده‌های شما کاری ندارد.
+   - کروم را باز می‌کند تا شما فقط دکمه "Reload" را بزنید.
 
-۱. <code>manifest.json</code> عمومی repository را برای مقایسه نسخه می‌خواند  
-۲. در صورت وجود نسخه جدید اعلان می‌دهد  
-۳. ZIP repository را دانلود می‌کند  
-۴. مراحل جایگزینی فایل‌های افزونه را نشان می‌دهد  
-۵. storage داخلی افزونه را حفظ می‌کند
-
-### مدل امنیتی آپدیت
-
-Updater فعلی شاخه قابل‌تغییر <code>main</code> را دنبال می‌کند و قبل از دانلود یا نصب **امضای release یا commit hash را به‌صورت cryptographic verify نمی‌کند**.
-
-بنابراین updater فعلی را باید یک **ابزار راحتی** دانست، نه یک کانال cryptographically verified برای توزیع نرم‌افزار.
-
-برای نصب‌های حساس، commit یا release مقصد را قبل از جایگزینی فایل‌ها بررسی کنید.
-
-راهنمای کامل در [docs/UPDATE-POLICY.md](docs/UPDATE-POLICY.md) است.
+### امنیت آپدیت
+از آنجایی که این یک افزونه امنیتی است، فرآیند آپدیت حول محور یکپارچگی فایل‌ها بنا شده است. آپدیتر از نصب هر فایلی که دقیقاً با هش SHA-256 منتشر شده در ریلیز رسمی مطابقت نداشته باشد خودداری می‌کند. خود افزونه هرگز فایل ZIP را دانلود نمی‌کند تا از هرگونه خطر اجرای کدهای ناخواسته (Remote Code Execution) جلوگیری شود.
 
 ---
 
@@ -151,8 +146,12 @@ Updater فعلی شاخه قابل‌تغییر <code>main</code> را دنبا�
     │   ├── security.js            پاک‌سازی، normalize و validation
     │   ├── storage.js             storage تراکنشی + مدیریت API Key
     │   ├── alarms.js              wrapper برای chrome.alarms
+    │   ├── bloom.js               جستجوی سریع در allowlist
     │   ├── dnr.js                 اجرای declarativeNetRequest
     │   ├── redirects.js           ردیابی redirect chain
+    │   ├── risk-aggregator.js     محاسبه ریسک چندمنبعی
+    │   ├── providers/
+    │   │   └── urlhaus.js         سرویس‌دهنده abuse.ch URLhaus (اختیاری)
     │   ├── threat-intel.js        VirusTotal + allowlist intelligence
     │   ├── heuristics.js          heuristicهای typosquat/homograph
     │   ├── intelligence.js        طبقه‌بندی سیگنال
@@ -162,9 +161,12 @@ Updater فعلی شاخه قابل‌تغییر <code>main</code> را دنبا�
     │   ├── migration.js           backup/restore نسخه‌بندی‌شده
     │   ├── tool-router.js         API داخلی محدود
     │   ├── replay.js              regression fixtureها
+    │   ├── event-filter.js        فیلترهای لاگ فعالیت
     │   ├── i18n.js                ترجمه ۸ زبان + RTL
-    │   └── updater.js             update checker بر پایه GitHub
+    │   └── updater.js             بررسی‌کننده آپدیت بر پایه latest.json
     ├── icons/
+    ├── launcher/
+    │   └── updater.ps1            لانچر امن آپدیت برای ویندوز
     ├── background.js              service worker
     ├── content-frame-guard.js     گارد popup در سطح فریم
     ├── content-main-world.js      محافظ window.open در MAIN world

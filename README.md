@@ -2,7 +2,7 @@
 
 # 🏴‍☠️ Corsair Unbound
 
-<strong>Local-first browser shield for Chrome (Manifest V3)</strong>
+<strong>Local browser shield for Chrome (Manifest V3)</strong>
 
 <p>
   <a href="README.fa.md">🇮🇷 فارسی</a> ·
@@ -49,7 +49,7 @@ The extension is designed to keep its core logic and user data on the device. Op
 - **Keyboard Shortcuts** — Ctrl+Shift+F for Fortress, Ctrl+Shift+E for Dashboard
 - **Full Dashboard** — analyzer, safe list, privacy controls, settings, API & intelligence, and language switching
 - **Light/Dark Theme**
-- **Built-in Update Checker** — periodic GitHub version check, desktop notification, ZIP download helper, and manual install guide
+- **Built-in Update Checker** — secure GitHub version check, desktop notification, and a dedicated Windows launcher for one-click, SHA-256 verified updates.
 - **Onboarding Wizard** — first-run guided setup with language choice, API key entry, and preference selection
 - **Guided Product Tour** — 7-step overlay tour of the dashboard's main areas
 
@@ -103,25 +103,20 @@ See [SECURITY.md](SECURITY.md) and [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.
 
 ## 🔄 Updates
 
-Corsair Unbound includes a convenience updater for unpacked installations.
+Corsair Unbound features a secure, two-part update system designed specifically for unpacked installations without relying on the Chrome Web Store.
 
-The current updater:
-
-1. Queries the GitHub Releases API for the latest published release
-2. Notifies you via a dashboard banner and desktop notification when a newer version is detected
-3. Downloads the release ZIP asset (`corsair-unbound-extension.zip`) to your Downloads folder
-4. Guides you through replacing the unpacked extension files
-5. Keeps browser-side extension storage intact
+### How it works
+1. **The Extension** periodically checks a secure `latest.json` file hosted on GitHub Releases.
+2. When a new version is found, the dashboard informs you and provides a link to the update page.
+3. **The Windows Updater (`updater.ps1`)** does the heavy lifting. You download it once, and it:
+   - Downloads the latest extension ZIP directly from GitHub.
+   - Calculates and verifies the **SHA-256 hash** against the official release metadata to ensure the file has not been tampered with.
+   - Automatically creates a timestamped backup of your current extension.
+   - Safely replaces the extension files without touching your data.
+   - Opens Chrome for you to simply click the "Reload" button.
 
 ### Update security
-
-The updater only downloads from URLs matching `https://github.com/amiraction0938/Corsair-Unbound/...`, `https://objects.githubusercontent.com/`, or `https://codeload.github.com/...`. Only an asset named exactly `corsair-unbound-extension.zip` is selected from a release.
-
-It does **not** cryptographically verify a release signature or immutable commit hash before download. Treat it as a convenience mechanism, not a cryptographically verified software-update channel.
-
-For security-sensitive deployments, review the target GitHub commit or release before replacing the unpacked extension.
-
-See [docs/UPDATE-POLICY.md](docs/UPDATE-POLICY.md).
+Because this is a security extension, the update process is built around integrity. The updater will refuse to install any file that does not perfectly match the SHA-256 hash published in the official release. The extension itself never downloads the ZIP, preventing any remote code execution risks.
 
 ## ⌨️ Keyboard Shortcuts
 
@@ -156,8 +151,10 @@ See [docs/UPDATE-POLICY.md](docs/UPDATE-POLICY.md).
     │   ├── replay.js              regression fixtures
     │   ├── event-filter.js        pure activity-log filter helpers
     │   ├── i18n.js                8-language translations + RTL support
-    │   └── updater.js             GitHub Releases-based update checker
+    │   └── updater.js             GitHub latest.json update checker
     ├── icons/
+    ├── launcher/
+    │   └── updater.ps1            secure Windows update launcher
     ├── background.js              service worker
     ├── content-frame-guard.js     frame-level popup interception
     ├── content-main-world.js      MAIN-world window.open protection

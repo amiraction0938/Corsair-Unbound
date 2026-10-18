@@ -2628,23 +2628,20 @@ safeOn('updateSkipVersion', 'click', () => {
 
 function handleGetUpdater() {
   const fallbackBase = 'https://github.com/amiraction0938/Corsair-Unbound';
-  const launcherUrl = (typeof CorsairUpdater !== 'undefined' && CorsairUpdater.launcherDownloadUrl)
-    || `${(typeof CorsairUpdater !== 'undefined' && CorsairUpdater.repoUrl) || fallbackBase}/releases/latest/download/corsair-unbound-updater.ps1`;
-
-  const copyPromise = (async () => {
-    try {
-      await navigator.clipboard.writeText(launcherUrl);
-      showToast(t('update.launcher.copied',
-        'Launcher URL copied. Open it in a browser to download the .ps1 file.'));
-    } catch {
-      showToast(
-        t('update.launcher.copyFailed',
-          'Copy failed. Open this URL manually:\n{url}').replace('{url}', launcherUrl),
-        'error'
-      );
+  const url = `${(typeof CorsairUpdater !== 'undefined' && CorsairUpdater.repoUrl) || fallbackBase}/releases`;
+  
+  // باز کردن صفحه ریلیزها
+  try {
+    if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+      chrome.tabs.create({ url }).catch(() => {});
+    } else {
+      window.open(url, '_blank', 'noopener');
     }
-  })();
-  return copyPromise;
+    // این خط رو به کلید جدید تغییر دادیم
+    showToast(t('update.openingReleases', 'Opening GitHub Releases page...'));
+  } catch {
+    try { window.open(url, '_blank', 'noopener'); } catch {}
+  }
 }
 
 function handleOpenReleases() {
