@@ -58,8 +58,7 @@ jobs:
       - name: Create extension ZIP
         run: |
           cd dist
-          zip -r ../corsair-unbound-extension.zip . \
-            -x '*.DS_Store' '__MACOSX/*' '*/.*'
+          zip -r ../corsair-unbound-extension.zip . -x '*.DS_Store' '__MACOSX/*' '*/.*'
           cd ..
 
       - name: Verify ZIP contents
