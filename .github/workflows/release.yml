@@ -116,6 +116,11 @@ jobs:
           prerelease: false
           generate_release_notes: true
           fail_on_unmatched_files: true
+          files: |
+            corsair-unbound-extension.zip
+            corsair-unbound-updater.ps1
+            latest.json
+            sha256.txt
           body: |
             ## 🛡️ Corsair Unbound ${{ github.ref_name }} is out!
 
