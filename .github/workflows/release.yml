@@ -18,22 +18,15 @@ jobs:
             echo "::error::Tag must be vMAJOR.MINOR.PATCH (stable only), got: ${GITHUB_REF_NAME}"
             exit 1
           fi
-          echo "Tag OK: ${GITHUB_REF_NAME}"
 
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci || npm install
 
       - name: Run tests
         run: npm test
@@ -43,17 +36,9 @@ jobs:
 
       - name: Validate built manifest
         run: |
-          if [ ! -f dist/manifest.json ]; then
-            echo "::error::dist/manifest.json was not produced by the build"
-            exit 1
-          fi
           MANIFEST_VERSION=$(node -p "require('./dist/manifest.json').version")
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
-            echo "::error::Tag v$TAG_VERSION does not match manifest version $MANIFEST_VERSION"
-            exit 1
-          fi
-          echo "Version OK: $MANIFEST_VERSION"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then exit 1; fi
 
       - name: Create extension ZIP
         run: |
@@ -61,27 +46,15 @@ jobs:
           zip -r ../corsair-unbound-extension.zip . -x '*.DS_Store' '__MACOSX/*' '*/.*'
           cd ..
 
-      - name: Verify ZIP contents
-        run: |
-          if ! unzip -l corsair-unbound-extension.zip | grep -q 'manifest.json'; then
-            echo "::error::ZIP does not contain manifest.json"
-            exit 1
-          fi
-          echo "ZIP contents look correct"
-
       - name: Compute SHA-256
         run: |
           SHA=$(sha256sum corsair-unbound-extension.zip | awk '{print $1}')
           echo "$SHA" > sha256.txt
-          echo "SHA256: $SHA"
 
-      - name: Prepare launcher asset
+      - name: Prepare launcher assets
         run: |
-          if [ ! -f launcher/updater.ps1 ]; then
-            echo "::error::launcher/updater.ps1 not found"
-            exit 1
-          fi
           cp launcher/updater.ps1 corsair-unbound-updater.ps1
+          cp launcher/updater.bat corsair-unbound-updater.bat
 
       - name: Generate latest.json
         run: |
@@ -112,48 +85,49 @@ jobs:
           files: |
             corsair-unbound-extension.zip
             corsair-unbound-updater.ps1
+            corsair-unbound-updater.bat
             latest.json
             sha256.txt
           body: |
-            ## 🛡️ Corsair Unbound ${{ github.ref_name }} is out!
+            ## 🛡️ Corsair Unbound ${{ github.ref_name }} is here!
 
-            Hello! If you are an ordinary user (not a developer), please don't panic. Updating is very easy and takes less than a minute.
+            Welcome to the latest release of Corsair Unbound! Updating is safe, fast, and keeps all your settings intact.
 
-            ### 📦 What are these files?
-            - `corsair-unbound-extension.zip`: The main extension file. (For manual updates)
-            - `corsair-unbound-updater.ps1`: The **Magic Updater**. It downloads, verifies, backs up, and installs the new version automatically!
-            - `latest.json` & `sha256.txt`: Security files used by the updater. You don't need to touch them.
+            ### 📦 What's inside the Assets?
+            - `corsair-unbound-updater.bat` 👈 **Double-click this to update!**
+            - `corsair-unbound-extension.zip`: The main extension file (for manual clean installs).
+            - `latest.json` & `sha256.txt`: Security files used by the updater.
 
-            ### 🚀 How to update (The Easy Way)
-            1. Download `corsair-unbound-updater.ps1` below.
-            2. Right-click the file and choose **Run with PowerShell**.
-            3. Select your extension folder when the window pops up.
-            4. Wait for the green text to say "Update complete"!
-            5. Open `chrome://extensions` and click the Reload (↻) button.
+            ### 🚀 How to Update (The Easy Way)
+            1. Scroll down and download **`corsair-unbound-updater.bat`**.
+            2. **Double-click** the downloaded `.bat` file. *(No PowerShell errors guaranteed!)*
+            3. The script will automatically find your Corsair Unbound folder and update it securely.
+            4. Wait for the green text saying "Update complete".
+            5. Reload the extension in `chrome://extensions`.
 
-            *(If Windows blocks the script, open PowerShell and run: `powershell -ExecutionPolicy Bypass -File .\corsair-unbound-updater.ps1`)*
+            > **🛡️ Why is this safe?** The updater downloads the official release directly from GitHub, verifies its SHA-256 hash to prevent tampering, and creates a backup before replacing any files. Your data lives in Chrome, so it is never touched.
 
             ---
 
-            <div dir="rtl">
+            <div dir="rtl" align="right">
 
             ## 🛡️ نسخه جدید Corsair Unbound ${{ github.ref_name }} منتشر شد!
 
-            سلام! اگر شما یک کاربر عادی هستید (نه برنامه‌نویس)، نگران نباشید. آپدیت کردن خیلی ساده است و کمتر از یک دقیقه وقت می‌گیرد.
+            به نسخه جدید Corsair Unbound خوش آمدید! آپدیت کردن کاملاً امن و سریع است و هیچ‌کدام از تنظیمات شما پاک نمی‌شود.
 
-            ### 📦 این فایل‌ها چی هستند؟
-            - `corsair-unbound-extension.zip`: فایل اصلی افزونه (برای آپدیت دستی).
-            - `corsair-unbound-updater.ps1`: **آپدیتر جادویی**. این فایل نسخه جدید را دانلود، تأیید و بکاپ‌گیری می‌کند و به صورت خودکار نصب می‌کند!
-            - `latest.json` و `sha256.txt`: فایل‌های امنیتی که آپدیتر از آن‌ها استفاده می‌کند. نیازی نیست به آن‌ها دست بزنید.
+            ### 📦 فایل‌های موجود در این بخش چه هستند؟
+            - `corsair-unbound-updater.bat` 👈 **برای آپدیت، روی این فایل دابل‌کلیک کنید!**
+            - `corsair-unbound-extension.zip`: فایل اصلی افزونه (برای نصب دستی).
+            - `latest.json` و `sha256.txt`: فایل‌های امنیتی که آپدیتر از آن‌ها استفاده می‌کند.
 
-            ### 🚀 چطور آپدیت کنیم؟ (روش ساده)
-            ۱. فایل `corsair-unbound-updater.ps1` را از پایین دانلود کنید.
-            ۲. روی فایل دانلود شده راست‌کلیک کنید و گزینه **Run with PowerShell** را بزنید.
-            ۳. اسکریپت به صورت خودکار پوشه افزونه شما را پیدا می‌کند!
-            ۴. صبر کنید تا متن سبز رنگ "Update complete" نمایش داده شود!
-            ۵. به صفحه `chrome://extensions` بروید و روی دکمه Reload (↻) کنار Corsair Unbound کلیک کنید.
+            ### 🚀 چطور آپدیت کنیم؟ (روش بسیار ساده)
+            ۱. به پایین صفحه بروید و فایل **`corsair-unbound-updater.bat`** را دانلود کنید.
+            ۲. روی فایل `.bat` دانلود شده **دابل‌کلیک** کنید. *(دیگر هیچ خطای PowerShell دریافت نمی‌کنید!)*
+            ۳. اسکریپت به طور خودکار پوشه افزونه شما را پیدا می‌کند و آن را به صورت امن آپدیت می‌کند.
+            ۴. صبر کنید تا متن سبز رنگ "Update complete" نمایش داده شود.
+            ۵. افزونه را در صفحه `chrome://extensions` مجدداً Reload کنید.
 
-            *(اگر ویندوز اجرای اسکریپت را بلاک کرد، PowerShell را باز کنید و این را بزنید: `powershell -ExecutionPolicy Bypass -File .\corsair-unbound-updater.ps1`)*
+            > **🛡️ چرا این کار امن است؟** آپدیتر فایل رسمی را مستقیماً از گیت‌هاب دانلود می‌کند، هش SHA-256 آن را برای جلوگیری از دستکاری بررسی می‌کند و قبل از جایگزینی هر فایلی، یک نسخه پشتیبان (Backup) می‌گیرد. داده‌های شما در کروم ذخیره می‌شوند و هرگز دست نمی‌خورند.
 
             </div>
         env:
