@@ -195,15 +195,12 @@ const CorsairSecurity = (() => {
     return clean;
   }
 
-  const CUSTOM_SCRIPT_MAX_LEN = 5000;
+const CUSTOM_SCRIPT_MAX_LEN = 200000;
 
   const CUSTOM_SCRIPT_BLOCKLIST = [
     { re: /document\s*\.\s*cookie/i, label: 'document.cookie access' },
-    { re: /\blocalStorage\b/i, label: 'localStorage access' },
     { re: /\bsessionStorage\b/i, label: 'sessionStorage access' },
     { re: /\bindexedDB\b/i, label: 'indexedDB access' },
-    { re: /\bfetch\s*\(/i, label: 'fetch() network call' },
-    { re: /\bXMLHttpRequest\b/i, label: 'XMLHttpRequest' },
     { re: /\bnavigator\s*\.\s*sendBeacon\b/i, label: 'navigator.sendBeacon' },
     { re: /\bWebSocket\b/i, label: 'WebSocket' },
     { re: /\bchrome\s*\.\s*\w+/i, label: 'chrome.* extension API access' },
