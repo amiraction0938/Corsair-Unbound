@@ -1,62 +1,84 @@
-# 📥 How to Install Corsair Unbound
+# Corsair Unbound — Installation & Update Guide
 
-Corsair Unbound is not yet on the Chrome Web Store. Installation is manual but takes less than 60 seconds.
+Welcome to Corsair Unbound! This guide is written for everyone, even if you have never installed a browser extension outside the Chrome Web Store before. Don't worry, it only takes a minute.
 
-## Step 1 — Download the extension
+*(برای راهنمای فارسی، به پایین صفحه اسکرول کنید)*
 
-1. Go to the [Releases page](https://github.com/amiraction0938/Corsair-Unbound/releases)
-2. Find the latest release (at the top of the list)
-3. Under **Assets**, click **`corsair-unbound-extension.zip`**
-4. The file will download to your Downloads folder
+---
 
-## Step 2 — Extract the ZIP
+## 🛠 Part 1: First-Time Installation (English)
 
-1. Find the downloaded ZIP in your Downloads folder
-2. Right-click → **Extract All…**
-3. Choose a **permanent** location (e.g. `Documents/Corsair-Unbound`)
+1. **Download the latest release:**
+   - Go to the [Releases page](https://github.com/amiraction0938/Corsair-Unbound/releases/latest).
+   - Under the "Assets" section, click on `corsair-unbound-extension.zip` to download it.
 
-   > ⚠️ Do NOT delete this folder later — Chrome loads the extension from it every time you open the browser.
+2. **Extract the files:**
+   - Right-click the downloaded ZIP file and choose **"Extract All..."**.
+   - Choose a safe place on your computer (e.g., `C:\CorsairUnbound`) where you will keep the extension files permanently. Do not delete this folder later!
 
-4. Click **Extract**
+3. **Load into Chrome:**
+   - Open Google Chrome and type `chrome://extensions` in the address bar.
+   - Turn on **"Developer mode"** (the toggle switch in the top-right corner).
+   - Click the **"Load unpacked"** button that appears in the top-left.
+   - Select the folder you extracted in Step 2 (the folder that contains `manifest.json`).
 
-## Step 3 — Load in Chrome
+**🎉 That's it!** Corsair Unbound is now installed. You can pin it to your toolbar.
 
-1. Open a new tab and go to `chrome://extensions`
-2. Turn on **Developer mode** (toggle in the top-right corner)
-3. Click **Load unpacked** (top-left)
-4. Select the folder you extracted in Step 2 (the one containing `manifest.json`)
-5. Done! You should see the Corsair Unbound icon in your toolbar
+---
 
-## Step 4 — First-time setup
+## 🔄 Part 2: How to Update (English)
 
-1. Click the Corsair Unbound icon in the toolbar
-2. Click **Open Dashboard**
-3. Go to **API & Intelligence** and paste your free VirusTotal API key
-   ([get one here](https://www.virustotal.com/gui/my-apikey))
-4. Enable **VirusTotal Threat Intelligence** and **Auto-Scan**
-5. (Optional) Pick your language from the sidebar
+When a new version is released, your Corsair Unbound dashboard will tell you. Here is how to update safely:
 
-## Updating to a new version
+1. In the dashboard, click **"Update"** when notified, and click the button to open the GitHub Releases page.
+2. Download the file named `corsair-unbound-updater.ps1`.
+3. Go to your Downloads folder, right-click `corsair-unbound-updater.ps1`, and select **"Run with PowerShell"**.
+   *(If Windows blocks it, open PowerShell and run: `powershell -ExecutionPolicy Bypass -File .\corsair-unbound-updater.ps1`)*
+4. A black window will open. It will ask you to select your Corsair Unbound folder (from Step 2 above). Select it.
+5. The script will say "Update complete" in green. It will automatically open `chrome://extensions` for you.
+6. Just click the **Reload (↻)** button on the Corsair Unbound card.
 
-1. Download the new release ZIP (Step 1)
-2. Extract it, overwriting the existing folder (Step 2)
-3. Go to `chrome://extensions` and click the **↻ reload** button on the Corsair Unbound card
+Your settings, blocklists, and data are 100% safe during this process!
 
-Your settings, profiles, blocklists, and cache are **preserved** — they live in Chrome's storage, not in the extension files.
+---
+---
 
-## Uninstalling
+<div dir="rtl">
 
-1. Go to `chrome://extensions`
-2. Click **Remove** on the Corsair Unbound card
-3. (Optional) Delete the extracted folder from Step 2
+## 🛠 بخش ۱: نصب اولیه (فارسی)
 
-## Troubleshooting
+به Corsair Unbound خوش آمدید! این راهنما برای همه نوشته شده است، حتی اگر تا به حال افزونه‌ای را خارج از فروشگاه گوگل نصب نکرده باشید. نگران نباشید، فقط یک دقیقه وقت می‌گیرد.
 
-**"Manifest file is missing or unreadable"**
-- You selected the wrong folder. Make sure `manifest.json` is directly inside the folder you selected.
+۱. **دانلود آخرین نسخه:**
+   - به [صفحه Releases](https://github.com/amiraction0938/Corsair-Unbound/releases/latest) بروید.
+   - در بخش "Assets"، روی فایل `corsair-unbound-extension.zip` کلیک کنید تا دانلود شود.
 
-**The extension icon doesn't appear**
-- Click the puzzle-piece icon in Chrome's toolbar and pin Corsair Unbound.
+۲. **استخراج فایل‌ها:**
+   - روی فایل ZIP دانلود شده راست‌کلیک کنید و گزینه **"Extract All..."** (استخراج همه) را انتخاب کنید.
+   - یک مکان امن در کامپیوتر خود انتخاب کنید (مثلاً `C:\CorsairUnbound`) که می‌خواهید فایل‌های افزونه برای همیشه آنجا بمانند. **این پوشه را بعداً پاک نکنید!**
 
-**Threat intelligence shows "Not configured"**
-- You need a free VirusTotal API key. See Step 4.
+۳. **نصب در کروم:**
+   - مرورگر گوگل کروم را باز کنید و در نوار آدرس تایپ کنید: `chrome://extensions`
+   - حالت **"Developer mode"** (حالت توسعه‌دهنده) را که در گوشه بالا سمت راست است، روشن کنید.
+   - روی دکمه **"Load unpacked"** که در بالا سمت چپ ظاهر می‌شود کلیک کنید.
+   - پوشه‌ای را که در مرحله ۲ استخراج کردید انتخاب کنید (پوشه‌ای که فایل `manifest.json` داخل آن است).
+
+**🎉 تمام شد!** Corsair Unbound الان نصب شده است. می‌توانید آن را در نوار ابزار خود پین (Pin) کنید.
+
+---
+
+## 🔄 بخش ۲: نحوه آپدیت کردن (فارسی)
+
+وقتی نسخه جدیدی منتشر شود، داشبورد Corsair Unbound به شما اطلاع می‌دهد. برای آپدیت امن این مراحل را دنبال کنید:
+
+۱. در داشبورد، وقتی پیام آپدیت آمد، روی دکمه کلیک کنید تا صفحه Releases گیت‌هاب باز شود.
+۲. فایلی به نام `corsair-unbound-updater.ps1` را دانلود کنید.
+۳. به پوشه Downloads بروید، روی فایل `corsair-unbound-updater.ps1` راست‌کلیک کنید و گزینه **"Run with PowerShell"** را انتخاب کنید.
+   *(اگر ویندوز اجازه نداد، PowerShell را باز کنید و این دستور را بزنید: `powershell -ExecutionPolicy Bypass -File .\corsair-unbound-updater.ps1`)*
+۴. یک پنجره باز می‌شود و از شما می‌خواهد پوشه افزونه (همان مرحله ۲) را انتخاب کنید. آن را انتخاب کنید.
+۵. اسکریپت با متن سبز رنگ می‌گوید "Update complete" (آپدیت کامل شد). به طور خودکار صفحه `chrome://extensions` را برای شما باز می‌کند.
+۶. فقط کافی است روی دکمه **Reload (↻)** روی کارت Corsair Unbound کلیک کنید.
+
+در طول این فرآیند، تنظیمات، لیست‌های سیاه و سفید و داده‌های شما ۱۰۰٪ در امان هستند!
+
+</div>
