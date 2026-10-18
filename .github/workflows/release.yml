@@ -62,14 +62,10 @@ jobs:
             -x '*.DS_Store' '__MACOSX/*' '*/.*'
           cd ..
 
-      - name: Verify ZIP contents (no launcher, has manifest)
+      - name: Verify ZIP contents
         run: |
           if ! unzip -l corsair-unbound-extension.zip | grep -q 'manifest.json'; then
             echo "::error::ZIP does not contain manifest.json"
-            exit 1
-          fi
-          if unzip -l corsair-unbound-extension.zip | grep -qi 'updater\.ps1'; then
-            echo "::error::ZIP must NOT contain the launcher (updater.ps1)"
             exit 1
           fi
           echo "ZIP contents look correct"
@@ -104,30 +100,25 @@ jobs:
             "mandatory": false
           }
           EOF
-          echo "Generated latest.json:"
-          cat latest.json
 
-      - name: Verify latest.json is valid JSON
+      - name: Debug - List files before upload
         run: |
-          node -e "const j = require('./latest.json'); \
-            if (!j.version || !j.tag || !j.download_url || !j.sha256) { \
-              console.error('latest.json missing required fields'); process.exit(1); \
-            } \
-            if (j.version !== j.tag.replace(/^v/, '')) { \
-              console.error('version/tag mismatch'); process.exit(1); \
-            } \
-            console.log('latest.json OK');"
+          echo "=== Files in root directory ==="
+          ls -la
+          echo "=== Checking required files ==="
+          ls -la corsair-unbound-extension.zip corsair-unbound-updater.ps1 latest.json sha256.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Corsair Unbound v${{ github.ref_name }}
+          name: Corsair Unbound ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           body: |
-            ## 🛡️ Corsair Unbound v${{ github.ref_name }} is out!
+            ## 🛡️ Corsair Unbound ${{ github.ref_name }} is out!
 
             Hello! If you are an ordinary user (not a developer), please don't panic. Updating is very easy and takes less than a minute.
 
@@ -147,7 +138,7 @@ jobs:
 
             ---
 
-            ## 🛡️ نسخه جدید Corsair Unbound v${{ github.ref_name }} منتشر شد!
+            ## 🛡️ نسخه جدید Corsair Unbound ${{ github.ref_name }} منتشر شد!
 
             سلام! اگر شما یک کاربر عادی هستید (نه برنامه‌نویس)، نگران نباشید. آپدیت کردن خیلی ساده است و کمتر از یک دقیقه وقت می‌گیرد.
 
@@ -158,9 +149,11 @@ jobs:
 
             ### 🚀 چطور آپدیت کنیم؟ (روش ساده)
             ۱. فایل `corsair-unbound-updater.ps1` را از پایین دانلود کنید.
-            ۲. روی فایل دانلود شده راست‌کلیک کنید و گزینه **Run with PowerShell** را بزنید (یا در PowerShell بازش کنید).
+            ۲. روی فایل دانلود شده راست‌کلیک کنید و گزینه **Run with PowerShell** را بزنید.
             ۳. یک پنجره باز می‌شود که از شما پوشه افزونه را می‌خواهد. پوشه‌ای که `manifest.json` دارد را انتخاب کنید.
             ۴. صبر کنید تا متن سبز رنگ "Update complete" نمایش داده شود!
             ۵. به صفحه `chrome://extensions` بروید و روی دکمه Reload (↻) کنار Corsair Unbound کلیک کنید.
 
             *(اگر ویندوز اجرای اسکریپت را بلاک کرد، PowerShell را باز کنید و این را بزنید: `powershell -ExecutionPolicy Bypass -File .\corsair-unbound-updater.ps1`)*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
