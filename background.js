@@ -164,6 +164,7 @@ async function maybeAutoArmFortress(host, report) {
     ]);
     const isAlreadyBlocked = Array.isArray(blockedList) && blockedList.includes(host);
 
+    /* ============ BLOCK PATH ============ */
     if (shouldBlock) {
       if (!isAlreadyBlocked) {
         try {
@@ -208,6 +209,7 @@ async function maybeAutoArmFortress(host, report) {
       return;
     }
 
+    /* ============ ARM-ONLY PATH ============ */
     if (existing && existing.autoArmed !== true) return;
     if (existing && existing.autoArmed === true && existing.protected === true) return;
 
@@ -294,9 +296,24 @@ async function maybeAutoScan(tabId, url) {
 /* ============================================================
    CUSTOM DOMAIN SCRIPTS
    ============================================================ */
+
+/**
+ * tabId -> { host, url, ts }
+ * We track the LAST injection per tab so revisits and SPA
+ * route changes still re-inject, while a same-instant
+ * double-fire does not.
+ */
 const _scriptedTabs = new Map();
 const SCRIPT_DEDUPE_WINDOW_MS = 400;
 
+/**
+ * Find a custom script that matches `host`, walking up the
+ * domain hierarchy.  mp.expl.com matches:
+ *   mp.expl.com   (exact)
+ *   expl.com      (parent)
+ *
+ * Returns { entry, matchedHost } or null.
+ */
 async function findScriptForHost(host) {
   if (!host || typeof host !== 'string') return null;
   const h = CorsairSecurity.normalizeHostname(host);
@@ -305,11 +322,14 @@ async function findScriptForHost(host) {
   const scripts = await CorsairStorage.get('customDomainScripts', {});
   if (!scripts || typeof scripts !== 'object') return null;
 
+  // 1) Exact match (fast path)
   const exact = scripts[h];
   if (exact && exact.enabled !== false && exact.code) {
     return { entry: exact, matchedHost: h };
   }
 
+  // 2) Parent-domain walk: mp.expl.com -> expl.com
+  //    Also handles deep subdomains: a.b.expl.com -> b.expl.com -> expl.com
   const parts = h.split('.');
   for (let i = 1; i < parts.length - 1; i++) {
     const parent = parts.slice(i).join('.');
@@ -331,16 +351,21 @@ async function runCustomScriptForTab(tabId, host, url) {
   }
 
   try {
+    // ---- 1. Find matching script (hierarchical) ----
     const match = await findScriptForHost(host);
     if (!match) return;
     const { entry, matchedHost } = match;
 
+    // ---- 2. Lint before injection ----
     const lint = CorsairSecurity.lintCustomScript(entry.code);
     if (!lint.ok) {
       console.warn(`[Corsair CS] ⛔ refusing to inject "${matchedHost}": ${lint.error}`);
       return;
     }
 
+    // ---- 3. Dedupe: skip only if the SAME tab fired for the
+    //       SAME (host + url) within the last SCRIPT_DEDUPE_WINDOW_MS.
+    //       This lets revisits and SPA route changes re-inject.
     const now = Date.now();
     const prev = _scriptedTabs.get(tabId);
     if (
@@ -355,6 +380,10 @@ async function runCustomScriptForTab(tabId, host, url) {
 
     console.log(`[Corsair CS] ▶ injecting "${matchedHost}" into tab ${tabId} (matched for ${host}, url=${url})`);
 
+    // ---- 4. Inject in ALL frames (main + iframes) ----
+    //     allFrames:true is intentional: many sites host the UI
+    //     we want to modify inside an iframe, and the user has
+    //     explicitly requested this behaviour.
     const results = await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
       world: 'MAIN',
@@ -663,9 +692,10 @@ async function initUpdater() {
 
     await CorsairUpdater.scheduleBackgroundCheck();
 
-    // NOTE: notifications removed — update check still runs silently.
-    // Users can see the latest version in the dashboard.
-    await CorsairUpdater.checkForUpdates({ force: false });
+    const result = await CorsairUpdater.checkForUpdates({ force: false });
+    if (result && result.hasUpdate) {
+      await CorsairUpdater.notifyIfUpdateAvailable(result);
+    }
   } catch {}
 }
 
@@ -676,6 +706,37 @@ try {
       try {
         if (alarm?.name !== CorsairUpdater?.ALARM_NAME) return;
         await CorsairUpdater.runBackgroundCheck();
+      } catch {}
+    });
+  }
+} catch {}
+
+/* Handle notification clicks and buttons */
+try {
+  if (typeof chrome !== 'undefined' && chrome.notifications?.onClicked) {
+    chrome.notifications.onClicked.addListener(async (notificationId) => {
+      try {
+        if (!notificationId || !notificationId.startsWith('corsair-update-')) return;
+        await chrome.tabs.create({
+          url: chrome.runtime.getURL('dashboard.html?update=1')
+        });
+        try { chrome.notifications.clear(notificationId); } catch {}
+      } catch {}
+    });
+  }
+} catch {}
+
+try {
+  if (typeof chrome !== 'undefined' && chrome.notifications?.onButtonClicked) {
+    chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+      try {
+        if (!notificationId || !notificationId.startsWith('corsair-update-')) return;
+        if (buttonIndex === 0) {
+          await chrome.tabs.create({
+            url: chrome.runtime.getURL('dashboard.html?update=1')
+          });
+        }
+        try { chrome.notifications.clear(notificationId); } catch {}
       } catch {}
     });
   }
@@ -767,44 +828,41 @@ async function setupContextMenus() {
   }
 }
 
-// Context-menu handler — notifications removed, errors surface via event log.
+function notify(title, message) {
+  try {
+    if (typeof chrome.notifications?.create === 'function') {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title,
+        message
+      });
+    }
+  } catch {}
+}
+
 try {
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     try {
       if (info.menuItemId === 'corsair-scan-link' || info.menuItemId === 'corsair-scan-page') {
         const targetUrl = info.menuItemId === 'corsair-scan-link' ? info.linkUrl : (info.pageUrl || tab?.url);
         if (!targetUrl) return;
+        notify('Corsair Unbound', 'Submitting to VirusTotal…');
         const result = await CorsairThreatIntel.scanUrl(targetUrl);
         const v = String(result.verdict || result.status || 'unknown').toUpperCase();
         const detail = result.status === 'pending'
           ? 'Still analyzing — check the dashboard analyzer in a moment.'
           : (result.flaggedEngines?.length ? `Flagged by ${result.flaggedEngines.length} engine(s).` : 'No engines flagged this URL.');
-        await CorsairStorage.appendEvent({
-          type: 'context_scan',
-          domain: CorsairSecurity.extractHostname(targetUrl) || '',
-          destination: targetUrl,
-          reason: `${v} — ${detail}`,
-          severity: result.verdict === 'malicious' ? 'high' : 'info'
-        }).catch(() => {});
+        notify(`Corsair scan: ${v}`, `${targetUrl}\n${detail}`);
       } else if (info.menuItemId === 'corsair-block-domain') {
         const targetUrl = info.linkUrl || info.pageUrl || tab?.url;
         const host = CorsairSecurity.extractHostname(targetUrl || '');
         if (!host) return;
         const r = await blockDomainGlobally(host);
-        await CorsairStorage.appendEvent({
-          type: 'context_block',
-          domain: host,
-          reason: r.ok ? 'blocked from context menu' : `block failed: ${r.error || 'unknown'}`,
-          severity: r.ok ? 'medium' : 'high'
-        }).catch(() => {});
+        notify('Corsair Unbound', r.ok ? `🚫 ${host} is now blocked everywhere.` : `Could not block ${host}: ${r.error || 'unknown error'}`);
       }
     } catch (err) {
-      await CorsairStorage.appendEvent({
-        type: 'context_error',
-        domain: '',
-        reason: `Context menu action failed: ${err.message}`,
-        severity: 'low'
-      }).catch(() => {});
+      notify('Corsair Unbound', `Scan failed: ${err.message}`);
     }
   });
 } catch {}
@@ -833,6 +891,13 @@ try {
         kind: 'download_blocked', origin: host, tabId: null,
         data: { filename: item.filename || '', url: item.url }
       });
+      if (settings.notifications === true && typeof chrome.notifications?.create === 'function') {
+        chrome.notifications.create({
+          type: 'basic', iconUrl: 'icons/icon128.png',
+          title: 'Corsair Shield — Download Blocked',
+          message: `Blocked malicious download from ${host}`
+        }).catch(() => {});
+      }
     } catch {}
   });
 } catch {}
@@ -857,6 +922,20 @@ async function logContainment({ type, sourceHost, destinationHost, reason, tabId
       origin: sourceHost, tabId: tabId || null,
       data: { destination: destinationHost, reason }
     });
+  } catch {}
+}
+
+async function notifyContainment(reason, sourceHost, destinationHost) {
+  try {
+    const settings = await CorsairStorage.getSettings();
+    if (settings.notifications !== true) return;
+    if (typeof chrome.notifications?.create === 'function') {
+      chrome.notifications.create({
+        type: 'basic', iconUrl: 'icons/icon128.png',
+        title: 'Corsair Shield — Contained',
+        message: `${reason}: ${sourceHost} → ${destinationHost || '?'}`
+      }).catch(() => {});
+    }
   } catch {}
 }
 
@@ -889,6 +968,7 @@ chrome.tabs.onCreated.addListener(async tab => {
     if (!profile || profile.protected !== true || profile.mode !== 'fortress') return;
 
     const destHost = CorsairSecurity.extractHostname(destUrl);
+
     if (destHost && CorsairSecurity.sameOrSubdomain(destHost, originHost)) return;
 
     const blockedList = Array.isArray(profile.blockedDestinationDomains)
@@ -903,9 +983,16 @@ chrome.tabs.onCreated.addListener(async tab => {
     const cooldownActive = isInCooldown(originHost);
 
     const isBlank = !destUrl || destUrl === 'about:blank';
-    if (isBlank && !burstDetected && !cooldownActive) return;
 
-    const shouldContain = isExplicitlyBlocked || burstDetected || cooldownActive;
+    if (isBlank && !burstDetected && !cooldownActive) {
+      return;
+    }
+
+    const shouldContain =
+      isExplicitlyBlocked ||
+      burstDetected ||
+      cooldownActive;
+
     if (!shouldContain) return;
 
     if (burstDetected || cooldownActive) setCooldown(originHost);
@@ -924,6 +1011,7 @@ chrome.tabs.onCreated.addListener(async tab => {
       reason,
       tabId: newTabId
     });
+    await notifyContainment('Popup blocked', originHost, destHost);
   } catch {}
 });
 
@@ -975,6 +1063,7 @@ chrome.webNavigation.onCreatedNavigationTarget.addListener(async details => {
       destinationHost: destHost || 'about:blank',
       reason, tabId: newTabId
     });
+    await notifyContainment('Popup blocked', originHost, destHost);
   } catch {}
 });
 
@@ -1062,6 +1151,15 @@ chrome.webNavigation.onCommitted.addListener(async details => {
 
 /* ============================================================
    SPA NAVIGATION — pushState / replaceState
+   ------------------------------------------------------------
+   Modern frameworks (React Router, Vue Router, Next.js, etc.)
+   do not fire onCommitted on route changes. We hook
+   onHistoryStateUpdated so custom scripts re-inject on every
+   in-app navigation.
+
+   NOTE: this is a TOP-LEVEL listener — it must NOT be nested
+   inside onCommitted, otherwise it would be re-registered on
+   every navigation and stack up over time.
    ============================================================ */
 chrome.webNavigation.onHistoryStateUpdated.addListener(async details => {
   if (details.frameId !== 0) return;
@@ -1073,10 +1171,13 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async details => {
     const host = CorsairSecurity.extractHostname(url);
     if (!host) return;
 
+    // Small delay so the SPA has a chance to render the new route
+    // before we inject (avoids injecting into the OLD DOM).
     setTimeout(() => {
       runCustomScriptForTab(tabId, host, url).catch(() => {});
     }, 250);
 
+    // Also refresh the auto-scan verdict for the new route's host.
     maybeAutoScan(tabId, url).catch(() => {});
   } catch {}
 });
@@ -1170,6 +1271,25 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
               data: { page, ...safeData }
             });
           } catch {}
+
+          if (sev === 'high') {
+            try {
+              const settings = await CorsairStorage.getSettings();
+              if (settings.notifications === true && typeof chrome.notifications?.create === 'function') {
+                const titles = {
+                  clipboard_hijack: 'Corsair Shield — Clipboard Hijack Blocked',
+                  form_jacking: 'Corsair Shield — Form Jacking Detected'
+                };
+                const title = titles[kind] || 'Corsair Shield — Security Event';
+                chrome.notifications.create({
+                  type: 'basic',
+                  iconUrl: 'icons/icon128.png',
+                  title,
+                  message: `Detected on ${host || page || 'unknown host'}`
+                }).catch(() => {});
+              }
+            } catch {}
+          }
 
           send({ ok: true });
           break;
