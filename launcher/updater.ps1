@@ -67,24 +67,12 @@ function Test-ExtensionManifest($dir) {
 }
 
 function Find-ExtensionPath {
-    # 1. Check Config File
-    $config = Load-Config
-    if ($config -and (Test-Path $config.extensionPath) -and (Test-ExtensionManifest $config.extensionPath)) {
-        return $config.extensionPath
-    }
-
-    # 2. Check if script is inside extension folder
-    if (Test-Path (Join-Path $PSScriptRoot 'manifest.json')) {
-        if (Test-ExtensionManifest $PSScriptRoot) {
-            return $PSScriptRoot
-        }
-    }
-
-    # 3. Search Chrome Preferences
-    Write-Step "Searching for Corsair Unbound in Chrome settings..."
+    # 1. Search Chrome Preferences (The active extension)
+    Write-Step "Searching for active Corsair Unbound extension in Chrome..."
     $chromeProfiles = @(
         "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Preferences",
-        "$env:LOCALAPPDATA\Google\Chrome\User Data\Profile 1\Preferences"
+        "$env:LOCALAPPDATA\Google\Chrome\User Data\Profile 1\Preferences",
+        "$env:LOCALAPPDATA\Google\Chrome\User Data\Profile 2\Preferences"
     )
     foreach ($pref in $chromeProfiles) {
         if (Test-Path $pref) {
@@ -100,6 +88,19 @@ function Find-ExtensionPath {
                     }
                 }
             } catch {}
+        }
+    }
+
+    # 2. Check Config File (Fallback)
+    $config = Load-Config
+    if ($config -and (Test-Path $config.extensionPath) -and (Test-ExtensionManifest $config.extensionPath)) {
+        return $config.extensionPath
+    }
+
+    # 3. Check if script is inside extension folder
+    if (Test-Path (Join-Path $PSScriptRoot 'manifest.json')) {
+        if (Test-ExtensionManifest $PSScriptRoot) {
+            return $PSScriptRoot
         }
     }
 
