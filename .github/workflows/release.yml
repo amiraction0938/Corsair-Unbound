@@ -100,13 +100,6 @@ jobs:
           }
           EOF
 
-      - name: Debug - List files before upload
-        run: |
-          echo "=== Files in root directory ==="
-          ls -la
-          echo "=== Checking required files ==="
-          ls -la corsair-unbound-extension.zip corsair-unbound-updater.ps1 latest.json sha256.txt
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -156,7 +149,7 @@ jobs:
             ### 🚀 چطور آپدیت کنیم؟ (روش ساده)
             ۱. فایل `corsair-unbound-updater.ps1` را از پایین دانلود کنید.
             ۲. روی فایل دانلود شده راست‌کلیک کنید و گزینه **Run with PowerShell** را بزنید.
-            ۳. یک پنجره باز می‌شود که از شما پوشه افزونه را می‌خواهد. پوشه‌ای که `manifest.json` دارد را انتخاب کنید.
+            ۳. اسکریپت به صورت خودکار پوشه افزونه شما را پیدا می‌کند!
             ۴. صبر کنید تا متن سبز رنگ "Update complete" نمایش داده شود!
             ۵. به صفحه `chrome://extensions` بروید و روی دکمه Reload (↻) کنار Corsair Unbound کلیک کنید.
 

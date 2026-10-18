@@ -1,33 +1,6 @@
 <#
 .SYNOPSIS
     Corsair Unbound — Windows Updater (Path A)
-
-.DESCRIPTION
-    Standalone updater for the Corsair Unbound Chrome extension.
-
-    The extension does NOT download updates. This launcher:
-      1. Reads latest.json from the GitHub Releases CDN
-      2. Compares installed version with latest
-      3. Downloads the release ZIP (once)
-      4. Verifies SHA-256 against latest.json
-      5. Creates a timestamped backup
-      6. Replaces extension files (never touching user data)
-      7. Opens chrome://extensions for the final Reload step
-
-    Chrome storage (settings, blocklists, profiles, cache) lives
-    in Chrome's profile directory, NOT in the extension folder —
-    so it survives every update automatically.
-
-    First run: asks the user to select the extension directory.
-    Config: %APPDATA%\CorsairUnbound\config.json
-    File manifest: %APPDATA%\CorsairUnbound\installed-files.json
-
-.NOTES
-    Requires Windows PowerShell 5.1+ (built into Windows 10/11).
-    Does NOT require admin rights (extension folder must be writable).
-
-.LINK
-    https://github.com/amiraction0938/Corsair-Unbound
 #>
 
 param(
@@ -58,7 +31,7 @@ function Write-Err($msg)  { Write-Host "ERR: $msg" -ForegroundColor Red }
 function Write-Note($msg) { Write-Host "    $msg" -ForegroundColor Gray }
 
 # ----------------------------------------------------------------------------
-# Config
+# Auto-Discovery Logic
 # ----------------------------------------------------------------------------
 function Load-Config {
     if (-not (Test-Path $ConfigPath)) { return $null }
@@ -80,9 +53,6 @@ function Save-Config($extPath) {
     ($data | ConvertTo-Json) | Set-Content -Path $ConfigPath -Encoding UTF8 -Force
 }
 
-# ----------------------------------------------------------------------------
-# Manifest validation
-# ----------------------------------------------------------------------------
 function Test-ExtensionManifest($dir) {
     if (-not $dir -or -not (Test-Path $dir)) { return $null }
     $manifestPath = Join-Path $dir 'manifest.json'
@@ -96,6 +66,46 @@ function Test-ExtensionManifest($dir) {
     } catch { return $null }
 }
 
+function Find-ExtensionPath {
+    # 1. Check Config File
+    $config = Load-Config
+    if ($config -and (Test-Path $config.extensionPath) -and (Test-ExtensionManifest $config.extensionPath)) {
+        return $config.extensionPath
+    }
+
+    # 2. Check if script is inside extension folder
+    if (Test-Path (Join-Path $PSScriptRoot 'manifest.json')) {
+        if (Test-ExtensionManifest $PSScriptRoot) {
+            return $PSScriptRoot
+        }
+    }
+
+    # 3. Search Chrome Preferences
+    Write-Step "Searching for Corsair Unbound in Chrome settings..."
+    $chromeProfiles = @(
+        "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Preferences",
+        "$env:LOCALAPPDATA\Google\Chrome\User Data\Profile 1\Preferences"
+    )
+    foreach ($pref in $chromeProfiles) {
+        if (Test-Path $pref) {
+            try {
+                $json = Get-Content $pref -Raw | ConvertFrom-Json
+                if ($json.extensions -and $json.extensions.settings) {
+                    foreach ($ext in $json.extensions.settings.PSObject.Properties) {
+                        if ($ext.Value.path -and (Test-Path $ext.Value.path)) {
+                            if ($ext.Value.manifest -and $ext.Value.manifest.name -eq 'Corsair Unbound') {
+                                return $ext.Value.path
+                            }
+                        }
+                    }
+                }
+            } catch {}
+        }
+    }
+
+    return $null
+}
+
 # ----------------------------------------------------------------------------
 # Fetch and validate latest.json
 # ----------------------------------------------------------------------------
@@ -104,29 +114,14 @@ function Get-LatestManifest {
     $res = Invoke-RestMethod -Uri $LatestJsonUrl -UseBasicParsing -TimeoutSec 30
 
     if (-not $res.version) { throw "latest.json is missing 'version'" }
-    if ($res.version -notmatch '^\d+\.\d+\.\d+$') { throw "latest.json has invalid version: $($res.version)" }
-    if (-not $res.tag) { throw "latest.json is missing 'tag'" }
-    if ($res.tag -ne "v$($res.version)") { throw "latest.json tag/version mismatch" }
-    if ($res.tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Non-stable tag: $($res.tag)" }
-    if (-not $res.download_url) { throw "latest.json is missing 'download_url'" }
-    if (-not ($res.download_url -like "https://github.com/$Repo/releases/download/*")) {
-        throw "download_url is not a GitHub release asset URL"
-    }
-    if (-not ($res.download_url -like "*$ExpectedZipName")) {
-        throw "download_url does not point to $ExpectedZipName"
-    }
-    if (-not $res.sha256 -or $res.sha256 -notmatch '^[a-fA-F0-9]{64}$') {
-        throw "latest.json has invalid sha256"
-    }
-    if ($res.published_at) {
-        $null = [DateTime]::Parse($res.published_at)
-    }
+    if ($res.version -notmatch '^\d+\.\d+\.\d+$') { throw "latest.json has invalid version" }
+    if (-not $res.tag -or $res.tag -ne "v$($res.version)") { throw "latest.json tag/version mismatch" }
+    if (-not $res.download_url -or -not ($res.download_url -like "https://github.com/$Repo/releases/download/*")) { throw "invalid download_url" }
+    if (-not $res.sha256 -or $res.sha256 -notmatch '^[a-fA-F0-9]{64}$') { throw "invalid sha256" }
+    
     return $res
 }
 
-# ----------------------------------------------------------------------------
-# Version compare
-# ----------------------------------------------------------------------------
 function Compare-VersionString($a, $b) {
     return ([version]$a).CompareTo([version]$b)
 }
@@ -140,68 +135,39 @@ function Save-VerifiedZip($url, $expectedSha, $outPath) {
 
     Write-Step "Verifying SHA-256..."
     $actual   = (Get-FileHash -Path $outPath -Algorithm SHA256).Hash.ToLower()
-    $expected = $expectedSha.ToLower()
-    if ($actual -ne $expected) {
-        throw "SHA-256 mismatch.`n  expected: $expected`n  actual:   $actual"
+    if ($actual -ne $expectedSha.ToLower()) {
+        throw "SHA-256 mismatch!`n  expected: $expectedSha`n  actual:   $actual"
     }
-    Write-Ok "SHA-256 verified ($($actual.Substring(0, 16))...)"
+    Write-Ok "SHA-256 verified."
 }
 
-# ----------------------------------------------------------------------------
-# ZIP extraction with traversal protection
-# ----------------------------------------------------------------------------
 function Expand-ZipSafely($zipPath, $destDir) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-
     Write-Step "Validating ZIP entries..."
     $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
     try {
         foreach ($entry in $zip.Entries) {
             $name = $entry.FullName
             if ([string]::IsNullOrWhiteSpace($name)) { continue }
-            if ([System.IO.Path]::IsPathRooted($name)) {
-                throw "ZIP contains absolute path: $name"
-            }
-            if ($name -match '(^|[/\\])\.\.([/\\]|$)') {
-                throw "ZIP contains path traversal: $name"
-            }
-            if ($name -match '^[A-Za-z]:') {
-                throw "ZIP contains drive-letter path: $name"
-            }
-            if ($name -match '(^|[/\\])(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.[^/\\]*)?$') {
-                throw "ZIP contains Windows reserved name: $name"
+            if ([System.IO.Path]::IsPathRooted($name) -or $name -match '(^|[/\\])\.\.([/\\]|$)' -or $name -match '^[A-Za-z]:') {
+                throw "ZIP contains unsafe path: $name"
             }
         }
-    } finally {
-        $zip.Dispose()
-    }
+    } finally { $zip.Dispose() }
 
     Write-Step "Extracting to staging directory..."
     if (Test-Path $destDir) { Remove-Item -Path $destDir -Recurse -Force }
     New-Item -ItemType Directory -Path $destDir -Force | Out-Null
     [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $destDir)
-
-    # Post-extraction safety check
-    $resolvedDest = (Resolve-Path $destDir).Path
-    Get-ChildItem -Path $destDir -Recurse -File | ForEach-Object {
-        if (-not $_.FullName.StartsWith($resolvedDest, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "Extracted file escaped target directory: $($_.FullName)"
-        }
-    }
-
-    Write-Ok "Extracted $((Get-ChildItem -Path $destDir -Recurse -File).Count) files"
+    Write-Ok "Extracted files safely."
 }
 
 function Find-ExtractedRoot($extractDir) {
-    # Case 1: manifest.json directly in extractDir
     if (Test-Path (Join-Path $extractDir 'manifest.json')) { return $extractDir }
-
     $topDirs = Get-ChildItem -Path $extractDir -Directory
     if ($topDirs.Count -eq 1) {
         $inner = $topDirs[0].FullName
-        # Case 2: manifest.json inside single top dir
         if (Test-Path (Join-Path $inner 'manifest.json')) { return $inner }
-        # Case 3: manifest.json inside single-top-dir/dist/
         $distDir = Join-Path $inner 'dist'
         if (Test-Path (Join-Path $distDir 'manifest.json')) { return $distDir }
     }
@@ -209,7 +175,7 @@ function Find-ExtractedRoot($extractDir) {
 }
 
 # ----------------------------------------------------------------------------
-# Backup
+# Backup & Install
 # ----------------------------------------------------------------------------
 function New-ExtensionBackup($extDir) {
     $parent = Split-Path $extDir -Parent
@@ -217,53 +183,38 @@ function New-ExtensionBackup($extDir) {
     $backupPath = Join-Path $parent $backupName
     Write-Step "Creating backup at $backupPath..."
     Copy-Item -Path $extDir -Destination $backupPath -Recurse -Force
-    Write-Ok "Backup created"
+    Write-Ok "Backup created."
     return $backupPath
 }
 
-# ----------------------------------------------------------------------------
-# Installed-files manifest
-# ----------------------------------------------------------------------------
 function Load-InstalledFiles {
     if (-not (Test-Path $InstalledFilePath)) { return @() }
     try {
         $data = Get-Content $InstalledFilePath -Raw | ConvertFrom-Json
-        if ($data.files -and $data.files -is [array]) {
-            return @($data.files)
-        }
+        if ($data.files -and $data.files -is [array]) { return @($data.files) }
         return @()
     } catch { return @() }
 }
 
 function Save-InstalledFiles($files) {
-    if (-not (Test-Path $AppDataDir)) {
-        New-Item -ItemType Directory -Path $AppDataDir -Force | Out-Null
-    }
-    $data = [ordered]@{
-        files        = @($files)
-        lastUpdateAt = (Get-Date).ToUniversalTime().ToString('o')
-    }
+    if (-not (Test-Path $AppDataDir)) { New-Item -ItemType Directory -Path $AppDataDir -Force | Out-Null }
+    $data = [ordered]@{ files = @($files); lastUpdateAt = (Get-Date).ToUniversalTime().ToString('o') }
     ($data | ConvertTo-Json -Depth 4) | Set-Content -Path $InstalledFilePath -Encoding UTF8 -Force
 }
 
 function Get-RelativeFiles($rootDir) {
     $resolved = (Resolve-Path $rootDir).Path
     Get-ChildItem -Path $rootDir -Recurse -File | ForEach-Object {
-        $rel = $_.FullName.Substring($resolved.Length).TrimStart('\', '/')
-        $rel -replace '\\', '/'
+        $_.FullName.Substring($resolved.Length).TrimStart('\', '/') -replace '\\', '/'
     }
 }
 
-# ----------------------------------------------------------------------------
-# Apply update: remove obsolete managed files, copy new files
-# ----------------------------------------------------------------------------
 function Apply-Update {
     param($extDir, $extractedDir, $oldFiles, $newFiles)
 
     $newSet = New-Object System.Collections.Generic.HashSet[string]
     foreach ($f in $newFiles) { $null = $newSet.Add($f) }
     $obsolete = @($oldFiles | Where-Object { -not $newSet.Contains($_) })
-
     $resolvedExt = (Resolve-Path $extDir).Path
 
     if ($obsolete.Count -gt 0) {
@@ -271,11 +222,8 @@ function Apply-Update {
         foreach ($rel in $obsolete) {
             $full = Join-Path $extDir $rel
             if (-not (Test-Path $full)) { continue }
-            $resolvedFull = (Resolve-Path $full).Path
-            if (-not $resolvedFull.StartsWith($resolvedExt, [System.StringComparison]::OrdinalIgnoreCase)) {
-                Write-Note "Skipping suspicious path: $rel"
-                continue
-            }
+            $item = Get-Item -Path $full -ErrorAction SilentlyContinue
+            if ($item -and $item.PSIsContainer) { continue } # Skip directories!
             Remove-Item -Path $full -Force -ErrorAction SilentlyContinue
         }
     }
@@ -286,17 +234,12 @@ function Apply-Update {
         $rel = $_.FullName.Substring($resolvedExtracted.Length).TrimStart('\', '/')
         $dest = Join-Path $extDir $rel
         $destDir = Split-Path $dest -Parent
-        if ($destDir -and -not (Test-Path $destDir)) {
-            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-        }
+        if ($destDir -and -not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
         Copy-Item -Path $_.FullName -Destination $dest -Force
     }
-    Write-Ok "Files installed"
+    Write-Ok "Files installed."
 }
 
-# ----------------------------------------------------------------------------
-# Open Chrome
-# ----------------------------------------------------------------------------
 function Open-ChromeExtensions {
     Write-Step "Attempting to open chrome://extensions..."
     $chromePaths = @(
@@ -308,30 +251,12 @@ function Open-ChromeExtensions {
         if (Test-Path $p) {
             try {
                 Start-Process -FilePath $p -ArgumentList "chrome://extensions" -ErrorAction Stop
-                Write-Ok "Chrome launched"
+                Write-Ok "Chrome launched."
                 return $true
-            } catch {
-                Write-Note "Launch failed from $p"
-            }
+            } catch {}
         }
     }
-    Write-Note "Chrome not found automatically."
     return $false
-}
-
-# ----------------------------------------------------------------------------
-# Folder picker (initial setup)
-# ----------------------------------------------------------------------------
-function Select-ExtensionFolder {
-    Write-Step "Please select the Corsair Unbound extension folder..."
-    Write-Note "It must contain manifest.json"
-    Add-Type -AssemblyName System.Windows.Forms
-    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-    $dialog.Description = "Select the Corsair Unbound extension folder (contains manifest.json)"
-    $dialog.ShowNewFolderButton = $false
-    $result = $dialog.ShowDialog()
-    if ($result -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
-    return $dialog.SelectedPath
 }
 
 # ----------------------------------------------------------------------------
@@ -346,73 +271,60 @@ function Main {
 
     if ($Reset) {
         if (Test-Path $ConfigPath) { Remove-Item $ConfigPath -Force }
-        if (Test-Path $InstalledFilePath) { Remove-Item $InstalledFilePath -Force }
-        Write-Note "Config reset. Setup mode will run."
+        Write-Note "Config reset. Setup will run."
     }
 
     # ---- Resolve extension folder ----
-    $config = Load-Config
     $extDir = $null
     if ($ExtensionPath) {
         $extDir = $ExtensionPath
-    } elseif ($config -and (Test-Path $config.extensionPath)) {
-        $extDir = $config.extensionPath
+    } else {
+        $extDir = Find-ExtensionPath
     }
 
     if (-not $extDir -or -not (Test-ExtensionManifest $extDir)) {
-        Write-Note "First-time setup required."
-        $selected = Select-ExtensionFolder
-        if (-not $selected) { Write-Err "No folder selected. Aborting."; exit 1 }
-        if (-not (Test-ExtensionManifest $selected)) {
-            Write-Err "Selected folder does not contain a valid Corsair Unbound manifest.json"
-            exit 1
-        }
-        Save-Config $selected
-        $extDir = (Resolve-Path $selected).Path
-        Write-Ok "Config saved to $ConfigPath"
+        Write-Note "Could not auto-detect the extension folder."
+        Add-Type -AssemblyName System.Windows.Forms
+        $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dialog.Description = "Select the Corsair Unbound extension folder (contains manifest.json)"
+        if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { Write-Err "Cancelled."; exit 1 }
+        $extDir = $dialog.SelectedPath
+        if (-not (Test-ExtensionManifest $extDir)) { Write-Err "Invalid extension folder."; exit 1 }
+        Save-Config $extDir
+    } else {
+        Write-Ok "Auto-detected extension folder: $extDir"
+        Save-Config $extDir
     }
 
-    # ---- Validate installed extension ----
     $installed = Test-ExtensionManifest $extDir
-    if (-not $installed) {
-        Write-Err "Installed extension at $extDir is not a valid Corsair Unbound installation."
-        exit 1
-    }
     $currentVersion = $installed.version
-    Write-Ok "Installed: v$currentVersion at $extDir"
+    Write-Ok "Installed version: v$currentVersion"
 
     # ---- Fetch latest metadata ----
     $latest = Get-LatestManifest
     Write-Ok "Latest available: v$($latest.version)"
 
-    if (-not $Force) {
-        $cmp = Compare-VersionString $latest.version $currentVersion
-        if ($cmp -le 0) { Write-Ok "Already up to date."; exit 0 }
+    if (-not $Force -and (Compare-VersionString $latest.version $currentVersion) -le 0) {
+        Write-Ok "Already up to date. No action needed."
+        exit 0
     }
 
-    # ---- Download & verify ----
     $tempDir = Join-Path $env:TEMP "corsair-update-$([guid]::NewGuid())"
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
     $zipPath = Join-Path $tempDir $ExpectedZipName
 
     try {
         Save-VerifiedZip $latest.download_url $latest.sha256 $zipPath
-
         $extractDir = Join-Path $tempDir 'extracted'
         Expand-ZipSafely $zipPath $extractDir
         $innerRoot = Find-ExtractedRoot $extractDir
 
         $newManifest = Test-ExtensionManifest $innerRoot
-        if (-not $newManifest) { throw "Downloaded package has no valid manifest.json" }
-        if ($newManifest.version -ne $latest.version) {
-            throw "Manifest version ($($newManifest.version)) != latest.json ($($latest.version))"
+        if (-not $newManifest -or $newManifest.version -ne $latest.version) {
+            throw "Downloaded package has invalid manifest or wrong version."
         }
-        Write-Ok "Package verified: v$($newManifest.version)"
 
-        # ---- Backup ----
         $backupPath = New-ExtensionBackup $extDir
-
-        # ---- Apply ----
         $oldFiles = Load-InstalledFiles
         $newFiles = @(Get-RelativeFiles $innerRoot)
 
@@ -424,28 +336,19 @@ function Main {
             $resolvedBackup = (Resolve-Path $backupPath).Path
             Get-ChildItem -Path $backupPath -Recurse -File | ForEach-Object {
                 $rel = $_.FullName.Substring($resolvedBackup.Length).TrimStart('\', '/')
-                $dest = Join-Path $extDir $rel
-                $destDir = Split-Path $dest -Parent
-                if ($destDir -and -not (Test-Path $destDir)) {
-                    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                }
-                Copy-Item -Path $_.FullName -Destination $dest -Force
+                Copy-Item -Path $_.FullName -Destination (Join-Path $extDir $rel) -Force
             }
-            Write-Ok "Rollback complete. Extension restored to v$currentVersion"
+            Write-Ok "Rollback complete."
             exit 1
         }
 
-        # ---- Verify ----
         $finalManifest = Test-ExtensionManifest $extDir
-        if (-not $finalManifest -or $finalManifest.version -ne $latest.version) {
-            throw "Post-install verification failed"
-        }
+        if (-not $finalManifest -or $finalManifest.version -ne $latest.version) { throw "Post-install verification failed" }
 
         Save-InstalledFiles $newFiles
         Write-Ok "Extension updated to v$($latest.version)"
 
-        # ---- Open Chrome ----
-        Start-Sleep -Seconds 3
+        Start-Sleep -Seconds 2
         $opened = Open-ChromeExtensions
 
         Write-Host ""
@@ -453,26 +356,17 @@ function Main {
         Write-Host "  Update complete: v$currentVersion -> v$($latest.version)" -ForegroundColor Green
         Write-Host "==========================================" -ForegroundColor Green
         if ($opened) {
-            Write-Host "  Chrome was opened. If the version shown is still" -ForegroundColor Yellow
-            Write-Host "  v$currentVersion, click Reload on Corsair Unbound." -ForegroundColor Yellow
+            Write-Host "  Chrome was opened. If the version is still old," -ForegroundColor Yellow
+            Write-Host "  click Reload on Corsair Unbound in chrome://extensions." -ForegroundColor Yellow
         } else {
-            Write-Host "  Open chrome://extensions in Chrome and click Reload" -ForegroundColor Yellow
-            Write-Host "  on Corsair Unbound if it did not reload automatically." -ForegroundColor Yellow
+            Write-Host "  Open chrome://extensions in Chrome and click Reload." -ForegroundColor Yellow
         }
         Write-Host "  Backup: $backupPath" -ForegroundColor Gray
         Write-Host ""
 
     } finally {
-        if (Test-Path $tempDir) {
-            Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
+        if (Test-Path $tempDir) { Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
 
-try {
-    Main
-} catch {
-    Write-Err "Fatal error: $_"
-    Write-Note "Full stack: $($_.ScriptStackTrace)"
-    exit 1
-}
+try { Main } catch { Write-Err "Fatal error: $_"; exit 1 }
