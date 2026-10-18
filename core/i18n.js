@@ -453,6 +453,8 @@ const CorsairI18n = (() => {
       'update.modal.step2.title': 'Run the Updater',
       'update.modal.step2.desc': 'Double-click the downloaded .ps1 file. Windows may show a SmartScreen or execution-policy prompt the first time — the launcher explains what to click. The updater verifies SHA-256 before installing anything.',
       'update.modal.step3.title': 'Files replaced automatically',
+      'update.modal.step3.button': '📋 Copy the path to paste in Explorer',
+      'update.modal.step4.button': '🔗 Copy chrome://extensions',
       'update.modal.step3.desc': 'The updater backs up your current installation, verifies the archive, replaces only the extension-managed files, and keeps your data intact. A timestamped backup is left next to your extension folder.',
       'update.modal.step4.title': 'Reload Chrome',
       'update.modal.step4.desc': 'Chrome usually auto-reloads unpacked extensions after files change. If the version shown is still the old one, open chrome://extensions and click ↻ Reload on Corsair Unbound.',

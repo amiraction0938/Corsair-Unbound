@@ -1,20 +1,5 @@
 /* ============================================================
    CORSAIR UNBOUND — UPDATER (PATH A)
-   ------------------------------------------------------------
-   The extension's ONLY job:
-     • Fetch latest.json from GitHub Releases
-     • Compare installed version with latest stable
-     • Show the user what's available + where to get the launcher
-     • Detect "we just got updated" (via getManifest().version)
-     • Log extension_updated events for the Activity Log
-
-   The extension DOES NOT download the ZIP itself.
-   The Windows launcher (launcher/updater.ps1) handles:
-     • Fetching latest.json again for its own use
-     • Downloading the release ZIP exactly once
-     • SHA-256 verification against latest.json.sha256
-     • Backup / extraction / file replacement
-     • Opening chrome://extensions for the Reload step
    ============================================================ */
 const CorsairUpdater = (() => {
   'use strict';
@@ -26,7 +11,7 @@ const CorsairUpdater = (() => {
   const LATEST_JSON_URL = `${REPO_URL}/releases/latest/download/latest.json`;
   const LAUNCHER_URL = `${REPO_URL}/releases/latest/download/corsair-unbound-updater.ps1`;
 
-  const CHECK_TTL_MS = 60 * 60 * 1000;          // 1 hour
+  const CHECK_TTL_MS = 60 * 60 * 1000;
   const CACHE_KEY = 'updaterV2Cache';
   const ALARM_NAME = 'corsair-update-check-v2';
   const NOTIFIED_KEY = 'updaterV2LastNotifiedVersion';
@@ -40,10 +25,8 @@ const CorsairUpdater = (() => {
     'https://objects.githubusercontent.com/'
   ];
 
-  /* ============================================================
-     VERSION HELPERS
-     ============================================================ */
   function parseVersion(str) {
+    // توجه: علامت $ در انتهای Regex باعث میشه پسوندهای بتا رد بشن
     const m = String(str || '').trim().match(/^[vV]?(\d+)\.(\d+)\.(\d+)$/);
     if (!m) return null;
     return {
@@ -72,20 +55,6 @@ const CorsairUpdater = (() => {
     return '0.0.0';
   }
 
-  /* ============================================================
-     FETCH latest.json
-     ------------------------------------------------------------
-     Every field is validated before anything is trusted:
-       version       — must parse as MAJOR.MINOR.PATCH
-       tag           — must be exactly 'v' + version
-       stable tag    — must match /^v\d+\.\d+\.\d+$/
-       download_url  — must be on our repo's release asset hosts
-       asset name    — must be exactly corsair-unbound-extension.zip
-       sha256        — must be exactly 64 lowercase hex chars
-       published_at  — if present, must parse as ISO 8601
-       mandatory     — optional boolean, default false
-     Any failure → thrown error. No insecure fallback.
-     ============================================================ */
   async function fetchLatestManifest() {
     const res = await fetch(LATEST_JSON_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error(`latest-json-http-${res.status}`);
@@ -98,16 +67,13 @@ const CorsairUpdater = (() => {
       throw new Error('latest-json-not-object');
     }
 
-    // ---- version ----
     const parsed = parseVersion(json.version);
     if (!parsed) throw new Error('latest-json-bad-version');
 
-    // ---- tag must be exactly v + version ----
     const tag = String(json.tag || '').trim();
     if (tag !== `v${parsed.str}`) throw new Error('latest-json-tag-mismatch');
     if (!STABLE_TAG_RE.test(tag)) throw new Error('latest-json-not-stable');
 
-    // ---- download_url ----
     const downloadUrl = String(json.download_url || '').trim();
     if (!downloadUrl) throw new Error('latest-json-no-url');
     if (!ALLOWED_DOWNLOAD_PREFIXES.some(p => downloadUrl.startsWith(p))) {
@@ -124,22 +90,17 @@ const CorsairUpdater = (() => {
       throw new Error('latest-json-bad-url');
     }
 
-    // ---- sha256: exactly 64 lowercase hex ----
     const sha256 = String(json.sha256 || '').toLowerCase();
     if (!/^[a-f0-9]{64}$/.test(sha256)) {
       throw new Error('latest-json-bad-sha256');
     }
 
-    // ---- published_at (optional but if present must be valid) ----
     const publishedAt = String(json.published_at || '');
     if (publishedAt && Number.isNaN(Date.parse(publishedAt))) {
       throw new Error('latest-json-bad-date');
     }
 
-    // ---- notes (optional, capped) ----
     const notes = String(json.notes || '').slice(0, 4000);
-
-    // ---- mandatory (optional) ----
     const mandatory = json.mandatory === true;
 
     return {
@@ -153,13 +114,9 @@ const CorsairUpdater = (() => {
     };
   }
 
-  /* ============================================================
-     PUBLIC: checkForUpdates
-     ============================================================ */
   async function checkForUpdates({ force = false } = {}) {
     const current = getCurrentVersion();
 
-    // Cache hit (only when not forced)
     if (!force) {
       try {
         const cached = (await chrome.storage.local.get(CACHE_KEY))[CACHE_KEY];
@@ -196,9 +153,6 @@ const CorsairUpdater = (() => {
       try { await chrome.storage.local.set({ [CACHE_KEY]: result }); } catch {}
       return result;
     } catch (err) {
-      // No insecure fallback. Return last known good cache (marked stale)
-      // or an explicit error result. Never silently accept a raw manifest
-      // from the branch tip.
       try {
         const cached = (await chrome.storage.local.get(CACHE_KEY))[CACHE_KEY];
         if (cached) {
@@ -227,13 +181,8 @@ const CorsairUpdater = (() => {
     }
   }
 
-  /* ============================================================
-     BACKGROUND: notification + alarm
-     ============================================================ */
   async function notifyIfUpdateAvailable(result) {
     if (!result?.hasUpdate || !result.latest) return false;
-
-    // Don't spam the same version twice.
     try {
       const r = await chrome.storage.local.get(NOTIFIED_KEY);
       if (r[NOTIFIED_KEY] === result.latest) return false;
@@ -271,14 +220,6 @@ const CorsairUpdater = (() => {
     } catch { return null; }
   }
 
-  /* ============================================================
-     INSTALLED VERSION MIGRATION (called from background.js)
-     ------------------------------------------------------------
-     Writes to `updaterV2LastInstalledVersion`. Dashboard uses a
-     DIFFERENT key (`updaterV2DashboardSeenVersion`) so the toast
-     can be shown even after background has already logged the
-     event. See dashboard.js detectExtensionUpdate().
-     ============================================================ */
   async function recordInstalledVersion() {
     const current = getCurrentVersion();
     try {
@@ -297,29 +238,12 @@ const CorsairUpdater = (() => {
     }
   }
 
-  /* ============================================================
-     PATH-A STUBS — back-compat only
-     ------------------------------------------------------------
-     dashboard.js does NOT call these in Path A. background.js
-     still has handlers for 'download-update' and
-     'reveal-downloaded-file'. Those handlers should be removed
-     when background.js is updated. These stubs return an error
-     so nothing crashes if the old handlers are still present.
-     ============================================================ */
   async function downloadUpdateZip() {
-    return {
-      ok: false,
-      error: 'path-a-no-download',
-      message: 'Path A does not download the ZIP inside the extension. Use the Windows launcher.'
-    };
+    return { ok: false, error: 'path-a-no-download' };
   }
 
   async function revealDownloadedFile() {
-    return {
-      ok: false,
-      error: 'path-a-no-download',
-      message: 'Path A does not download the ZIP inside the extension.'
-    };
+    return { ok: false, error: 'path-a-no-download' };
   }
 
   async function openDownloadsFolder() {
@@ -334,11 +258,7 @@ const CorsairUpdater = (() => {
     }
   }
 
-  /* ============================================================
-     EXPORTS
-     ============================================================ */
   return {
-    // Public API
     checkForUpdates,
     notifyIfUpdateAvailable,
     scheduleBackgroundCheck,
@@ -347,13 +267,9 @@ const CorsairUpdater = (() => {
     getCurrentVersion,
     compareVersions,
     parseVersion,
-
-    // Path-A stubs (back-compat with old background.js handlers)
     downloadUpdateZip,
     revealDownloadedFile,
     openDownloadsFolder,
-
-    // Constants — used by dashboard.js and background.js
     GITHUB_USER,
     GITHUB_REPO,
     repoUrl: REPO_URL,
