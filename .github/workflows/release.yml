@@ -142,6 +142,8 @@ jobs:
 
             ---
 
+            <div dir="rtl">
+
             ## 🛡️ نسخه جدید Corsair Unbound ${{ github.ref_name }} منتشر شد!
 
             سلام! اگر شما یک کاربر عادی هستید (نه برنامه‌نویس)، نگران نباشید. آپدیت کردن خیلی ساده است و کمتر از یک دقیقه وقت می‌گیرد.
@@ -159,5 +161,7 @@ jobs:
             ۵. به صفحه `chrome://extensions` بروید و روی دکمه Reload (↻) کنار Corsair Unbound کلیک کنید.
 
             *(اگر ویندوز اجرای اسکریپت را بلاک کرد، PowerShell را باز کنید و این را بزنید: `powershell -ExecutionPolicy Bypass -File .\corsair-unbound-updater.ps1`)*
+
+            </div>
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
