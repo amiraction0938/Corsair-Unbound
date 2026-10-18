@@ -3,94 +3,133 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (e.g. v1.8.1)'
-        required: true
-        type: string
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Build & publish release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Validate tag format
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must be vMAJOR.MINOR.PATCH (stable only), got: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          echo "Tag OK: ${GITHUB_REF_NAME}"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Run tests
         run: npm test
 
-      - name: Build extension
-        run: npm run build
+      - name: Build distributable
+        run: node scripts/build.mjs
 
-      - name: Verify manifest
-        run: test -f dist/manifest.json
+      - name: Validate built manifest
+        run: |
+          if [ ! -f dist/manifest.json ]; then
+            echo "::error::dist/manifest.json was not produced by the build"
+            exit 1
+          fi
+          MANIFEST_VERSION=$(node -p "require('./dist/manifest.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match manifest version $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "Version OK: $MANIFEST_VERSION"
 
-      - name: Package extension as ZIP
+      - name: Create extension ZIP
         run: |
           cd dist
-          zip -r -q ../corsair-unbound-extension.zip .
+          zip -r ../corsair-unbound-extension.zip . \
+            -x '*.DS_Store' '__MACOSX/*' '*/.*'
           cd ..
-          ls -la corsair-unbound-extension.zip
 
-      - name: Determine release tag
-        id: tag
+      - name: Verify ZIP contents (no launcher, has manifest)
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          if ! unzip -l corsair-unbound-extension.zip | grep -q 'manifest.json'; then
+            echo "::error::ZIP does not contain manifest.json"
+            exit 1
           fi
+          if unzip -l corsair-unbound-extension.zip | grep -qi 'updater\.ps1'; then
+            echo "::error::ZIP must NOT contain the launcher (updater.ps1)"
+            exit 1
+          fi
+          echo "ZIP contents look correct"
+
+      - name: Compute SHA-256
+        run: |
+          SHA=$(sha256sum corsair-unbound-extension.zip | awk '{print $1}')
+          echo "$SHA" > sha256.txt
+          echo "SHA256: $SHA"
+
+      - name: Prepare launcher asset
+        run: |
+          if [ ! -f launcher/updater.ps1 ]; then
+            echo "::error::launcher/updater.ps1 not found"
+            exit 1
+          fi
+          cp launcher/updater.ps1 corsair-unbound-updater.ps1
+
+      - name: Generate latest.json
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          SHA=$(cat sha256.txt)
+          PUBLISHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          cat > latest.json <<EOF
+          {
+            "version": "${TAG_VERSION}",
+            "tag": "${GITHUB_REF_NAME}",
+            "download_url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/corsair-unbound-extension.zip",
+            "sha256": "${SHA}",
+            "published_at": "${PUBLISHED_AT}",
+            "notes": "",
+            "mandatory": false
+          }
+          EOF
+          echo "Generated latest.json:"
+          cat latest.json
+
+      - name: Verify latest.json is valid JSON
+        run: |
+          node -e "const j = require('./latest.json'); \
+            if (!j.version || !j.tag || !j.download_url || !j.sha256) { \
+              console.error('latest.json missing required fields'); process.exit(1); \
+            } \
+            if (j.version !== j.tag.replace(/^v/, '')) { \
+              console.error('version/tag mismatch'); process.exit(1); \
+            } \
+            console.log('latest.json OK');"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: Corsair Unbound ${{ steps.tag.outputs.tag }}
-          body: |
-            ## Corsair Unbound ${{ steps.tag.outputs.tag }}
-
-            ### 🚀 Quick Install
-
-            1. **Download** `corsair-unbound-extension.zip` from the Assets below
-            2. **Extract** the ZIP to a folder you'll keep (don't delete it later)
-            3. Open `chrome://extensions`
-            4. Enable **Developer mode** (top-right toggle)
-            5. Click **Load unpacked** and select the extracted folder
-
-            Full instructions: [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/INSTALL.md)
-
-            ### 📋 What's in this release
-
-            - Deterministic DNR enforcement (Fortress catch-all)
-            - Multi-source threat intelligence (VirusTotal + URLhaus + heuristics)
-            - Notification Center with real-time updates
-            - Content security guard (clipboard / CSP / form-jacking)
-            - Multi-language UI (8 languages, full RTL support)
-            - Custom domain scripts
-            - Backup & restore
-
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
-          files: |
-            corsair-unbound-extension.zip
+          name: Corsair Unbound v${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
+          files: |
+            corsair-unbound-extension.zip
+            corsair-unbound-updater.ps1
+            latest.json
+            sha256.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

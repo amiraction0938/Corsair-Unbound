@@ -1,68 +1,50 @@
 /* ============================================================
-   CORSAIR UNBOUND — UPDATER
+   CORSAIR UNBOUND — UPDATER (PATH A)
    ------------------------------------------------------------
-   Checks for updates via the GitHub Releases API, downloads
-   the latest published ZIP, and guides the user through a
-   data-preserving manual reload.
+   The extension's ONLY job:
+     • Fetch latest.json from GitHub Releases
+     • Compare installed version with latest stable
+     • Show the user what's available + where to get the launcher
+     • Detect "we just got updated" (via getManifest().version)
+     • Log extension_updated events for the Activity Log
 
-   IMPORTANT — what this can and cannot do:
-
-     ✅ Check for new releases (GitHub API)
-     ✅ Show a desktop notification + dashboard banner
-     ✅ Download the release ZIP asset with one click
-     ✅ Open the file in Explorer / Finder
-     ✅ Guide the user to chrome://extensions
-     ❌ Cannot replace its own files (Chrome blocks it)
-     ❌ Cannot reload itself (Chrome blocks it)
-     ❌ Cannot run install scripts (Chrome blocks it)
-
-   Unpacked Chrome extensions require a manual reload. Users'
-   data lives in chrome.storage.local, NOT in the extension
-   files — so it survives every update automatically.
+   The extension DOES NOT download the ZIP itself.
+   The Windows launcher (launcher/updater.ps1) handles:
+     • Fetching latest.json again for its own use
+     • Downloading the release ZIP exactly once
+     • SHA-256 verification against latest.json.sha256
+     • Backup / extraction / file replacement
+     • Opening chrome://extensions for the Reload step
    ============================================================ */
 const CorsairUpdater = (() => {
   'use strict';
 
   const GITHUB_USER = 'amiraction0938';
   const GITHUB_REPO = 'Corsair-Unbound';
-  const GITHUB_BRANCH = 'main';
   const REPO_URL = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}`;
   const RELEASES_URL = `${REPO_URL}/releases`;
-  const LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/releases/latest`;
+  const LATEST_JSON_URL = `${REPO_URL}/releases/latest/download/latest.json`;
+  const LAUNCHER_URL = `${REPO_URL}/releases/latest/download/corsair-unbound-updater.ps1`;
 
-  // Fallback source: raw manifest.json on the main branch.
-  // Only used when the Releases API is unavailable (rate limit,
-  // network hiccup, or the repo has no published releases yet).
-  const MANIFEST_FALLBACK_URL =
-    `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/manifest.json`;
+  const CHECK_TTL_MS = 60 * 60 * 1000;          // 1 hour
+  const CACHE_KEY = 'updaterV2Cache';
+  const ALARM_NAME = 'corsair-update-check-v2';
+  const NOTIFIED_KEY = 'updaterV2LastNotifiedVersion';
+  const INSTALLED_AT_KEY = 'updaterV2LastInstalledVersion';
 
-  // Fallback download if no release asset is available. Downloads
-  // the branch tip as a ZIP. Less ideal but keeps the flow working.
-  const BRANCH_ZIP_FALLBACK_URL =
-    `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/archive/refs/heads/${GITHUB_BRANCH}.zip`;
-
-  const CHECK_TTL_MS = 6 * 60 * 60 * 1000;      // 6h cache
-  const CACHE_KEY = 'versionCheckCache';
-  const ALARM_NAME = 'corsair-update-check';
-  const NOTIFIED_KEY = 'updaterLastNotifiedVersion';
-  const INSTALLED_AT_KEY = 'updaterLastInstalledVersion';
-
-  // The exact ZIP filename we expect inside the release assets.
-  // Anything else in the release is ignored — this prevents a
-  // malicious repo compromise from swapping in a different file.
   const EXPECTED_ASSET_NAME = 'corsair-unbound-extension.zip';
+  const STABLE_TAG_RE = /^v\d+\.\d+\.\d+$/;
+
+  const ALLOWED_DOWNLOAD_PREFIXES = [
+    `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/`,
+    'https://objects.githubusercontent.com/'
+  ];
 
   /* ============================================================
      VERSION HELPERS
      ============================================================ */
-  function _normalizeTag(tag) {
-    const s = String(tag || '').trim();
-    if (!s) return '';
-    return s.replace(/^[vV]/, '');
-  }
-
   function parseVersion(str) {
-    const m = String(str || '').trim().match(/^[vV]?(\d+)\.(\d+)\.(\d+)/);
+    const m = String(str || '').trim().match(/^[vV]?(\d+)\.(\d+)\.(\d+)$/);
     if (!m) return null;
     return {
       major: Number(m[1]),
@@ -91,176 +73,167 @@ const CorsairUpdater = (() => {
   }
 
   /* ============================================================
-     RELEASE ASSET PICKER
+     FETCH latest.json
      ------------------------------------------------------------
-     Given the release JSON from the GitHub API, find the asset
-     whose name matches EXPECTED_ASSET_NAME exactly. This is the
-     ONLY file we will ever offer for download.
+     Every field is validated before anything is trusted:
+       version       — must parse as MAJOR.MINOR.PATCH
+       tag           — must be exactly 'v' + version
+       stable tag    — must match /^v\d+\.\d+\.\d+$/
+       download_url  — must be on our repo's release asset hosts
+       asset name    — must be exactly corsair-unbound-extension.zip
+       sha256        — must be exactly 64 lowercase hex chars
+       published_at  — if present, must parse as ISO 8601
+       mandatory     — optional boolean, default false
+     Any failure → thrown error. No insecure fallback.
      ============================================================ */
-  function _pickReleaseAsset(assets) {
-    if (!Array.isArray(assets)) return null;
-    for (const a of assets) {
-      if (!a || typeof a !== 'object') continue;
-      if (a.name !== EXPECTED_ASSET_NAME) continue;
-      if (a.state !== 'uploaded') continue;
-      if (typeof a.browser_download_url !== 'string') continue;
-      if (!/^https:\/\/github\.com\//.test(a.browser_download_url)) continue;
-      return a;
+  async function fetchLatestManifest() {
+    const res = await fetch(LATEST_JSON_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`latest-json-http-${res.status}`);
+
+    let json;
+    try { json = await res.json(); }
+    catch { throw new Error('latest-json-invalid-json'); }
+
+    if (!json || typeof json !== 'object' || Array.isArray(json)) {
+      throw new Error('latest-json-not-object');
     }
-    return null;
-  }
 
-  /* ============================================================
-     CACHE
-     ============================================================ */
-  async function getCache() {
+    // ---- version ----
+    const parsed = parseVersion(json.version);
+    if (!parsed) throw new Error('latest-json-bad-version');
+
+    // ---- tag must be exactly v + version ----
+    const tag = String(json.tag || '').trim();
+    if (tag !== `v${parsed.str}`) throw new Error('latest-json-tag-mismatch');
+    if (!STABLE_TAG_RE.test(tag)) throw new Error('latest-json-not-stable');
+
+    // ---- download_url ----
+    const downloadUrl = String(json.download_url || '').trim();
+    if (!downloadUrl) throw new Error('latest-json-no-url');
+    if (!ALLOWED_DOWNLOAD_PREFIXES.some(p => downloadUrl.startsWith(p))) {
+      throw new Error('latest-json-untrusted-url');
+    }
     try {
-      const r = await chrome.storage.local.get(CACHE_KEY);
-      return r[CACHE_KEY] || null;
-    } catch { return null; }
-  }
+      const u = new URL(downloadUrl);
+      const lastSegment = u.pathname.split('/').filter(Boolean).pop() || '';
+      if (lastSegment !== EXPECTED_ASSET_NAME) {
+        throw new Error('latest-json-wrong-asset');
+      }
+    } catch (e) {
+      if (e.message === 'latest-json-wrong-asset') throw e;
+      throw new Error('latest-json-bad-url');
+    }
 
-  async function setCache(data) {
-    try { await chrome.storage.local.set({ [CACHE_KEY]: data }); } catch {}
+    // ---- sha256: exactly 64 lowercase hex ----
+    const sha256 = String(json.sha256 || '').toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(sha256)) {
+      throw new Error('latest-json-bad-sha256');
+    }
+
+    // ---- published_at (optional but if present must be valid) ----
+    const publishedAt = String(json.published_at || '');
+    if (publishedAt && Number.isNaN(Date.parse(publishedAt))) {
+      throw new Error('latest-json-bad-date');
+    }
+
+    // ---- notes (optional, capped) ----
+    const notes = String(json.notes || '').slice(0, 4000);
+
+    // ---- mandatory (optional) ----
+    const mandatory = json.mandatory === true;
+
+    return {
+      version: parsed.str,
+      tag,
+      downloadUrl,
+      sha256,
+      publishedAt,
+      notes,
+      mandatory
+    };
   }
 
   /* ============================================================
-     UPDATE CHECK — via GitHub Releases API
+     PUBLIC: checkForUpdates
      ============================================================ */
   async function checkForUpdates({ force = false } = {}) {
     const current = getCurrentVersion();
-    const cached = await getCache();
 
-    if (!force && cached && (Date.now() - (cached.checkedAt || 0)) < CHECK_TTL_MS) {
-      return { ...cached, current, cached: true };
+    // Cache hit (only when not forced)
+    if (!force) {
+      try {
+        const cached = (await chrome.storage.local.get(CACHE_KEY))[CACHE_KEY];
+        if (cached && Date.now() - (cached.checkedAt || 0) < CHECK_TTL_MS) {
+          return { ...cached, current, cached: true };
+        }
+      } catch {}
     }
 
-    // ---- Primary: GitHub Releases API ----
     try {
-      const res = await fetch(LATEST_RELEASE_API, {
-        headers: {
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28'
-        },
-        cache: 'no-store'
-      });
-
-      if (res.status === 404) {
-        // Repo has no published releases yet — fall through to manifest.
-        throw new Error('no-releases-published');
-      }
-      if (res.status === 403 || res.status === 429) {
-        // Rate limited. Fall through to manifest, but log it.
-        throw new Error('rate-limited');
-      }
-      if (!res.ok) {
-        throw new Error(`github-api-${res.status}`);
-      }
-
-      const data = await res.json();
-      const tag = String(data.tag_name || '').trim();
-      const latest = _normalizeTag(tag);
-      if (!latest) throw new Error('release-missing-tag');
-
-      const asset = _pickReleaseAsset(data.assets);
-      const cmp = compareVersions(latest, current);
+      const manifest = await fetchLatestManifest();
+      const cmp = compareVersions(manifest.version, current);
 
       const result = {
         current,
-        latest,
-        tag,
+        latest: manifest.version,
+        tag: manifest.tag,
         hasUpdate: cmp > 0,
         isAhead: cmp < 0,
         upToDate: cmp === 0,
-        source: 'releases-api',
+        source: 'latest-json',
         repoUrl: REPO_URL,
-        releaseUrl: typeof data.html_url === 'string' ? data.html_url : RELEASES_URL,
-        releaseName: String(data.name || tag),
-        releaseBody: String(data.body || '').slice(0, 4000),
-        publishedAt: data.published_at || null,
-        zipUrl: asset ? asset.browser_download_url : BRANCH_ZIP_FALLBACK_URL,
-        zipName: asset ? asset.name : `corsair-unbound-${GITHUB_BRANCH}.zip`,
-        zipSize: asset ? Number(asset.size) || 0 : 0,
-        fromReleaseAsset: Boolean(asset),
+        releaseUrl: `${RELEASES_URL}/tag/${manifest.tag}`,
+        releaseBody: manifest.notes,
+        publishedAt: manifest.publishedAt,
+        zipUrl: manifest.downloadUrl,
+        zipName: EXPECTED_ASSET_NAME,
+        expectedSha256: manifest.sha256,
+        mandatory: manifest.mandatory,
         checkedAt: Date.now(),
         error: null
       };
 
-      await setCache(result);
+      try { await chrome.storage.local.set({ [CACHE_KEY]: result }); } catch {}
+      return result;
+    } catch (err) {
+      // No insecure fallback. Return last known good cache (marked stale)
+      // or an explicit error result. Never silently accept a raw manifest
+      // from the branch tip.
       try {
-        const installed = await chrome.storage.local.get(INSTALLED_AT_KEY);
-        if (!installed[INSTALLED_AT_KEY]) {
-          await chrome.storage.local.set({ [INSTALLED_AT_KEY]: current });
+        const cached = (await chrome.storage.local.get(CACHE_KEY))[CACHE_KEY];
+        if (cached) {
+          return { ...cached, current, cached: true, stale: true, error: err.message };
         }
       } catch {}
 
-      return result;
-    } catch (primaryErr) {
-      // ---- Fallback: raw manifest.json on main branch ----
-      try {
-        const res = await fetch(MANIFEST_FALLBACK_URL, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const latest = String(data.version || '').trim();
-        if (!latest) throw new Error('manifest-missing-version');
-
-        const cmp = compareVersions(latest, current);
-        const result = {
-          current,
-          latest,
-          tag: `v${latest}`,
-          hasUpdate: cmp > 0,
-          isAhead: cmp < 0,
-          upToDate: cmp === 0,
-          source: 'manifest-fallback',
-          repoUrl: REPO_URL,
-          releaseUrl: RELEASES_URL,
-          releaseName: `v${latest}`,
-          releaseBody: '',
-          publishedAt: null,
-          zipUrl: BRANCH_ZIP_FALLBACK_URL,
-          zipName: `corsair-unbound-${GITHUB_BRANCH}.zip`,
-          zipSize: 0,
-          fromReleaseAsset: false,
-          checkedAt: Date.now(),
-          error: null
-        };
-        await setCache(result);
-        return result;
-      } catch (fallbackErr) {
-        // Both failed — return the cached result if we have one,
-        // otherwise surface the primary error.
-        const fallback = {
-          current,
-          latest: cached?.latest || null,
-          tag: cached?.tag || null,
-          hasUpdate: cached?.hasUpdate || false,
-          isAhead: cached?.isAhead || false,
-          upToDate: cached?.upToDate || false,
-          source: 'cache',
-          repoUrl: REPO_URL,
-          releaseUrl: RELEASES_URL,
-          releaseName: cached?.releaseName || null,
-          releaseBody: cached?.releaseBody || '',
-          publishedAt: cached?.publishedAt || null,
-          zipUrl: cached?.zipUrl || BRANCH_ZIP_FALLBACK_URL,
-          zipName: cached?.zipName || `corsair-unbound-${GITHUB_BRANCH}.zip`,
-          zipSize: cached?.zipSize || 0,
-          fromReleaseAsset: cached?.fromReleaseAsset || false,
-          checkedAt: cached?.checkedAt || 0,
-          error: primaryErr.message || 'check-failed'
-        };
-        return fallback;
-      }
+      return {
+        current,
+        latest: null,
+        hasUpdate: false,
+        isAhead: false,
+        upToDate: false,
+        source: 'none',
+        repoUrl: REPO_URL,
+        releaseUrl: RELEASES_URL,
+        releaseBody: '',
+        publishedAt: null,
+        zipUrl: null,
+        zipName: null,
+        expectedSha256: null,
+        mandatory: false,
+        checkedAt: Date.now(),
+        error: err.message
+      };
     }
   }
 
   /* ============================================================
-     DESKTOP NOTIFICATION
+     BACKGROUND: notification + alarm
      ============================================================ */
   async function notifyIfUpdateAvailable(result) {
-    if (!result || !result.hasUpdate || !result.latest) return false;
+    if (!result?.hasUpdate || !result.latest) return false;
 
+    // Don't spam the same version twice.
     try {
       const r = await chrome.storage.local.get(NOTIFIED_KEY);
       if (r[NOTIFIED_KEY] === result.latest) return false;
@@ -273,7 +246,7 @@ const CorsairUpdater = (() => {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
         title: `Corsair Unbound v${result.latest} is available`,
-        message: `You have v${result.current}. Click to view the update guide.`,
+        message: `You have v${result.current}. Open the dashboard to update.`,
         priority: 1,
         requireInteraction: false,
         buttons: [{ title: 'Open Dashboard' }]
@@ -283,68 +256,72 @@ const CorsairUpdater = (() => {
     } catch { return false; }
   }
 
+  async function scheduleBackgroundCheck() {
+    if (typeof chrome === 'undefined' || !chrome.alarms?.create) return;
+    try {
+      await chrome.alarms.create(ALARM_NAME, { periodInMinutes: 6 * 60 });
+    } catch {}
+  }
+
+  async function runBackgroundCheck() {
+    try {
+      const r = await checkForUpdates({ force: true });
+      if (r?.hasUpdate) await notifyIfUpdateAvailable(r);
+      return r;
+    } catch { return null; }
+  }
+
   /* ============================================================
-     DOWNLOAD RELEASE ZIP
+     INSTALLED VERSION MIGRATION (called from background.js)
      ------------------------------------------------------------
-     Downloads the release asset (or branch ZIP as fallback) to
-     the user's default Downloads folder. We use `saveAs: false`
-     so the file lands without a dialog.
+     Writes to `updaterV2LastInstalledVersion`. Dashboard uses a
+     DIFFERENT key (`updaterV2DashboardSeenVersion`) so the toast
+     can be shown even after background has already logged the
+     event. See dashboard.js detectExtensionUpdate().
      ============================================================ */
-  async function downloadUpdateZip(overrideUrl = null) {
-    if (typeof chrome === 'undefined' || !chrome.downloads?.download) {
-      return { ok: false, error: 'downloads-unavailable' };
-    }
+  async function recordInstalledVersion() {
+    const current = getCurrentVersion();
     try {
-      // Trust ONLY URLs we resolved ourselves — the caller cannot
-      // pass an arbitrary URL in. If overrideUrl is missing, we
-      // re-read the last cached check.
-      let url = overrideUrl;
-      if (!url) {
-        const cached = await getCache();
-        url = cached?.zipUrl || BRANCH_ZIP_FALLBACK_URL;
+      const r = await chrome.storage.local.get(INSTALLED_AT_KEY);
+      const prev = r[INSTALLED_AT_KEY] || null;
+      if (prev !== current) {
+        await chrome.storage.local.set({
+          [INSTALLED_AT_KEY]: current,
+          updaterLastUpdatedAt: Date.now()
+        });
+        return { changed: true, from: prev, to: current };
       }
-
-      // Hard validation: only allow GitHub release-asset or
-      // archive URLs from OUR repo.
-      const allowedPrefixes = [
-        `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/`,
-        `https://objects.githubusercontent.com/`,
-        `https://codeload.github.com/${GITHUB_USER}/${GITHUB_REPO}/`
-      ];
-      const isAllowed = allowedPrefixes.some(p => url.startsWith(p));
-      if (!isAllowed) {
-        return { ok: false, error: 'invalid-download-url' };
-      }
-
-      const id = await chrome.downloads.download({
-        url,
-        filename: EXPECTED_ASSET_NAME,
-        saveAs: false,
-        conflictAction: 'overwrite'
-      });
-      return { ok: true, downloadId: id };
-    } catch (err) {
-      return { ok: false, error: err.message };
+      return { changed: false, version: current };
+    } catch {
+      return { changed: false, version: current };
     }
   }
 
-  /* Reveal the downloaded ZIP in the user's file manager. */
-  async function revealDownloadedFile(downloadId) {
-    if (typeof chrome === 'undefined' || !chrome.downloads?.show) {
-      return { ok: false, error: 'downloads-unavailable' };
-    }
-    if (!Number.isInteger(downloadId)) {
-      return { ok: false, error: 'invalid-download-id' };
-    }
-    try {
-      await chrome.downloads.show(downloadId);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
+  /* ============================================================
+     PATH-A STUBS — back-compat only
+     ------------------------------------------------------------
+     dashboard.js does NOT call these in Path A. background.js
+     still has handlers for 'download-update' and
+     'reveal-downloaded-file'. Those handlers should be removed
+     when background.js is updated. These stubs return an error
+     so nothing crashes if the old handlers are still present.
+     ============================================================ */
+  async function downloadUpdateZip() {
+    return {
+      ok: false,
+      error: 'path-a-no-download',
+      message: 'Path A does not download the ZIP inside the extension. Use the Windows launcher.'
+    };
   }
 
-  /* Open the OS default Downloads folder. */
+  async function revealDownloadedFile() {
+    return {
+      ok: false,
+      error: 'path-a-no-download',
+      message: 'Path A does not download the ZIP inside the extension.'
+    };
+  }
+
   async function openDownloadsFolder() {
     if (typeof chrome === 'undefined' || !chrome.downloads?.showDefaultFolder) {
       return { ok: false, error: 'downloads-unavailable' };
@@ -358,53 +335,12 @@ const CorsairUpdater = (() => {
   }
 
   /* ============================================================
-     PERIODIC BACKGROUND CHECK (alarms)
+     EXPORTS
      ============================================================ */
-  async function scheduleBackgroundCheck() {
-    if (typeof chrome === 'undefined' || !chrome.alarms?.create) return;
-    try {
-      await chrome.alarms.create(ALARM_NAME, { periodInMinutes: 6 * 60 });
-    } catch {}
-  }
-
-  async function runBackgroundCheck() {
-    try {
-      const result = await checkForUpdates({ force: true });
-      if (result && result.hasUpdate) {
-        await notifyIfUpdateAvailable(result);
-      }
-      return result;
-    } catch { return null; }
-  }
-
-  /* ============================================================
-     INSTALLED-VERSION MIGRATION HELPER
-     ============================================================ */
-  async function recordInstalledVersion() {
-    const current = getCurrentVersion();
-    try {
-      const r = await chrome.storage.local.get(INSTALLED_AT_KEY);
-      const previous = r[INSTALLED_AT_KEY] || null;
-      if (previous !== current) {
-        await chrome.storage.local.set({
-          [INSTALLED_AT_KEY]: current,
-          updaterLastUpdatedAt: Date.now()
-        });
-        return { changed: true, from: previous, to: current };
-      }
-      return { changed: false, version: current };
-    } catch {
-      return { changed: false, version: current };
-    }
-  }
-
   return {
     // Public API
     checkForUpdates,
     notifyIfUpdateAvailable,
-    downloadUpdateZip,
-    revealDownloadedFile,
-    openDownloadsFolder,
     scheduleBackgroundCheck,
     runBackgroundCheck,
     recordInstalledVersion,
@@ -412,18 +348,20 @@ const CorsairUpdater = (() => {
     compareVersions,
     parseVersion,
 
-    // Internal helpers — exposed for tests
-    _normalizeTag,
-    _pickReleaseAsset,
+    // Path-A stubs (back-compat with old background.js handlers)
+    downloadUpdateZip,
+    revealDownloadedFile,
+    openDownloadsFolder,
 
-    // Constants for UI
+    // Constants — used by dashboard.js and background.js
     GITHUB_USER,
     GITHUB_REPO,
-    GITHUB_BRANCH,
-    EXPECTED_ASSET_NAME,
     repoUrl: REPO_URL,
     releasesUrl: RELEASES_URL,
-    ALARM_NAME
+    latestJsonUrl: LATEST_JSON_URL,
+    launcherDownloadUrl: LAUNCHER_URL,
+    ALARM_NAME,
+    EXPECTED_ASSET_NAME
   };
 })();
 

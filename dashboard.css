@@ -1209,7 +1209,7 @@ input::placeholder { color: var(--text-dim); }
 }
 .safe-search-row input {
   flex: 1;
-  min-width: 200px;
+  min-width: 20px;
   font-family: var(--font-mono);
   font-size: 13px;
 }
@@ -1222,7 +1222,7 @@ input::placeholder { color: var(--text-dim); }
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
-  padding: 7px 12px;
+  padding: 7px 3px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--card2);
@@ -2927,4 +2927,184 @@ body.lang-rtl-text .bar-row-count { text-align: left; }
   .activity-filter-bar { flex-direction: column; align-items: stretch; }
   .activity-filter-bar .search-input { width: 100%; }
   .activity-filter-bar #activityCount { margin-left: 0; text-align: right; }
+}
+/* ============================================================
+   FIX: Select dropdowns (Activity filter bar)
+   ------------------------------------------------------------
+   The select element was never given an explicit background/
+   color, so in dark mode it kept the OS/browser default (white)
+   while the text inherited var(--text) = near-white → invisible.
+   ============================================================ */
+select {
+  background: var(--card2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 32px 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+select:hover {
+  border-color: var(--border-strong);
+}
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+/* The <option> popup is rendered by the OS in some browsers,
+   but Chrome honors these when the dropdown opens. */
+select option {
+  background: var(--card2);
+  color: var(--text);
+  padding: 8px 12px;
+}
+select option:checked {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Light mode: adjust the little chevron arrow to a darker gray */
+body[data-theme="light"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+}
+
+/* Make sure the activity filter bar's selects override any
+   earlier activity-filter-bar rule that might not have set color */
+.activity-filter-bar select.search-input {
+  background: var(--card2);
+  color: var(--text);
+  font-family: var(--font-sans);
+  padding: 7px 30px 7px 12px;
+}
+
+/* ============================================================
+   FIX: Trusted / Blocked / Safe domains lists — scrollable
+   ------------------------------------------------------------
+   The list uses flex-column layout with children that have
+   fixed content. In flexbox, this can prevent overflow from
+   triggering a scrollbar unless min-height is reset to 0.
+   We also widen the scrollbar and give it a visible color so
+   dark mode users can actually see and grab it.
+   ============================================================ */
+.safe-domains-list {
+  min-height: 0;
+  max-height: 460px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+}
+.safe-domains-list::-webkit-scrollbar {
+  width: 10px;
+}
+.safe-domains-list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 5px;
+}
+.safe-domains-list::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.safe-domains-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Light mode — lighter scrollbar thumb for contrast */
+body[data-theme="light"] .safe-domains-list {
+  scrollbar-color: #cbd5e1 transparent;
+}
+body[data-theme="light"] .safe-domains-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+body[data-theme="light"] .safe-domains-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+.grid-2col {
+  align-items: start;
+}
+#blockedList,
+#trustedList,
+#safeDomainsList {
+  display: block !important;
+  max-height: 420px !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+}
+
+/* Replace the flex gap with explicit margins on children,
+   because we switched to display:block for guaranteed scroll */
+#blockedList > *,
+#trustedList > *,
+#safeDomainsList > * {
+  margin-bottom: 8px;
+}
+#blockedList > *:last-child,
+#trustedList > *:last-child,
+#safeDomainsList > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Make the scrollbar thumb clearly visible in both themes */
+#blockedList::-webkit-scrollbar,
+#trustedList::-webkit-scrollbar,
+#safeDomainsList::-webkit-scrollbar {
+  width: 10px;
+}
+#blockedList::-webkit-scrollbar-track,
+#trustedList::-webkit-scrollbar-track,
+#safeDomainsList::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 5px;
+}
+#blockedList::-webkit-scrollbar-thumb,
+#trustedList::-webkit-scrollbar-thumb,
+#safeDomainsList::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+#blockedList::-webkit-scrollbar-thumb:hover,
+#trustedList::-webkit-scrollbar-thumb:hover,
+#safeDomainsList::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+body[data-theme="light"] #blockedList::-webkit-scrollbar-thumb,
+body[data-theme="light"] #trustedList::-webkit-scrollbar-thumb,
+body[data-theme="light"] #safeDomainsList::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+body[data-theme="light"] #blockedList::-webkit-scrollbar-thumb:hover,
+body[data-theme="light"] #trustedList::-webkit-scrollbar-thumb:hover,
+body[data-theme="light"] #safeDomainsList::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+  border: 2px solid transparent;
 }

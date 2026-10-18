@@ -20,7 +20,7 @@
         <strong id="updateBannerTitle">New version available</strong>
         <span id="updateBannerDetail">A newer version is ready to install.</span>
       </div>
-      <a id="updateBannerLink" class="btn-primary" href="#" rel="noopener">Download</a>
+      <a id="updateBannerLink" class="btn-primary" href="#" rel="noopener">View update</a>
       <button id="updateBannerDismiss" class="icon-btn" aria-label="Dismiss">✕</button>
     </div>
   </div>
@@ -117,7 +117,6 @@
 
       <!-- ============ VIEW: OVERVIEW ============ -->
       <section class="view active" id="view-overview">
-        <!-- Hero -->
         <div class="hero" id="heroStatus">
           <div class="hero-shield">🛡️</div>
           <div class="hero-content">
@@ -128,7 +127,6 @@
           <div class="hero-pulse"></div>
         </div>
 
-        <!-- Quick Stats -->
         <div class="quick-stats" id="quickStats">
           <div class="stat-card" data-stat="events">
             <div class="stat-icon-wrap stat-events"><span>📊</span></div>
@@ -160,7 +158,6 @@
           </div>
         </div>
 
-        <!-- Recent Activity Preview -->
         <div class="panel">
           <div class="panel-head">
             <h2 data-i18n="overview.recentActivity">Recent Activity</h2>
@@ -296,7 +293,6 @@
           </div>
         </div>
 
-        <!-- SAFE SCANNED -->
         <div class="panel safe-domains-panel">
           <div class="panel-head">
             <div>
@@ -324,7 +320,6 @@
           </div>
         </div>
 
-        <!-- PROFILES -->
         <div class="panel">
           <div class="panel-head">
             <h2 data-i18n="profiles.title">Domain Profiles</h2>
@@ -364,7 +359,6 @@
           </div>
         </div>
 
-        <!-- CUSTOM SCRIPTS -->
         <div class="panel custom-scripts-panel">
           <div class="panel-head">
             <div>
@@ -455,7 +449,6 @@
           </div>
         </div>
 
-        <!-- ================= URLHAUS (OPTIONAL) ================= -->
         <div class="panel">
           <div class="panel-head">
             <div>
@@ -577,7 +570,7 @@
     </main>
   </div>
 
-  <!-- ================= UPDATE INSTALL MODAL ================= -->
+  <!-- ================= UPDATE MODAL (Path A) ================= -->
   <div id="updateModal" class="update-modal" hidden>
     <div class="update-modal-card">
       <button class="update-modal-close" id="updateModalClose" aria-label="Close">✕</button>
@@ -586,61 +579,53 @@
         <div class="update-modal-icon">🎉</div>
         <h2 class="update-modal-title" id="updateModalTitle">A new version is available</h2>
         <p class="update-modal-subtitle" id="updateModalSubtitle">
-          Corsair Unbound <span id="updateModalLatest">v1.7.0</span> is ready.
+          Corsair Unbound <span id="updateModalLatest">v1.9.0</span> is ready.
         </p>
       </div>
 
       <div class="update-modal-steps">
+        <!-- STEP 1: Get the Updater -->
         <div class="update-step">
           <div class="update-step-num">1</div>
           <div class="update-step-body">
-            <strong>Download the new version</strong>
-            <span>The ZIP file contains all the source files you need.</span>
-            <button id="updateDownloadBtn" class="btn-primary update-download-btn">
-              ⬇ Download v<span id="updateDownloadVersion">1.7.0</span>
+            <strong>Get the Updater</strong>
+            <span>Copy the launcher URL and download <code>corsair-unbound-updater.ps1</code> from GitHub Releases. Save it anywhere outside the extension folder.</span>
+            <button id="updateGetUpdaterBtn" class="btn-primary update-download-btn" type="button">
+              ⬇ Get the Updater (v<span id="updateDownloadVersion">1.9.0</span>)
             </button>
-            <button id="updateRevealBtn" class="tool-btn copy-path-btn" type="button" hidden>
-              <span>📂</span> <span>Show in Folder</span>
+            <button id="updateOpenReleasesBtn" class="tool-btn copy-path-btn" type="button" style="margin-top:8px;">
+              <span>🔗</span> <span>Open GitHub Releases</span>
             </button>
-            <div id="updateDownloadStatus" class="update-download-status" hidden></div>
           </div>
         </div>
 
+        <!-- STEP 2: Run the Updater -->
         <div class="update-step">
           <div class="update-step-num">2</div>
           <div class="update-step-body">
-            <strong>Extract the ZIP</strong>
-            <span>Right-click the downloaded file → Extract All. This creates a folder named <code id="updateFolderName">Corsair-Unbound-main</code>.</span>
+            <strong>Run the Updater</strong>
+            <span>Double-click the downloaded <code>.ps1</code> file. Windows may show a SmartScreen or execution-policy prompt the first time — the launcher explains what to click. The updater verifies SHA-256 before installing anything.</span>
           </div>
         </div>
 
+        <!-- STEP 3: Files replaced automatically -->
         <div class="update-step">
           <div class="update-step-num">3</div>
           <div class="update-step-body">
-            <strong>Replace the extension files</strong>
-            <span>Go to your Corsair Unbound extension folder. Copy all files from the extracted folder and paste them over the existing ones. Overwrite when asked.</span>
-            <button id="updateCopyPathBtn" class="tool-btn copy-path-btn" type="button">
-              <span>📋</span> <span>Copy the path to paste in Explorer</span>
-            </button>
+            <strong>Files replaced automatically</strong>
+            <span>The updater backs up your current installation, verifies the archive, replaces only the extension-managed files, and keeps your data intact. A timestamped backup is left next to your extension folder.</span>
           </div>
         </div>
 
+        <!-- STEP 4: Reload Chrome -->
         <div class="update-step">
           <div class="update-step-num">4</div>
           <div class="update-step-body">
-            <strong>Reload the extension</strong>
-            <span>Open <code>chrome://extensions</code>, find Corsair Unbound, and click the ↻ reload button.</span>
+            <strong>Reload Chrome</strong>
+            <span>Chrome usually auto-reloads unpacked extensions after files change. If the version shown is still the old one, open <code>chrome://extensions</code> and click ↻ Reload on Corsair Unbound.</span>
             <button id="updateOpenExtensionsBtn" class="tool-btn copy-path-btn" type="button">
               <span>🔗</span> <span>Copy chrome://extensions</span>
             </button>
-          </div>
-        </div>
-
-        <div class="update-step">
-          <div class="update-step-num">✓</div>
-          <div class="update-step-body">
-            <strong>Your data is safe</strong>
-            <span>Settings, profiles, blocklists, and cached data are all preserved across the update — they live in Chrome's storage, not in the extension files.</span>
           </div>
         </div>
       </div>

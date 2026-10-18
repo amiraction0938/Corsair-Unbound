@@ -288,9 +288,6 @@ document.addEventListener('click', (e) => {
 
 /* ============================================================
    NOTIFICATION CENTER
-   Real-time-ish alert feed built from the same activity log the
-   Activity view uses. Lives entirely in local storage — no
-   network call, no new background message types.
    ============================================================ */
 const NOTIF_LAST_SEEN_KEY = 'notifCenterLastSeen';
 let _notifLastSeen = 0;
@@ -369,11 +366,6 @@ function closeNotifPanel() {
 }
 
 function markNotificationsRead() {
-  // Use `now + 1` rather than `now` so that a batch of events that
-  // landed on the exact same millisecond as the user's click is also
-  // considered "read". Without the +1, the badge would sometimes show
-  // "1 unread" right after the user opened the panel, when a fresh
-  // high/medium event was written in the same tick.
   saveNotifLastSeen(Date.now() + 1);
   renderNotifications();
 }
@@ -390,8 +382,6 @@ safeOn('notifBell', 'click', (e) => {
 safeOn('notifMarkAll', 'click', (e) => {
   e.stopPropagation();
   markNotificationsRead();
-  // Debug: confirm the handler actually fired and the badge state
-  // was updated. Harmless in production but visible in DevTools.
   try {
     console.debug('[Corsair notif] marked read; _notifLastSeen =',
       _notifLastSeen,
@@ -404,11 +394,6 @@ safeOn('notifViewAll', 'click', (e) => {
   try { e.preventDefault(); } catch {}
   try { e.stopPropagation(); } catch {}
   closeNotifPanel();
-  // Explicitly switch to the Activity view. The general
-  // [data-navigate] handler in initNavigation() *should* already
-  // do this, but we call switchView here too so the button works
-  // even if the general handler failed to attach for any reason
-  // (e.g. element was not present when initNavigation ran).
   switchView('activity');
 });
 
@@ -419,8 +404,6 @@ document.addEventListener('click', (e) => {
   closeNotifPanel();
 });
 
-// Live updates: react the moment the background service worker logs a
-// new event, without waiting for the next manual refresh().
 if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area !== 'local' || !changes.activityLog) return;
@@ -933,7 +916,6 @@ function renderApiStatus() {
 
   const hasKey = Boolean(state.currentApiKey && state.currentApiKey.length > 0);
 
-  // Reflect the persist preference
   const persistToggle = $('persistApiKeyToggle');
   if (persistToggle) {
     persistToggle.checked = state.settings.persistApiKey !== false;
@@ -975,9 +957,6 @@ safeOn('apiKeyToggle', 'click', () => {
   const field = $('vtApiKeyField');
   if (!field) return;
 
-  // Snapshot BEFORE we change anything. If the user has typed an
-  // unsaved value, we MUST NOT overwrite it with state.currentApiKey
-  // (which is empty until they press Save).
   const currentValue = field.value;
   const wasMasked = /^•+$/.test(currentValue);
 
@@ -985,15 +964,10 @@ safeOn('apiKeyToggle', 'click', () => {
   field.type = state.apiKeyVisible ? 'text' : 'password';
 
   if (state.apiKeyVisible && wasMasked && state.currentApiKey) {
-    // Revealing: field was showing dots from a saved key → swap in
-    // the real value.
     field.value = state.currentApiKey;
   } else if (!state.apiKeyVisible && currentValue === state.currentApiKey && state.currentApiKey) {
-    // Hiding: field was showing the real saved key → put dots back.
     field.value = '•'.repeat(Math.min(64, state.currentApiKey.length));
   }
-  // In every other case (user typed a new unsaved value) → leave the
-  // value untouched, only the input type flipped.
 });
 
 safeOn('persistApiKeyToggle', 'change', async () => {
@@ -1017,7 +991,6 @@ safeOn('apiKeySave', 'click', async () => {
   const rawValue = field.value.trim();
   const isMasked = /^•+$/.test(rawValue);
 
-  // --- Clear path ---
   if (!rawValue) {
     try {
       await send({ type: 'set-api-key-secure', apiKey: '' });
@@ -1031,13 +1004,11 @@ safeOn('apiKeySave', 'click', async () => {
     return;
   }
 
-  // --- Field is still masked → nothing new to save ---
   if (isMasked) {
     showToast(t('api.alreadySaved', 'Key already saved and verified.'), 'success');
     return;
   }
 
-  // --- Format pre-check (fast, no network) ---
   if (rawValue.length !== 64) {
     showToast(t('api.invalidLength',
       '⚠ VirusTotal API keys are 64 characters (yours is {n}).')
@@ -1045,7 +1016,6 @@ safeOn('apiKeySave', 'click', async () => {
     return;
   }
 
-  // --- Live verification via background. Only saves if VT accepts it. ---
   const btn = $('apiKeySave');
   const originalText = btn ? btn.textContent : 'Save & Verify';
   if (btn) { btn.disabled = true; btn.textContent = t('api.verifying', 'Verifying…'); }
@@ -1069,7 +1039,6 @@ safeOn('apiKeySave', 'click', async () => {
       return;
     }
 
-    // --- Verified successfully ---
     state.currentApiKey = rawValue;
     state.apiKeyVisible = false;
     renderApiStatus();
@@ -1088,10 +1057,6 @@ safeOn('apiKeySave', 'click', async () => {
 });
 
 let _urlhausKeyVisible = false;
-// Mirror of what's actually persisted in settings. The toggle handler
-// needs this to reveal the saved key without re-reading settings on
-// every click, and the save handler uses it to distinguish "user
-// pressed eye to reveal" from "user typed a new value".
 let _urlhausKeyStored = '';
 
 async function renderUrlhausStatus() {
@@ -1139,9 +1104,6 @@ safeOn('urlhausKeyToggle', 'click', () => {
   } else if (!_urlhausKeyVisible && currentValue === _urlhausKeyStored && _urlhausKeyStored) {
     field.value = '•'.repeat(Math.min(64, _urlhausKeyStored.length));
   }
-  // Otherwise: user typed a new unsaved value — leave it alone.
-  // NOTE: we deliberately do NOT call renderUrlhausStatus() here,
-  // because that would overwrite the field from settings.
 });
 
 safeOn('urlhausKeySave', 'click', async () => {
@@ -1151,7 +1113,6 @@ safeOn('urlhausKeySave', 'click', async () => {
   const raw = field.value.trim();
   const isMasked = /^•+$/.test(raw);
 
-  // --- Clear path ---
   if (!raw) {
     try {
       await send({ type: 'set-urlhaus-key-secure', apiKey: '' });
@@ -1166,19 +1127,16 @@ safeOn('urlhausKeySave', 'click', async () => {
     return;
   }
 
-  // --- Field is still masked → nothing new to save ---
   if (isMasked) {
     showToast(t('urlhaus.alreadySaved', 'Key already saved and verified.'), 'success');
     return;
   }
 
-  // --- Format pre-check ---
   if (raw.length < 10) {
     showToast(t('urlhaus.invalidLength', '⚠ Auth-Key looks too short.'), 'error');
     return;
   }
 
-  // --- Live verification ---
   const btn = $('urlhausKeySave');
   const originalText = btn ? btn.textContent : 'Save';
   if (btn) { btn.disabled = true; btn.textContent = t('urlhaus.verifying', 'Verifying…'); }
@@ -1563,9 +1521,7 @@ function renderRecentActivity() {
 }
 
 /* ============================================================
-   ANALYTICS — lightweight, dependency-free SVG charts
-   Built entirely from the locally-stored event log (state.events).
-   No external chart library, no network calls, no CDN.
+   ANALYTICS
    ============================================================ */
 const SEVERITY_COLORS = {
   high: 'var(--danger)',
@@ -1605,11 +1561,6 @@ function shortDayLabel(ts) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/**
- * Builds a self-contained line/area SVG chart. No dependencies —
- * pure path math so it renders instantly and matches the theme
- * via CSS variables (works in both light & dark mode).
- */
 function buildTimelineChartSVG(points) {
   const W = 560, H = 200, padL = 8, padR = 8, padT = 16, padB = 24;
   const innerW = W - padL - padR;
@@ -1632,7 +1583,6 @@ function buildTimelineChartSVG(points) {
     return `<line class="grid-line" x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke-dasharray="3,4"/>`;
   }).join('');
 
-  // Show at most ~6 evenly-spaced day labels so it never overlaps.
   const labelEvery = Math.max(1, Math.ceil(n / 6));
   const labels = coords.map((c, i) => {
     if (i % labelEvery !== 0 && i !== n - 1) return '';
@@ -1659,9 +1609,6 @@ function buildTimelineChartSVG(points) {
     </svg>`;
 }
 
-/**
- * Builds a donut chart from {label, value, color} segments.
- */
 function buildDonutChartSVG(segments, centerValue, centerLabel) {
   const size = 180, cx = size / 2, cy = size / 2, r = 62, sw = 26;
   const total = Math.max(1, segments.reduce((s, x) => s + x.value, 0));
@@ -1718,7 +1665,6 @@ function renderAnalytics() {
   const shownEl = $('analyticsShown');
   if (shownEl) shownEl.textContent = t('analytics.totalShown', 'Based on the last {n} recorded events').replace('{n}', String(state.events.length));
 
-  // ---- Timeline (events per day) ----
   const dayBuckets = new Map();
   for (let i = rangeDays - 1; i >= 0; i--) {
     const ts = Date.now() - i * 24 * 60 * 60 * 1000;
@@ -1736,7 +1682,6 @@ function renderAnalytics() {
       : `<div class="empty">${escapeHtml(t('analytics.empty', 'No data yet.'))}</div>`;
   }
 
-  // ---- Severity donut ----
   const sevCounts = { high: 0, medium: 0, low: 0, info: 0 };
   for (const e of events) {
     const s = (e.severity || 'info').toLowerCase();
@@ -1753,7 +1698,6 @@ function renderAnalytics() {
       : `<div class="empty">${escapeHtml(t('analytics.empty', 'No data yet.'))}</div>`;
   }
 
-  // ---- Event types ----
   const typeCounts = new Map();
   for (const e of events) {
     const k = e.type || 'event';
@@ -1766,7 +1710,6 @@ function renderAnalytics() {
   const typesEl = $('analyticsTypes');
   if (typesEl) typesEl.innerHTML = buildBarList(typeEntries, { icon: true, emptyText: t('analytics.empty', 'No data yet.') });
 
-  // ---- Most targeted domains ----
   const domainCounts = new Map();
   for (const e of events) {
     for (const host of [e.domain, e.destination]) {
@@ -2234,11 +2177,6 @@ async function runUrlScan() {
 /* ============================================================
    REFRESH
    ============================================================ */
-   /**
- * Snapshot the current form values before re-rendering. If the user
- * is mid-edit and a background refresh fires, we restore their typed
- * value instead of blowing it away.
- */
 function snapshotSettingsForm() {
   const snap = {};
   document.querySelectorAll('#settingsForm [data-key]').forEach(el => {
@@ -2267,11 +2205,6 @@ function restoreSettingsForm(snap) {
   });
 }
 
-/**
- * Called on save → after a successful save, refresh() may be invoked
- * and rebuild the form. This flag tells renderSettings to skip the
- * re-render so the user's edits are not lost.
- */
 let _skipSettingsRender = false;
 
 async function refresh() {
@@ -2338,10 +2271,6 @@ async function doExport() {
     const exp = r.export || {};
     const s = exp.summary || {};
 
-    // Ask for confirmation, showing a detailed preview of what the
-    // file will contain. This makes it obvious that EVERYTHING the
-    // user cares about — custom scripts, locked domains, telemetry —
-    // is included.
     const lines = [
       `Corsair Unbound Backup`,
       ``,
@@ -2390,8 +2319,6 @@ async function handleImport(file) {
       throw new Error('This file is not a Corsair Unbound backup.');
     }
 
-    // Show a preview of what's about to be imported so the user can
-    // confirm before any destructive action.
     const s = data.summary || {};
     const v = data.version || '?';
     const lines = [
@@ -2434,10 +2361,50 @@ async function handleImport(file) {
 }
 
 /* ============================================================
-   UPDATE CHECK
+   UPDATE CHECK — PATH A
+   ------------------------------------------------------------
+   In Path A, the extension does NOT download the ZIP itself.
+   The Windows launcher (launcher/updater.ps1) handles:
+     • Downloading the release ZIP
+     • SHA-256 verification
+     • Backup / extraction / file replacement
+     • Opening chrome://extensions for the Reload step
+   The extension's ONLY jobs are:
+     • Detect that a stable release exists (via latest.json)
+     • Show version info + release notes
+     • Give the user the launcher URL
+     • Open GitHub releases / chrome://extensions
+     • Detect the "just updated" event and toast the user
    ============================================================ */
+const LAST_SEEN_VERSION_KEY = 'updaterV2DashboardSeenVersion';
+
+async function detectExtensionUpdate() {
+  if (typeof CorsairUpdater === 'undefined') return;
+  try {
+    const current = CorsairUpdater.getCurrentVersion();
+    const stored = await chrome.storage.local.get(LAST_SEEN_VERSION_KEY);
+    const previous = stored?.[LAST_SEEN_VERSION_KEY];
+
+    // First run: record the version silently, no toast.
+    if (!previous) {
+      await chrome.storage.local.set({ [LAST_SEEN_VERSION_KEY]: current });
+      return;
+    }
+    if (previous === current) return;
+
+    // Version changed while the dashboard was closed.
+    await chrome.storage.local.set({ [LAST_SEEN_VERSION_KEY]: current });
+    const msg = t('update.detected', 'Corsair Unbound updated to v{version}.')
+      .replace('{version}', current);
+    showToast(msg, 'success');
+  } catch {}
+}
+
 async function initUpdateCheck() {
   if (typeof CorsairUpdater === 'undefined') return;
+
+  // Detect "we just got updated" BEFORE we check for new updates.
+  await detectExtensionUpdate();
 
   const aboutBadge = $('aboutVersionBadge');
   const currentVersion = CorsairUpdater.getCurrentVersion();
@@ -2463,28 +2430,37 @@ function applyUpdateResult(result) {
   if (!result) return;
   state.updateInfo = result;
 
+  const mandatory = result.mandatory === true;
   const banner = $('updateBanner');
   const bannerTitle = $('updateBannerTitle');
   const bannerDetail = $('updateBannerDetail');
   const bannerLink = $('updateBannerLink');
+  const bannerDismiss = $('updateBannerDismiss');
   const dismissed = sessionStorage.getItem('updateBannerDismissed');
 
-  if (bannerTitle) bannerTitle.textContent = t('update.banner.title', 'New version available');
+  if (bannerTitle) {
+    bannerTitle.textContent = mandatory
+      ? t('update.banner.titleMandatory', 'Required update available')
+      : t('update.banner.title', 'New version available');
+  }
 
-  if (result.hasUpdate && banner && !dismissed) {
+  if (result.hasUpdate && banner && (mandatory || !dismissed)) {
     if (bannerDetail) {
-      bannerDetail.textContent = t('update.banner.detail', 'v{version} is ready. Download & install — your data will be preserved.')
-        .replace('{version}', result.latest || '?');
+      bannerDetail.textContent = mandatory
+        ? t('update.banner.detailMandatory',
+            'v{version} is required. Open the dashboard to update.').replace('{version}', result.latest || '?')
+        : t('update.banner.detail',
+            'v{version} is available. Your data will be preserved.').replace('{version}', result.latest || '?');
     }
     if (bannerLink) {
       bannerLink.href = '#';
-      bannerLink.textContent = t('update.banner.button', 'Download v{version}')
-        .replace('{version}', result.latest || '?');
+      bannerLink.textContent = t('update.banner.button', 'View update');
     }
+    if (bannerDismiss) bannerDismiss.hidden = mandatory;
     banner.hidden = false;
   } else if (banner) {
     banner.hidden = true;
-  } 
+  }
 
   const statusBox = $('aboutUpdateStatus');
   const statusText = $('aboutCheckUpdateText');
@@ -2561,9 +2537,10 @@ safeOn('aboutCheckUpdate', 'click', async () => {
   if (btn) btn.disabled = false;
 });
 
-/* ---------- UPDATE MODAL ---------- */
+/* ---------- UPDATE MODAL (Path A) ---------- */
 function translateUpdateModal() {
   const latest = state.updateInfo?.latest || '?';
+  const mandatory = state.updateInfo?.mandatory === true;
   const setText = (id, key, fb) => {
     const el = $(id);
     if (el) el.textContent = t(key, fb);
@@ -2577,39 +2554,25 @@ function translateUpdateModal() {
       .replace('{version}', `<span id="updateModalLatest">v${escapeHtml(latest)}</span>`);
   }
 
-  /* Rebuild the download button while PRESERVING its child <span>.
-   *
-   * The previous implementation did `dlBtn.innerHTML = ''` and then
-   * appended a single text node — which permanently destroyed the
-   * <span id="updateDownloadVersion"> that applyUpdateResult() relies
-   * on to update the version number. Once the modal had been opened
-   * once, subsequent calls to applyUpdateResult() would silently fail
-   * to find the span and the version digit inside the button would
-   * stop updating.
-   *
-   * The new implementation:
-   *   1. reads the localized "⬇ Download v{version}" template
-   *   2. splits off the prefix that precedes the version number
-   *   3. writes the prefix as a text node
-   *   4. (re)creates the version <span> after it
-   * This keeps the button label in sync with the active language AND
-   * keeps the span alive for every subsequent applyUpdateResult() call.
-   */
-  const dlBtn = $('updateDownloadBtn');
-  if (dlBtn) {
-    const fullText = t('update.modal.step1.button', '⬇ Download v{version}')
+  // The button that triggers "Get the Updater" is aliased to work
+  // with both the legacy updateDownloadBtn ID and the new
+  // updateGetUpdaterBtn ID. Add the version span inside whichever
+  // one exists so CSS/localization behaves consistently.
+  const getBtn = $('updateGetUpdaterBtn') || $('updateDownloadBtn');
+  if (getBtn) {
+    const fullText = t('update.modal.step1.button', '⬇ Get the Updater (v{version})')
       .replace('{version}', latest);
     const prefix = fullText.endsWith(latest)
       ? fullText.slice(0, fullText.length - latest.length)
       : fullText;
 
-    dlBtn.textContent = '';
-    dlBtn.appendChild(document.createTextNode(prefix));
+    getBtn.textContent = '';
+    getBtn.appendChild(document.createTextNode(prefix));
 
     const versionSpan = document.createElement('span');
     versionSpan.id = 'updateDownloadVersion';
     versionSpan.textContent = latest;
-    dlBtn.appendChild(versionSpan);
+    getBtn.appendChild(versionSpan);
   }
 
   const stepNodes = document.querySelectorAll('.update-step-body strong');
@@ -2618,8 +2581,7 @@ function translateUpdateModal() {
     ['update.modal.step1.title', 'update.modal.step1.desc'],
     ['update.modal.step2.title', 'update.modal.step2.desc'],
     ['update.modal.step3.title', 'update.modal.step3.desc'],
-    ['update.modal.step4.title', 'update.modal.step4.desc'],
-    ['update.modal.step5.title', 'update.modal.step5.desc']
+    ['update.modal.step4.title', 'update.modal.step4.desc']
   ];
   stepNodes.forEach((node, i) => {
     if (keys[i]) node.textContent = t(keys[i][0], node.textContent);
@@ -2628,10 +2590,13 @@ function translateUpdateModal() {
     if (keys[i]) node.textContent = t(keys[i][1], node.textContent);
   });
 
-  setText('updateCopyPathBtn', 'update.modal.step3.button', '📋 Copy the path');
-  setText('updateOpenExtensionsBtn', 'update.modal.step4.button', '🔗 Copy chrome://extensions');
+  setText('updateOpenReleasesBtn', 'update.modal.releasesBtn', '🔗 Open GitHub Releases');
+  setText('updateOpenExtensionsBtn', 'update.modal.extensionsBtn', '🔗 Copy chrome://extensions');
   setText('updateSkipVersion', 'update.modal.snooze', 'Remind me later');
   setText('updateModalDone', 'update.modal.done', 'Got it');
+
+  const snooze = $('updateSkipVersion');
+  if (snooze) snooze.hidden = mandatory;
 }
 
 function openUpdateModal() {
@@ -2654,67 +2619,60 @@ safeOn('updateModal', 'click', (e) => {
 });
 
 safeOn('updateSkipVersion', 'click', () => {
+  if (state.updateInfo?.mandatory === true) return;
   closeUpdateModal();
   showToast(t('update.snoozed', 'Reminder snoozed for this session.'));
 });
 
-safeOn('updateDownloadBtn', 'click', async () => {
-  const btn = $('updateDownloadBtn');
-  const status = $('updateDownloadStatus');
-  const revealBtn = $('updateRevealBtn');
-  if (btn) btn.disabled = true;
-  if (revealBtn) revealBtn.hidden = true;
-  if (status) {
-    status.hidden = false;
-    status.className = 'update-download-status';
-    status.textContent = t('update.download.starting', '⏳ Starting download…');
-  }
+/* ---------- PATH A ACTIONS ---------- */
 
-  const r = await send({ type: 'download-update', url: state.updateInfo?.zipUrl || null });
-  if (r?.ok) {
-    state.updateInfo.downloadedFileId = r.downloadId;
-    if (status) {
-      status.className = 'update-download-status success';
-      status.textContent = t('update.download.success',
-        '✅ Downloaded! Use "Show in Folder", extract the ZIP, then replace your extension files.');
-    }
-    if (revealBtn) revealBtn.hidden = false;
-    showToast(t('update.download.successShort', 'Update ZIP downloaded.'));
-  } else {
-    if (status) {
-      status.className = 'update-download-status error';
-      status.textContent = t('update.download.failed', '⚠ Download failed: {error}').replace('{error}', r?.error || 'unknown');
-    }
-    showToast(t('update.download.failed', 'Download failed.').replace('{error}', r?.error || '?'), 'error');
-  }
-  if (btn) btn.disabled = false;
-});
-safeOn('updateRevealBtn', 'click', async () => {
-  const id = state.updateInfo?.downloadedFileId;
-  const status = $('updateDownloadStatus');
-  if (!Number.isInteger(id)) {
-    if (status) {
-      status.className = 'update-download-status error';
-      status.textContent = t('update.reveal.noFile', '⚠ No file to reveal yet.');
-    }
-    return;
-  }
-  const r = await send({ type: 'reveal-downloaded-file', downloadId: id });
-  if (!r?.ok && status) {
-    status.className = 'update-download-status error';
-    status.textContent = t('update.reveal.failed', '⚠ Could not open the folder.');
-  }
-});
+function handleGetUpdater() {
+  const fallbackBase = 'https://github.com/amiraction0938/Corsair-Unbound';
+  const launcherUrl = (typeof CorsairUpdater !== 'undefined' && CorsairUpdater.launcherDownloadUrl)
+    || `${(typeof CorsairUpdater !== 'undefined' && CorsairUpdater.repoUrl) || fallbackBase}/releases/latest/download/corsair-unbound-updater.ps1`;
 
-safeOn('updateCopyPathBtn', 'click', async () => {
+  const copyPromise = (async () => {
+    try {
+      await navigator.clipboard.writeText(launcherUrl);
+      showToast(t('update.launcher.copied',
+        'Launcher URL copied. Open it in a browser to download the .ps1 file.'));
+    } catch {
+      showToast(
+        t('update.launcher.copyFailed',
+          'Copy failed. Open this URL manually:\n{url}').replace('{url}', launcherUrl),
+        'error'
+      );
+    }
+  })();
+  return copyPromise;
+}
+
+function handleOpenReleases() {
+  const fallbackBase = 'https://github.com/amiraction0938/Corsair-Unbound';
+  const url = `${(typeof CorsairUpdater !== 'undefined' && CorsairUpdater.repoUrl) || fallbackBase}/releases`;
   try {
-    await navigator.clipboard.writeText(t('update.copy.pathHint', 'Open your Corsair Unbound extension folder'));
-    showToast(t('update.copy.success', 'Copied to clipboard.'));
+    if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+      chrome.tabs.create({ url }).catch(() => {});
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
   } catch {
-    showToast(t('update.copy.failed', 'Could not copy — copy manually.'), 'error');
+    try { window.open(url, '_blank', 'noopener'); } catch {}
   }
-});
+}
 
+// Primary button inside the modal (Path A).
+safeOn('updateGetUpdaterBtn', 'click', handleGetUpdater);
+// Back-compat: the legacy HTML may still carry this ID.
+safeOn('updateDownloadBtn', 'click', handleGetUpdater);
+
+// Open GitHub Releases.
+safeOn('updateOpenReleasesBtn', 'click', handleOpenReleases);
+// Back-compat: the legacy HTML "Copy path" button now opens Releases
+// (closest equivalent action in Path A).
+safeOn('updateCopyPathBtn', 'click', handleOpenReleases);
+
+// Copy chrome://extensions (unchanged behavior).
 safeOn('updateOpenExtensionsBtn', 'click', async () => {
   try {
     await navigator.clipboard.writeText('chrome://extensions');
@@ -2723,6 +2681,11 @@ safeOn('updateOpenExtensionsBtn', 'click', async () => {
     showToast(t('update.copy.extensionsManual', 'Paste chrome://extensions in the URL bar.'), 'error');
   }
 });
+
+// The legacy "Reveal in folder" button has no Path A equivalent.
+// Hide it if it still exists so the modal doesn't show a dead control.
+const _legacyRevealBtn = $('updateRevealBtn');
+if (_legacyRevealBtn) _legacyRevealBtn.hidden = true;
 
 /* ============================================================
    ONBOARDING WIZARD
@@ -3262,7 +3225,6 @@ safeOn('activityTypeFilter', 'change', () => {
   renderEvents();
 });
 
-
 safeOn('clearTelemetry', 'click', async () => {
   await send({ type: 'clear-telemetry' });
   await refresh();
@@ -3391,7 +3353,7 @@ const TOUR_STOP_DEFS = [
   },
   {
     view: 'security',
-    target: '.grid-2col',
+    target: '#view-security .grid-2col',
     titleKey: 'tour.step6.title',
     titleFb: 'Security Controls',
     descKey: 'tour.step6.desc',
@@ -3433,32 +3395,41 @@ function startTour() {
   _tourActive = true;
   _tourIndex = 0;
 
-  _tourStops = TOUR_STOP_DEFS.map(def => ({
-    ...def,
-    title: t(def.titleKey, def.titleFb),
-    desc: t(def.descKey, def.descFb)
-  }));
+  try {
+    _tourStops = TOUR_STOP_DEFS.map(def => ({
+      ...def,
+      title: t(def.titleKey, def.titleFb),
+      desc: t(def.descKey, def.descFb)
+    }));
 
-  document.body.classList.add('tour-active');
-  const overlay = $('tourOverlay');
-  if (overlay) overlay.hidden = false;
+    document.body.classList.add('tour-active');
+    const overlay = $('tourOverlay');
+    if (overlay) overlay.hidden = false;
 
-  _tourResizeHandler = () => {
-    if (!_tourActive) return;
-    const stop = _tourStops[_tourIndex];
-    if (!stop) return;
-    const target = document.querySelector(stop.target);
-    if (target) {
-      const rect = target.getBoundingClientRect();
-      positionTourSpotlight(rect, stop.placement);
-    }
-  };
-  window.addEventListener('resize', _tourResizeHandler);
-  window.addEventListener('scroll', _tourResizeHandler, true);
+    _tourResizeHandler = () => {
+      if (!_tourActive) return;
+      const stop = _tourStops[_tourIndex];
+      if (!stop) return;
+      const target = document.querySelector(stop.target);
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        positionTourSpotlight(rect, stop.placement);
+      }
+    };
+    window.addEventListener('resize', _tourResizeHandler);
+    window.addEventListener('scroll', _tourResizeHandler, true);
 
-  document.addEventListener('keydown', _tourKeyHandler);
+    document.addEventListener('keydown', _tourKeyHandler);
 
-  showTourStop(0);
+    showTourStop(0);
+  } catch (err) {
+    // اگر تور به هر دلیلی کرش کرد، متغیرها رو ریست می‌کنیم تا دکمه دوباره کار کنه
+    console.error('[Corsair Tour] Failed to start:', err);
+    _tourActive = false;
+    document.body.classList.remove('tour-active');
+    const overlay = $('tourOverlay');
+    if (overlay) overlay.hidden = true;
+  }
 }
 
 function _tourKeyHandler(e) {
