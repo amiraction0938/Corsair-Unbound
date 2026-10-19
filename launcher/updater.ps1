@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Corsair Unbound — Windows Updater (Path A)
+    Corsair Unbound — Windows Installer & Updater (Path A)
 #>
 
 param(
@@ -21,6 +21,7 @@ $ExpectedZipName   = 'corsair-unbound-extension.zip'
 $AppDataDir        = Join-Path $env:APPDATA 'CorsairUnbound'
 $ConfigPath        = Join-Path $AppDataDir 'config.json'
 $InstalledFilePath = Join-Path $AppDataDir 'installed-files.json'
+$DefaultInstallDir = Join-Path $env:LOCALAPPDATA 'CorsairUnbound\Extension'
 
 # ----------------------------------------------------------------------------
 # Console helpers
@@ -43,9 +44,7 @@ function Load-Config {
 }
 
 function Save-Config($extPath) {
-    if (-not (Test-Path $AppDataDir)) {
-        New-Item -ItemType Directory -Path $AppDataDir -Force | Out-Null
-    }
+    if (-not (Test-Path $AppDataDir)) { New-Item -ItemType Directory -Path $AppDataDir -Force | Out-Null }
     $data = [ordered]@{
         extensionPath = (Resolve-Path $extPath).Path
         configuredAt  = (Get-Date).ToUniversalTime().ToString('o')
@@ -67,8 +66,7 @@ function Test-ExtensionManifest($dir) {
 }
 
 function Find-ExtensionPath {
-    # 1. Search Chrome Preferences (The active extension)
-    Write-Step "Searching for active Corsair Unbound extension in Chrome..."
+    # 1. Search Chrome Preferences
     $chromeProfiles = @(
         "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Preferences",
         "$env:LOCALAPPDATA\Google\Chrome\User Data\Profile 1\Preferences",
@@ -91,17 +89,15 @@ function Find-ExtensionPath {
         }
     }
 
-    # 2. Check Config File (Fallback)
+    # 2. Check Config File
     $config = Load-Config
     if ($config -and (Test-Path $config.extensionPath) -and (Test-ExtensionManifest $config.extensionPath)) {
         return $config.extensionPath
     }
 
-    # 3. Check if script is inside extension folder
-    if (Test-Path (Join-Path $PSScriptRoot 'manifest.json')) {
-        if (Test-ExtensionManifest $PSScriptRoot) {
-            return $PSScriptRoot
-        }
+    # 3. Check default install dir
+    if (Test-Path $DefaultInstallDir -and (Test-ExtensionManifest $DefaultInstallDir)) {
+        return $DefaultInstallDir
     }
 
     return $null
@@ -114,31 +110,25 @@ function Get-LatestManifest {
     Write-Step "Fetching release metadata..."
     $res = Invoke-RestMethod -Uri $LatestJsonUrl -UseBasicParsing -TimeoutSec 30
 
-    if (-not $res.version) { throw "latest.json is missing 'version'" }
-    if ($res.version -notmatch '^\d+\.\d+\.\d+$') { throw "latest.json has invalid version" }
-    if (-not $res.tag -or $res.tag -ne "v$($res.version)") { throw "latest.json tag/version mismatch" }
+    if (-not $res.version -or $res.version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid version in latest.json" }
+    if (-not $res.tag -or $res.tag -ne "v$($res.version)") { throw "tag/version mismatch" }
     if (-not $res.download_url -or -not ($res.download_url -like "https://github.com/$Repo/releases/download/*")) { throw "invalid download_url" }
     if (-not $res.sha256 -or $res.sha256 -notmatch '^[a-fA-F0-9]{64}$') { throw "invalid sha256" }
     
     return $res
 }
 
-function Compare-VersionString($a, $b) {
-    return ([version]$a).CompareTo([version]$b)
-}
+function Compare-VersionString($a, $b) { return ([version]$a).CompareTo([version]$b) }
 
 # ----------------------------------------------------------------------------
-# Download + SHA-256
+# Download + Secure Extract
 # ----------------------------------------------------------------------------
-function Save-VerifiedZip($url, $expectedSha, $outPath) {
+function Download-And-VerifyZip($url, $expectedSha, $outPath) {
     Write-Step "Downloading release ZIP..."
     Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing -TimeoutSec 300
-
     Write-Step "Verifying SHA-256..."
-    $actual   = (Get-FileHash -Path $outPath -Algorithm SHA256).Hash.ToLower()
-    if ($actual -ne $expectedSha.ToLower()) {
-        throw "SHA-256 mismatch!`n  expected: $expectedSha`n  actual:   $actual"
-    }
+    $actual = (Get-FileHash -Path $outPath -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $expectedSha.ToLower()) { throw "SHA-256 mismatch!`n  expected: $expectedSha`n  actual:   $actual" }
     Write-Ok "SHA-256 verified."
 }
 
@@ -266,7 +256,7 @@ function Open-ChromeExtensions {
 function Main {
     Write-Host ""
     Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host "  Corsair Unbound - Windows Updater" -ForegroundColor Cyan
+    Write-Host "  Corsair Unbound - Windows Installer/Updater" -ForegroundColor Cyan
     Write-Host "==========================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -275,48 +265,68 @@ function Main {
         Write-Note "Config reset. Setup will run."
     }
 
-    # ---- Resolve extension folder ----
-    $extDir = $null
-    if ($ExtensionPath) {
-        $extDir = $ExtensionPath
-    } else {
-        $extDir = Find-ExtensionPath
-    }
-
-    if (-not $extDir -or -not (Test-ExtensionManifest $extDir)) {
-        Write-Note "Could not auto-detect the extension folder."
-        Add-Type -AssemblyName System.Windows.Forms
-        $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-        $dialog.Description = "Select the Corsair Unbound extension folder (contains manifest.json)"
-        if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { Write-Err "Cancelled."; exit 1 }
-        $extDir = $dialog.SelectedPath
-        if (-not (Test-ExtensionManifest $extDir)) { Write-Err "Invalid extension folder."; exit 1 }
-        Save-Config $extDir
-    } else {
-        Write-Ok "Auto-detected extension folder: $extDir"
-        Save-Config $extDir
-    }
-
-    $installed = Test-ExtensionManifest $extDir
-    $currentVersion = $installed.version
-    Write-Ok "Installed version: v$currentVersion"
-
-    # ---- Fetch latest metadata ----
     $latest = Get-LatestManifest
-    Write-Ok "Latest available: v$($latest.version)"
-
-    if (-not $Force -and (Compare-VersionString $latest.version $currentVersion) -le 0) {
-        Write-Ok "Already up to date. No action needed."
-        exit 0
-    }
+    $extDir = if ($ExtensionPath) { $ExtensionPath } else { Find-ExtensionPath }
 
     $tempDir = Join-Path $env:TEMP "corsair-update-$([guid]::NewGuid())"
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
     $zipPath = Join-Path $tempDir $ExpectedZipName
+    $extractDir = Join-Path $tempDir 'extracted'
 
     try {
-        Save-VerifiedZip $latest.download_url $latest.sha256 $zipPath
-        $extractDir = Join-Path $tempDir 'extracted'
+        # =========================================================================
+        # MODE 1: FRESH INSTALL
+        # =========================================================================
+        if (-not $extDir -or -not (Test-ExtensionManifest $extDir)) {
+            Write-Note "Corsair Unbound is NOT installed yet. Starting fresh installation..."
+            $extDir = $DefaultInstallDir
+            
+            Download-And-VerifyZip $latest.download_url $latest.sha256 $zipPath
+            Expand-ZipSafely $zipPath $extractDir
+            $innerRoot = Find-ExtractedRoot $extractDir
+
+            Write-Step "Installing to $extDir..."
+            if (Test-Path $extDir) { Remove-Item -Path $extDir -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Path $extDir -Force | Out-Null
+            Copy-Item -Path "$innerRoot\*" -Destination $extDir -Recurse -Force
+
+            $newFiles = @(Get-RelativeFiles $extDir)
+            Save-InstalledFiles $newFiles
+            Save-Config $extDir
+
+            Write-Host ""
+            Write-Host "==========================================" -ForegroundColor Green
+            Write-Host "  Installation Complete!" -ForegroundColor Green
+            Write-Host "==========================================" -ForegroundColor Green
+            Write-Host "  1. Chrome will now open." -ForegroundColor Yellow
+            Write-Host "  2. Turn on 'Developer mode' (top right)." -ForegroundColor Yellow
+            Write-Host "  3. Click 'Load unpacked' (top left)." -ForegroundColor Yellow
+            Write-Host "  4. Select this folder: " -NoNewline -ForegroundColor Yellow
+            Write-Host $extDir -ForegroundColor Cyan
+            Write-Host ""
+            
+            Set-Clipboard -Value $extDir
+            Write-Ok "The folder path has been copied to your clipboard!"
+            
+            Start-Sleep -Seconds 3
+            Open-ChromeExtensions | Out-Null
+            exit 0
+        }
+
+        # =========================================================================
+        # MODE 2: UPDATE
+        # =========================================================================
+        $installed = Test-ExtensionManifest $extDir
+        $currentVersion = $installed.version
+        Write-Ok "Installed version: v$currentVersion"
+        Write-Ok "Latest available: v$($latest.version)"
+
+        if (-not $Force -and (Compare-VersionString $latest.version $currentVersion) -le 0) {
+            Write-Ok "Already up to date. No action needed."
+            exit 0
+        }
+
+        Download-And-VerifyZip $latest.download_url $latest.sha256 $zipPath
         Expand-ZipSafely $zipPath $extractDir
         $innerRoot = Find-ExtractedRoot $extractDir
 
