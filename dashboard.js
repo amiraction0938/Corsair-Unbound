@@ -23,6 +23,8 @@ const state = {
   userTrusted: [],
   userBlocked: [],
   customScripts: [],
+  userscriptAvailability: null,
+  extensionId: '',
   safeDomainSearch: '',
   safeDomainSelected: new Set(),
   editingScript: null,
@@ -478,21 +480,75 @@ function renderProfiles() {
 /* ============================================================
    CUSTOM SCRIPTS
    ============================================================ */
+const USERSCRIPT_TEMPLATE = [
+  '// ==UserScript==',
+  '// @name         New Script',
+  '// @namespace    https://corsair.local/',
+  '// @version      0.1',
+  '// @description  Describe what this script does',
+  '// @match        https://example.com/*',
+  '// @grant        none',
+  '// @run-at       document-idle',
+  '// ==/UserScript==',
+  '',
+  '(function () {',
+  "  'use strict';",
+  '',
+  '  // Your code here',
+  '})();',
+  ''
+].join('\n');
+
+function renderUserscriptStatus() {
+  const el = $('usStatus');
+  if (!el) return;
+  const av = state.userscriptAvailability;
+  if (!av || av.ok) { el.hidden = true; el.textContent = ''; return; }
+
+  el.hidden = false;
+  el.textContent = '';
+  const title = document.createElement('strong');
+  const body = document.createElement('div');
+
+  if (av.code === 'old-chrome') {
+    title.textContent = '⚠️ Chrome is too old for userscripts';
+    body.textContent = 'Userscripts need Chrome 120 or newer. Please update Chrome.';
+    el.append(title, body);
+    return;
+  }
+
+  title.textContent = '⚠️ One-time setup needed: allow user scripts';
+  const ol = document.createElement('ol');
+  [
+    'Open chrome://extensions and click "Details" on Corsair Unbound.',
+    'Turn on "Allow User Scripts". (On Chrome 137 or older, turn on "Developer mode" at the top right instead.)',
+    'Come back here and reload this page.'
+  ].forEach(txt => { const li = document.createElement('li'); li.textContent = txt; ol.appendChild(li); });
+
+  const btn = document.createElement('button');
+  btn.className = 'tool-btn';
+  btn.type = 'button';
+  btn.textContent = 'Open extension settings';
+  btn.addEventListener('click', () => {
+    const id = state.extensionId || (chrome.runtime && chrome.runtime.id) || '';
+    chrome.tabs.create({ url: 'chrome://extensions/?id=' + id });
+  });
+  el.append(title, ol, btn);
+}
+
 function renderCustomScripts() {
   const box = $('scriptList');
   if (!box) return;
   box.innerHTML = '';
+  renderUserscriptStatus();
 
   if (!state.customScripts.length) {
-    box.innerHTML = `<div class="empty">${escapeHtml(t('scripts.empty', 'No custom scripts yet. Add a domain above to begin.'))}</div>`;
+    box.innerHTML = '<div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>';
     return;
   }
 
   for (const item of state.customScripts) {
-    const host = item.host;
     const enabled = item.enabled !== false;
-    const codePreview = (item.code || '').split('\n').slice(0, 3).join('\n') || '(empty)';
-
     const row = document.createElement('div');
     row.className = 'script-item' + (enabled ? '' : ' disabled');
 
@@ -502,12 +558,31 @@ function renderCustomScripts() {
     const left = document.createElement('div');
     const title = document.createElement('div');
     title.className = 'script-host';
-    title.textContent = host;
+    title.textContent = item.name + (item.version ? '  v' + item.version : '');
     const meta = document.createElement('div');
     meta.className = 'script-meta';
-    const lines = (item.code || '').split('\n').length;
-    meta.textContent = `${lines} ${t('scripts.lines', 'lines')} • ${enabled ? '✓' : '✕'} ${t('scripts.enable', 'Enabled')}`;
+    const world = item.world === 'MAIN' ? 'page' : 'sandbox';
+    meta.textContent = [
+      item.description || '',
+      `${item.lines} lines`,
+      item.runAt,
+      world,
+      item.sourceUrl ? 'from URL' : (item.migratedFrom ? 'migrated' : 'local')
+    ].filter(Boolean).join(' • ');
     left.append(title, meta);
+
+    if (item.noMatch) {
+      const warn = document.createElement('div');
+      warn.className = 'script-warn';
+      warn.textContent = 'No @match or @include in the header: this script will not run anywhere yet.';
+      left.appendChild(warn);
+    }
+    if (item.lastError) {
+      const warn = document.createElement('div');
+      warn.className = 'script-warn';
+      warn.textContent = 'Registration error: ' + item.lastError;
+      left.appendChild(warn);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'script-actions';
@@ -518,11 +593,11 @@ function renderCustomScripts() {
     toggle.type = 'checkbox';
     toggle.checked = enabled;
     toggle.addEventListener('change', async () => {
-      const res = await send({ type: 'toggle-custom-script', host, enabled: toggle.checked });
+      const res = await send({ type: 'us-toggle', id: item.id, enabled: toggle.checked });
       if (res?.ok) {
         item.enabled = toggle.checked;
         row.classList.toggle('disabled', !toggle.checked);
-        showToast(`${host}: ${toggle.checked ? 'enabled' : 'disabled'}`);
+        showToast(`${item.name}: ${toggle.checked ? 'enabled' : 'disabled'}`);
       } else {
         toggle.checked = !toggle.checked;
         showToast(res?.error || 'Failed', 'error');
@@ -535,15 +610,15 @@ function renderCustomScripts() {
     const editBtn = document.createElement('button');
     editBtn.className = 'btn-script-edit';
     editBtn.textContent = t('scripts.edit', 'Edit');
-    editBtn.addEventListener('click', () => openEditor(host, item.code || ''));
+    editBtn.addEventListener('click', () => openEditor(item.id));
 
     const delBtn = document.createElement('button');
     delBtn.className = 'btn-script-remove';
     delBtn.textContent = t('scripts.remove', 'Remove');
     delBtn.addEventListener('click', async () => {
       if (!confirm(t('scripts.confirmRemove', 'Remove this script? This cannot be undone.'))) return;
-      const res = await send({ type: 'remove-custom-script', host });
-      if (res?.ok) { showToast(`Removed script for ${host}`); await refresh(); }
+      const res = await send({ type: 'us-remove', id: item.id });
+      if (res?.ok) { showToast(`Removed ${item.name}`); await refresh(); }
       else showToast(res?.error || 'Failed', 'error');
     });
 
@@ -553,39 +628,67 @@ function renderCustomScripts() {
 
     const preview = document.createElement('div');
     preview.className = 'script-preview';
-    preview.textContent = codePreview;
-    preview.addEventListener('click', () => openEditor(host, item.code || ''));
+    const shown = (item.matches || []).slice(0, 4);
+    preview.textContent = shown.length
+      ? shown.join('\n') + ((item.matches || []).length > 4 ? `\n… +${item.matches.length - 4} more` : '')
+      : '(no match rules)';
+    preview.addEventListener('click', () => openEditor(item.id));
     row.appendChild(preview);
 
     box.appendChild(row);
   }
 }
 
-function addCustomScript() {
-  const input = $('scriptDomain');
-  if (!input) return;
-  const raw = (input.value || '').trim();
-  if (!raw) { showToast('Enter a domain first', 'error'); return; }
-
-  let host = raw.toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/:\d+$/, '')
-    .replace(/^www\./, '');
-  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) {
-    showToast('Invalid domain format', 'error');
-    return;
+function reportSaveResult(res, fallbackName) {
+  if (!res?.ok) { showToast(res?.error || 'Failed to save', 'error'); return false; }
+  const name = res.script?.name || fallbackName || 'script';
+  if (res.sync && res.sync.ok === false) {
+    showToast(`Saved "${name}", but it is not active yet: allow user scripts for this extension (see the notice above).`, 'error');
+  } else if (res.sync?.errors?.length) {
+    showToast(`Saved "${name}" with an error: ${res.sync.errors[0].error}`, 'error');
+  } else if (res.warnings?.length) {
+    showToast(`Saved "${name}". ${res.warnings[0]}`, 'error');
+  } else {
+    showToast(`Saved "${name}"`);
   }
+  return true;
+}
 
-  input.value = '';
-  openEditor(host, '');
+async function importUserscriptFromUrl() {
+  const input = $('scriptImportUrl');
+  const url = (input?.value || '').trim();
+  if (!url) { showToast('Paste a script URL first', 'error'); return; }
+  const res = await send({ type: 'us-import-url', url });
+  if (reportSaveResult(res)) { input.value = ''; await refresh(); }
+}
+
+async function importUserscriptFiles(files) {
+  for (const file of Array.from(files || [])) {
+    try {
+      const code = await file.text();
+      const res = await send({ type: 'us-save', code });
+      reportSaveResult(res, file.name);
+    } catch (e) {
+      showToast(`Could not read ${file.name}`, 'error');
+    }
+  }
+  await refresh();
 }
 
 /* ============================================================
    CODE EDITOR
    ============================================================ */
-function openEditor(host, code) {
-  state.editingScript = { host, code: code || '', originalCode: code || '' };
+async function openEditor(id) {
+  let code = USERSCRIPT_TEMPLATE;
+  let name = 'New script';
+  if (id) {
+    const res = await send({ type: 'us-get', id });
+    if (!res?.ok || !res.script) { showToast(res?.error || 'Script not found', 'error'); return; }
+    code = res.script.code || '';
+    name = res.script.name;
+  }
+
+  state.editingScript = { id: id || null, code, originalCode: id ? code : '' };
   const modal = $('editorModal');
   if (!modal) return;
 
@@ -594,10 +697,10 @@ function openEditor(host, code) {
   const ta = $('editorCode');
   const tab = $('editorTab');
 
-  if (hostEl) hostEl.textContent = host;
-  if (fileEl) fileEl.textContent = host.replace(/[^a-z0-9.-]/gi, '_') + '.js';
-  if (ta) { ta.value = code || ''; ta.focus(); }
-  if (tab) tab.classList.remove('dirty');
+  if (hostEl) hostEl.textContent = name;
+  if (fileEl) fileEl.textContent = name.replace(/[^a-z0-9.-]/gi, '_') + '.user.js';
+  if (ta) { ta.value = code; ta.focus(); }
+  if (tab) tab.classList.toggle('dirty', !id);
 
   updateLineNumbers();
   modal.hidden = false;
@@ -616,18 +719,14 @@ async function saveEditor() {
   const code = ta ? ta.value : '';
 
   const res = await send({
-    type: 'upsert-custom-script',
-    host: state.editingScript.host,
-    code,
-    enabled: true
+    type: 'us-save',
+    id: state.editingScript.id || undefined,
+    code
   });
 
-  if (res?.ok) {
-    showToast(`Saved script for ${state.editingScript.host}`);
+  if (reportSaveResult(res)) {
     closeEditor();
     await refresh();
-  } else {
-    showToast(res?.error || 'Failed to save', 'error');
   }
 }
 
@@ -2217,7 +2316,7 @@ async function refresh() {
     send({ type: 'get-safe-scanned-domains' }),
     send({ type: 'get-user-trusted' }),
     send({ type: 'get-user-blocked' }),
-    send({ type: 'get-custom-scripts' }),
+    send({ type: 'us-list' }),
     send({ type: 'get-api-key-secure' })
   ]);
 
@@ -2229,6 +2328,8 @@ async function refresh() {
   state.userTrusted = ut?.domains || [];
   state.userBlocked = ub?.domains || [];
   state.customScripts = cs?.scripts || [];
+  state.userscriptAvailability = cs?.availability || null;
+  state.extensionId = cs?.extensionId || state.extensionId;
   state.currentApiKey = ak?.apiKey || '';
 
   const settingsSnapshot = snapshotSettingsForm();
@@ -3269,8 +3370,11 @@ safeOn('trustedDomainInput', 'keydown', e => { if (e.key === 'Enter') addTrusted
 safeOn('blockedDomainBtn', 'click', addBlockedDomain);
 safeOn('blockedDomainInput', 'keydown', e => { if (e.key === 'Enter') addBlockedDomain(); });
 
-safeOn('scriptAddBtn', 'click', addCustomScript);
-safeOn('scriptDomain', 'keydown', e => { if (e.key === 'Enter') addCustomScript(); });
+safeOn('scriptNewBtn', 'click', () => openEditor(null));
+safeOn('scriptImportBtn', 'click', importUserscriptFromUrl);
+safeOn('scriptImportUrl', 'keydown', e => { if (e.key === 'Enter') importUserscriptFromUrl(); });
+safeOn('scriptImportFileBtn', 'click', () => { const f = $('scriptImportFile'); if (f) f.click(); });
+safeOn('scriptImportFile', 'change', (e) => { importUserscriptFiles(e.target.files); e.target.value = ''; });
 
 safeOn('syncWhitelistBtn', 'click', async () => {
   showToast('Syncing…');

@@ -17,6 +17,7 @@ import './core/migration.js';
 import './core/tool-router.js';
 import './core/replay.js';
 import './core/updater.js';
+import './core/userscripts.js';
 
 let _startupReconcilePromise = null;
 
@@ -294,180 +295,12 @@ async function maybeAutoScan(tabId, url) {
 }
 
 /* ============================================================
-   CUSTOM DOMAIN SCRIPTS
+   USERSCRIPTS (Tampermonkey-style, see core/userscripts.js)
    ============================================================ */
-
-/**
- * tabId -> { host, url, ts }
- * We track the LAST injection per tab so revisits and SPA
- * route changes still re-inject, while a same-instant
- * double-fire does not.
- */
-const _scriptedTabs = new Map();
-const SCRIPT_DEDUPE_WINDOW_MS = 400;
-
-/**
- * Find a custom script that matches `host`, walking up the
- * domain hierarchy.  mp.expl.com matches:
- *   mp.expl.com   (exact)
- *   expl.com      (parent)
- *
- * Returns { entry, matchedHost } or null.
- */
-async function findScriptForHost(host) {
-  if (!host || typeof host !== 'string') return null;
-  const h = CorsairSecurity.normalizeHostname(host);
-  if (!h) return null;
-
-  const scripts = await CorsairStorage.get('customDomainScripts', {});
-  if (!scripts || typeof scripts !== 'object') return null;
-
-  // 1) Exact match (fast path)
-  const exact = scripts[h];
-  if (exact && exact.enabled !== false && exact.code) {
-    return { entry: exact, matchedHost: h };
-  }
-
-  // 2) Parent-domain walk: mp.expl.com -> expl.com
-  //    Also handles deep subdomains: a.b.expl.com -> b.expl.com -> expl.com
-  const parts = h.split('.');
-  for (let i = 1; i < parts.length - 1; i++) {
-    const parent = parts.slice(i).join('.');
-    const entry = scripts[parent];
-    if (entry && entry.enabled !== false && entry.code) {
-      return { entry, matchedHost: parent };
-    }
-  }
-
-  return null;
-}
-
-async function runCustomScriptForTab(tabId, host, url) {
-  if (!Number.isInteger(tabId) || !host) return;
-
-  if (!chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
-    console.error('[Corsair CS] chrome.scripting NOT available! Reload extension and approve permissions.');
-    return;
-  }
-
-  try {
-    // ---- 1. Find matching script (hierarchical) ----
-    const match = await findScriptForHost(host);
-    if (!match) return;
-    const { entry, matchedHost } = match;
-
-    // ---- 2. Lint before injection ----
-    const lint = CorsairSecurity.lintCustomScript(entry.code);
-    if (!lint.ok) {
-      console.warn(`[Corsair CS] ⛔ refusing to inject "${matchedHost}": ${lint.error}`);
-      return;
-    }
-
-    // ---- 3. Dedupe: skip only if the SAME tab fired for the
-    //       SAME (host + url) within the last SCRIPT_DEDUPE_WINDOW_MS.
-    //       This lets revisits and SPA route changes re-inject.
-    const now = Date.now();
-    const prev = _scriptedTabs.get(tabId);
-    if (
-      prev &&
-      prev.host === matchedHost &&
-      prev.url === url &&
-      now - prev.ts < SCRIPT_DEDUPE_WINDOW_MS
-    ) {
-      return;
-    }
-    _scriptedTabs.set(tabId, { host: matchedHost, url, ts: now });
-
-    console.log(`[Corsair CS] ▶ injecting "${matchedHost}" into tab ${tabId} (matched for ${host}, url=${url})`);
-
-    // ---- 4. Inject in ALL frames (main + iframes) ----
-    //     allFrames:true is intentional: many sites host the UI
-    //     we want to modify inside an iframe, and the user has
-    //     explicitly requested this behaviour.
-    const results = await chrome.scripting.executeScript({
-      target: { tabId, allFrames: true },
-      world: 'MAIN',
-      func: (userCode) => {
-        console.log('[Corsair CS] ▶ page-side func reached:', location.href);
-
-        const run = () => {
-          try {
-            const s = document.createElement('script');
-            s.textContent = userCode;
-            (document.head || document.documentElement || document.body).appendChild(s);
-            s.remove();
-            console.log('[Corsair CS] ✅ user code injected via <script> tag');
-            return true;
-          } catch (e) {
-            console.error('[Corsair CS] ❌ inline injection failed:', e && e.message);
-            return false;
-          }
-        };
-
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', run, { once: true });
-          return { scheduled: 'on-dom-ready' };
-        }
-        return { immediate: run() };
-      },
-      args: [String(entry.code)]
-    });
-
-    console.log('[Corsair CS] ✓ injected into', results?.length || 0, 'frame(s)');
-  } catch (err) {
-    console.error('[Corsair CS] ❌ executeScript threw:', err && err.message, err);
-  }
-}
-
-async function listCustomScripts() {
-  const scripts = await CorsairStorage.get('customDomainScripts', {});
-  return Object.entries(scripts || {}).map(([host, e]) => ({
-    host,
-    code: e.code || '',
-    enabled: e.enabled !== false,
-    createdAt: e.createdAt || 0,
-    updatedAt: e.updatedAt || 0
-  })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-}
-
-async function upsertCustomScript(host, patch) {
-  const h = CorsairSecurity.normalizeHostname(host || '');
-  if (!h || !CorsairSecurity.isValidHostname(h)) return { ok: false, error: 'invalid-host' };
-
-  if (typeof patch.code === 'string') {
-    const lint = CorsairSecurity.lintCustomScript(patch.code);
-    if (!lint.ok) {
-      return { ok: false, error: lint.line ? `${lint.error} (line ${lint.line})` : lint.error };
-    }
-  }
-
-  return CorsairStorage.withPartitionLock('globalSettings', async () => {
-    const scripts = await CorsairStorage.get('customDomainScripts', {});
-    const prev = scripts[h] || { createdAt: Date.now() };
-    const next = {
-      ...prev,
-      enabled: patch.enabled !== undefined ? Boolean(patch.enabled) : (prev.enabled !== false),
-      code: typeof patch.code === 'string' ? patch.code.slice(0, CorsairSecurity.CUSTOM_SCRIPT_MAX_LEN) : (prev.code || ''),
-      createdAt: prev.createdAt || Date.now(),
-      updatedAt: Date.now()
-    };
-    scripts[h] = next;
-    await CorsairStorage.set('customDomainScripts', scripts);
-    return { ok: true, entry: { host: h, ...next } };
-  });
-}
-
-async function removeCustomScript(host) {
-  const h = CorsairSecurity.normalizeHostname(host || '');
-  if (!h) return { ok: false, error: 'invalid-host' };
-  return CorsairStorage.withPartitionLock('globalSettings', async () => {
-    const scripts = await CorsairStorage.get('customDomainScripts', {});
-    if (scripts[h]) {
-      delete scripts[h];
-      await CorsairStorage.set('customDomainScripts', scripts);
-    }
-    return { ok: true };
-  });
+if (typeof CorsairUserScripts !== 'undefined') {
+  CorsairUserScripts.init().catch(() => {});
+  chrome.runtime.onInstalled.addListener(() => { CorsairUserScripts.init().then(() => CorsairUserScripts.sync()).catch(() => {}); });
+  chrome.runtime.onStartup.addListener(() => { CorsairUserScripts.sync().catch(() => {}); });
 }
 
 /* ============================================================
@@ -1093,14 +926,6 @@ chrome.webNavigation.onCommitted.addListener(async details => {
   if (!Number.isInteger(tabId)) return;
 
   try {
-    const currentUrlForScript = CorsairSecurity.normalizeUrl(details.url);
-    const destinationHostForScript = CorsairSecurity.extractHostname(currentUrlForScript);
-    if (destinationHostForScript) {
-      runCustomScriptForTab(tabId, destinationHostForScript, currentUrlForScript).catch(() => {});
-    }
-  } catch {}
-
-  try {
     let chain = await CorsairRedirects.reconcileCommittedHop({
       tabId, frameId: details.frameId, url: details.url,
       qualifiers: details.transitionQualifiers || [],
@@ -1171,12 +996,6 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async details => {
     const host = CorsairSecurity.extractHostname(url);
     if (!host) return;
 
-    // Small delay so the SPA has a chance to render the new route
-    // before we inject (avoids injecting into the OLD DOM).
-    setTimeout(() => {
-      runCustomScriptForTab(tabId, host, url).catch(() => {});
-    }, 250);
-
     // Also refresh the auto-scan verdict for the new route's host.
     maybeAutoScan(tabId, url).catch(() => {});
   } catch {}
@@ -1189,7 +1008,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'loading' || !tab?.url) return;
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
     clearBadge(tabId);
-    _scriptedTabs.delete(tabId);
     _autoScannedTabs.delete(tabId);
   }
 });
@@ -1205,7 +1023,6 @@ chrome.tabs.onRemoved.addListener(async tabId => {
     const token = await CorsairRedirects.getGenerationToken(tabId);
     await CorsairRedirects.clearChainIfTabClosed(tabId, token);
     _autoScannedTabs.delete(tabId);
-    _scriptedTabs.delete(tabId);
     for (const [host, arr] of _popupBurst) {
       const now = Date.now();
       const keep = arr.filter(t => now - t < POPUP_BURST_WINDOW_MS);
@@ -1316,24 +1133,46 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           break;
         }
 
-        /* ============ CUSTOM SCRIPTS ============ */
-        case 'get-custom-scripts': {
-          try { send({ ok: true, scripts: await listCustomScripts() }); }
+        /* ============ USERSCRIPTS ============ */
+        case 'us-list': {
+          try {
+            const [scripts, availability] = await Promise.all([
+              CorsairUserScripts.list(),
+              CorsairUserScripts.checkAvailability()
+            ]);
+            send({ ok: true, scripts, availability, extensionId: chrome.runtime.id });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-get': {
+          try {
+            const script = await CorsairUserScripts.get(String(m.id || ''));
+            send(script ? { ok: true, script } : { ok: false, error: 'not-found' });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-save': {
+          try { send(await CorsairUserScripts.save({ id: m.id, code: m.code, enabled: m.enabled, sourceUrl: m.sourceUrl })); }
           catch (err) { send({ ok: false, error: err.message }); }
           break;
         }
-        case 'upsert-custom-script': {
-          try { send(await upsertCustomScript(m.host || '', { code: m.code, enabled: m.enabled })); }
+        case 'us-remove': {
+          try { send(await CorsairUserScripts.remove(String(m.id || ''))); }
           catch (err) { send({ ok: false, error: err.message }); }
           break;
         }
-        case 'remove-custom-script': {
-          try { send(await removeCustomScript(m.host || '')); }
+        case 'us-toggle': {
+          try { send(await CorsairUserScripts.setEnabled(String(m.id || ''), m.enabled !== false)); }
           catch (err) { send({ ok: false, error: err.message }); }
           break;
         }
-        case 'toggle-custom-script': {
-          try { send(await upsertCustomScript(m.host || '', { enabled: m.enabled !== false })); }
+        case 'us-import-url': {
+          try { send(await CorsairUserScripts.importFromUrl(m.url)); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-sync': {
+          try { const r = await CorsairUserScripts.sync(); send({ ok: r.ok, availability: r.availability, registered: r.registered, errors: r.errors }); }
           catch (err) { send({ ok: false, error: err.message }); }
           break;
         }

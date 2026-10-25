@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Userscript manager (Tampermonkey-style)** — the old one-script-per-domain feature is replaced by a full userscript engine built on the official `chrome.userScripts` API (`core/userscripts.js`). Scripts now run even on sites with strict CSP.
+- Standard metadata block support: `@name`, `@namespace`, `@version`, `@description`, `@author`, `@match`, `@include` (globs and `/regex/`), `@exclude`, `@exclude-match`, `@run-at` (`document-start/body/end/idle`), `@noframes`, `@require`, `@resource`, `@grant`, `@inject-into`, `@connect`, `@updateURL`, `@downloadURL`.
+- Multiple scripts per site, enable/disable per script, import from URL or `.user.js` file, and re-importing the same `@name`/`@namespace` updates in place.
+- `@require` libraries and `@resource` files are downloaded and cached at install time. User code and `@require` code share one async scope, so `return` and top-level `await` work.
+- Dashboard: new Userscripts panel with a template editor and a one-time "Allow User Scripts" setup notice.
+- `GM_info`, `GM_log`, `GM_addStyle`, `unsafeWindow` helpers (the rest of the `GM_*` API is planned next).
+
+### Changed
+- **No script restrictions** — the content blocklist (`document.cookie`, `WebSocket`, `eval`, `chrome.*`, `window.top`, ...) and the 200,000-character size cap were removed. Whatever the user installs is what runs.
+- Minimum Chrome version is now 120. New permissions: `userScripts`, `unlimitedStorage`.
+- Legacy per-domain scripts are migrated automatically to `@match *://host/*` + `*://*.host/*` userscripts (the old data is left untouched).
+
+### Known limitations
+- Users must enable "Allow User Scripts" for the extension once in `chrome://extensions` (Chrome requirement; Tampermonkey needs the same).
+- Scripts using `@grant GM_*` run in the isolated user-script world, where `unsafeWindow` cannot read the page's own JS variables. Use `@grant none` (or `@inject-into page`) for that.
+- Scripts run once per page load (as in Tampermonkey); SPA route changes do not re-run them.
+- Backup export/import does not include the new userscripts yet.
+
 ### Planned
 - Optional local blocklist import from uBlock Origin / AdGuard / hosts files
 - Redirect-chain visualizer in the dashboard

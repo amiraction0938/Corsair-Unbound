@@ -3108,3 +3108,18 @@ body[data-theme="light"] #safeDomainsList::-webkit-scrollbar-thumb:hover {
   background-clip: padding-box;
   border: 2px solid transparent;
 }
+
+/* ===== Userscripts ===== */
+.us-status {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--warn, #d9a441);
+  border-radius: 10px;
+  background: rgba(217, 164, 65, 0.1);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.us-status ol { margin: 6px 0 10px; padding-inline-start: 20px; }
+.script-warn { margin-top: 4px; font-size: 12px; color: var(--danger, #e5534b); }
+.script-input-row { flex-wrap: wrap; }
+.script-input-row input#scriptImportUrl { flex: 1 1 260px; min-width: 200px; }

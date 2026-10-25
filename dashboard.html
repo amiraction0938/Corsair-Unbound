@@ -362,16 +362,20 @@
         <div class="panel custom-scripts-panel">
           <div class="panel-head">
             <div>
-              <h2 data-i18n="scripts.title">🎨 Custom Domain Scripts</h2>
-              <div class="muted" data-i18n="scripts.subtitle">Inject your own JS snippets into specific domains — executed automatically on every visit.</div>
+              <h2>🧩 Userscripts</h2>
+              <div class="muted">Install and write Tampermonkey-style userscripts. Supports @match, @include, @exclude, @run-at, @require, @resource and @grant headers. No code restrictions.</div>
             </div>
           </div>
+          <div id="usStatus" class="us-status" hidden></div>
           <div class="script-input-row">
-            <input id="scriptDomain" data-i18n-placeholder="scripts.domainPlaceholder" placeholder="example.com" autocomplete="off" spellcheck="false">
-            <button id="scriptAddBtn" class="btn-primary" data-i18n="scripts.addDomain">Add Domain</button>
+            <button id="scriptNewBtn" class="btn-primary" type="button">+ New script</button>
+            <input id="scriptImportUrl" placeholder="https://example.com/script.user.js" autocomplete="off" spellcheck="false">
+            <button id="scriptImportBtn" class="tool-btn" type="button">Import URL</button>
+            <button id="scriptImportFileBtn" class="tool-btn" type="button">Import file</button>
+            <input type="file" id="scriptImportFile" accept=".js,.user.js,text/javascript" multiple hidden>
           </div>
           <div id="scriptList" class="script-list">
-            <div class="empty" data-i18n="scripts.empty">No custom scripts yet. Add a domain above to begin.</div>
+            <div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>
           </div>
         </div>
       </section>

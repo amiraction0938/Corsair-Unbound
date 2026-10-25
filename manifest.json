@@ -3,7 +3,7 @@
   "name": "Corsair Unbound",
   "version": "1.9.3",
   "description": "Local-first browser shield with deterministic DNR enforcement, fortress catch-all, heuristics, custom scripts, and navigation isolation.",
-  "minimum_chrome_version": "111",
+  "minimum_chrome_version": "120",
   "permissions": [
     "storage",
     "declarativeNetRequest",
@@ -13,7 +13,9 @@
     "notifications",
     "alarms",
     "scripting",
-    "contextMenus"
+    "contextMenus",
+    "userScripts",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "http://*/*",

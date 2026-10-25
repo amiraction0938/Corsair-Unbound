@@ -195,39 +195,13 @@ const CorsairSecurity = (() => {
     return clean;
   }
 
-const CUSTOM_SCRIPT_MAX_LEN = 200000;
-
-  const CUSTOM_SCRIPT_BLOCKLIST = [
-    { re: /document\s*\.\s*cookie/i, label: 'document.cookie access' },
-    { re: /\bsessionStorage\b/i, label: 'sessionStorage access' },
-    { re: /\bindexedDB\b/i, label: 'indexedDB access' },
-    { re: /\bnavigator\s*\.\s*sendBeacon\b/i, label: 'navigator.sendBeacon' },
-    { re: /\bWebSocket\b/i, label: 'WebSocket' },
-    { re: /\bchrome\s*\.\s*\w+/i, label: 'chrome.* extension API access' },
-    { re: /\bimport\s*\(/i, label: 'dynamic import()' },
-    { re: /\beval\s*\(/i, label: 'eval()' },
-    { re: /\bnew\s+Function\s*\(/i, label: 'new Function()' },
-    { re: /\bsetTimeout\s*\(\s*['"`]/i, label: "setTimeout('string', ...) — string form re-enters eval" },
-    { re: /\bsetInterval\s*\(\s*['"`]/i, label: "setInterval('string', ...) — string form re-enters eval" },
-    { re: /window\s*\.\s*top\b/i, label: 'window.top cross-frame access' },
-    { re: /window\s*\.\s*parent\b/i, label: 'window.parent cross-frame access' },
-    { re: /\bdocument\s*\.\s*domain\s*=/i, label: 'document.domain assignment' }
-  ];
+// Userscripts are intentionally unrestricted: no size cap and no
+  // content blocklist. Kept as exported names so older callers
+  // (backup import) keep working.
+  const CUSTOM_SCRIPT_MAX_LEN = Number.MAX_SAFE_INTEGER;
 
   function lintCustomScript(code) {
     if (typeof code !== 'string') return { ok: false, error: 'Script must be a string' };
-    if (code.length > CUSTOM_SCRIPT_MAX_LEN) {
-      return { ok: false, error: `Script too long (${code.length}/${CUSTOM_SCRIPT_MAX_LEN} chars)` };
-    }
-    const lines = code.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      for (const { re, label } of CUSTOM_SCRIPT_BLOCKLIST) {
-        if (re.test(line)) {
-          return { ok: false, error: `Blocked: ${label}`, line: i + 1 };
-        }
-      }
-    }
     return { ok: true };
   }
 
