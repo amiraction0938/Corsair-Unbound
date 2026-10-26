@@ -298,3 +298,132 @@ describe('CorsairUserScripts — storage and registration', () => {
     expect(reg.world).toBe('MAIN');
   });
 });
+
+describe('CorsairUserScripts — GM_* API end to end', () => {
+  let downloads;
+
+  beforeEach(() => {
+    installChromeMock();
+    installUserScriptsMock();
+    downloads = [];
+    globalThis.chrome.downloads = { download: async (o) => { downloads.push(o); return 7; } };
+    globalThis.chrome.notifications = { create: async () => {}, clear: () => {} };
+    globalThis.chrome.tabs = { create: async (o) => ({ id: 99, ...o }), remove: async () => {} };
+    globalThis.chrome.runtime.getURL = (p) => 'chrome-extension://x/' + p;
+    globalThis.fetch = async (url, init) => {
+      if (String(url).includes('fail')) throw new Error('boom');
+      return {
+        status: 200, statusText: 'OK', url,
+        headers: new Headers({ 'content-type': 'application/json', 'x-test': init && init.method || 'GET' }),
+        text: async () => '{"hello":"world"}',
+        arrayBuffer: async () => new TextEncoder().encode('bin').buffer
+      };
+    };
+    loadCore('core/userscripts.js');
+  });
+
+  async function runScript(body, header = '', record = {}) {
+    const code = `// ==UserScript==\n// @name GMTest\n// @match *://*/*\n${header}\n// ==/UserScript==\n${body}`;
+    const { meta } = CorsairUserScripts.parseMetadata(code);
+    const rec = { id: 'cu-test1', code, meta, ...record };
+    const plan = CorsairUserScripts.buildPlan(meta);
+    const src = CorsairUserScripts.buildSource(rec, plan);
+    const logs = [];
+    const ctx = vm.createContext({
+      location: { href: 'https://site.test/page', },
+      document: {
+        body: {}, head: { appendChild() {} }, documentElement: {}, createElement: () => ({}),
+        addEventListener() {}
+      },
+      window: {},
+      console: { log: (...a) => logs.push(a.map(String).join(' ')), warn: (...a) => logs.push('WARN ' + a.join(' ')), error: (...a) => logs.push('ERR ' + a.join(' ')) },
+      chrome: { runtime: { sendMessage: (m) => CorsairUserScripts.handleGmMessage(m, { tab: { id: 5 } }) } },
+      URL, URLSearchParams, Response, Blob, TextDecoder, TextEncoder, atob, btoa, setTimeout, clearTimeout,
+      MutationObserver: class { observe() {} disconnect() {} }
+    });
+    vm.runInContext(src, ctx);
+    await new Promise(r => setTimeout(r, 60));
+    return logs;
+  }
+
+  it('GM_setValue / GM_getValue persist between runs', async () => {
+    await runScript('GM_setValue("count", 41); GM_setValue("obj", {a:[1,2]});', '// @grant GM_setValue');
+    const logs = await runScript('console.log(GM_getValue("count"), JSON.stringify(GM_getValue("obj")), GM_getValue("missing", "dflt"), GM_listValues().join(","));', '// @grant GM_getValue\n// @grant GM_listValues');
+    expect(logs).toContain('41 {"a":[1,2]} dflt count,obj');
+  });
+
+  it('GM_deleteValue removes stored data and GM_addValueChangeListener fires', async () => {
+    const logs = await runScript(
+      'GM_addValueChangeListener("k", (n, o, v, remote) => console.log("chg", o, v, remote));' +
+      'GM_setValue("k", 1); GM_setValue("k", 2); GM_deleteValue("k"); console.log(GM_getValue("k", "gone"));',
+      '// @grant GM_setValue\n// @grant GM_getValue\n// @grant GM_deleteValue\n// @grant GM_addValueChangeListener');
+    expect(logs).toContain('chg undefined 1 false');
+    expect(logs).toContain('chg 1 2 false');
+    expect(logs).toContain('gone');
+  });
+
+  it('GM.getValue / GM.setValue return promises', async () => {
+    const logs = await runScript('await GM.setValue("p", "x"); console.log("v=" + await GM.getValue("p"));', '// @grant GM.setValue\n// @grant GM.getValue');
+    expect(logs).toContain('v=x');
+  });
+
+  it('GM_xmlhttpRequest performs a cross-origin request through the extension', async () => {
+    const logs = await runScript(
+      'GM_xmlhttpRequest({ method: "POST", url: "https://api.other.test/x", data: "a=1", responseType: "json",' +
+      ' onload: r => console.log("status", r.status, JSON.stringify(r.response), r.responseHeaders.includes("x-test: POST"), r.finalUrl) });',
+      '// @grant GM_xmlhttpRequest');
+    expect(logs).toContain('status 200 {"hello":"world"} true https://api.other.test/x');
+  });
+
+  it('GM_xmlhttpRequest reports network errors via onerror', async () => {
+    const logs = await runScript(
+      'GM_xmlhttpRequest({ url: "https://fail.test/", onerror: e => console.log("err", e.status, e.error) });',
+      '// @grant GM_xmlhttpRequest');
+    expect(logs).toContain('err 0 boom');
+  });
+
+  it('GM.xmlHttpRequest resolves a promise', async () => {
+    const logs = await runScript(
+      'const r = await GM.xmlHttpRequest({ url: "https://api.other.test/y" }); console.log("text", r.responseText);',
+      '// @grant GM.xmlHttpRequest');
+    expect(logs).toContain('text {"hello":"world"}');
+  });
+
+  it('GM_download sanitises the file name', async () => {
+    await runScript('GM_download({ url: "https://a.test/f.zip", name: "../../evil/../file.zip" });', '// @grant GM_download');
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0].filename).toBe('evil/file.zip');
+  });
+
+  it('GM_getResourceText returns cached @resource data', async () => {
+    const logs = await runScript(
+      'console.log(GM_getResourceText("css"), GM_getResourceURL("css"));',
+      '// @resource css https://cdn.example.com/a.css\n// @grant GM_getResourceText\n// @grant GM_getResourceURL',
+      { resources: { css: { url: 'https://cdn.example.com/a.css', text: 'body{}', dataUrl: 'data:text/css;base64,Ym9keXt9' } } });
+    expect(logs).toContain('body{} data:text/css;base64,Ym9keXt9');
+  });
+
+  it('only defines the GM_* functions that were granted', async () => {
+    const logs = await runScript('console.log(typeof GM_setValue, typeof GM_xmlhttpRequest, typeof GM_info, typeof unsafeWindow);', '// @grant none');
+    expect(logs).toContain('undefined undefined object object');
+  });
+
+  it('runs scripts that only use local helpers in the page world', async () => {
+    const { meta } = CorsairUserScripts.parseMetadata('// ==UserScript==\n// @match *://*/*\n// @grant GM_addStyle\n// @grant GM_setClipboard\n// @grant GM_registerMenuCommand\n// ==/UserScript==');
+    expect(CorsairUserScripts.chooseWorld(meta)).toBe('MAIN');
+  });
+
+  it('rejects malformed or foreign bridge messages', async () => {
+    expect((await CorsairUserScripts.handleGmMessage({ op: 'vals:get', id: 'cu-x' }, {})).ok).toBe(false);
+    expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:get', id: 'other' }, {})).ok).toBe(false);
+    expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'nope', id: 'cu-x' }, {})).ok).toBe(false);
+  });
+
+  it('removing a script deletes its stored values', async () => {
+    const { script } = await CorsairUserScripts.save({ code: '// ==UserScript==\n// @name V\n// @match *://*/*\n// @grant GM_setValue\n// ==/UserScript==' });
+    await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:set', id: script.id, data: { k: 'a', v: 1 } }, {});
+    expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:get', id: script.id }, {})).values).toEqual({ a: 1 });
+    await CorsairUserScripts.remove(script.id);
+    expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:get', id: script.id }, {})).values).toEqual({});
+  });
+});

@@ -95,20 +95,6 @@
         <h1 class="view-title" id="viewTitle">Overview</h1>
         <div class="header-actions">
           <input id="configFile" type="file" accept=".json,.corsair.json,application/json" hidden>
-          <div class="notif-center" id="notifCenter">
-            <button id="notifBell" class="tool-btn icon-btn notif-bell" aria-label="Notifications" title="Notifications">
-              🔔
-              <span id="notifBadge" class="notif-badge" hidden>0</span>
-            </button>
-            <div class="notif-panel" id="notifPanel">
-              <div class="notif-panel-head">
-                <h3 data-i18n="notif.title">Notifications</h3>
-                <button id="notifMarkAll" class="link-btn" data-i18n="notif.markAll">Mark all read</button>
-              </div>
-              <div id="notifList" class="notif-list"></div>
-              <button id="notifViewAll" class="notif-viewall" data-navigate="activity" data-i18n="notif.viewAll">View all activity →</button>
-            </div>
-          </div>
           <button id="startTourBtn" class="tool-btn" title="Take a guided tour">
             <span>🎯</span> <span data-i18n="actions.tour">Take Tour</span>
           </button>
@@ -373,6 +359,13 @@
             <button id="scriptImportBtn" class="tool-btn" type="button">Import URL</button>
             <button id="scriptImportFileBtn" class="tool-btn" type="button">Import file</button>
             <input type="file" id="scriptImportFile" accept=".js,.user.js,text/javascript" multiple hidden>
+          </div>
+          <div class="script-examples">
+            <span class="muted">Try a demo (works on example.com):</span>
+            <button class="tool-btn" type="button" data-us-demo="hello">1. Hello banner</button>
+            <button class="tool-btn" type="button" data-us-demo="counter">2. Visit counter</button>
+            <button class="tool-btn" type="button" data-us-demo="xhr">3. Cross-site request</button>
+            <button class="tool-btn" type="button" id="scriptOpenExample">Open example.com</button>
           </div>
           <div id="scriptList" class="script-list">
             <div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>

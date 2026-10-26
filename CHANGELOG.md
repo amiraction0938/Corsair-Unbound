@@ -13,16 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multiple scripts per site, enable/disable per script, import from URL or `.user.js` file, and re-importing the same `@name`/`@namespace` updates in place.
 - `@require` libraries and `@resource` files are downloaded and cached at install time. User code and `@require` code share one async scope, so `return` and top-level `await` work.
 - Dashboard: new Userscripts panel with a template editor and a one-time "Allow User Scripts" setup notice.
-- `GM_info`, `GM_log`, `GM_addStyle`, `unsafeWindow` helpers (the rest of the `GM_*` API is planned next).
+- **GM API:** `GM_getValue/setValue/deleteValue/listValues` (+ `GM_getValues/setValues/deleteValues`, `GM_addValueChangeListener`), `GM_xmlhttpRequest` (cross-origin, no CORS limits, JSON/blob/arraybuffer, timeout, abort), `GM_notification`, `GM_openInTab`, `GM_download`, `GM_setClipboard`, `GM_addStyle`, `GM_addElement`, `GM_log`, `GM_registerMenuCommand` (floating in-page menu), `GM_getResourceText/URL`, `GM_info`, `unsafeWindow`, plus the promise-based `GM.*` equivalents. Only granted functions are defined, like Tampermonkey.
+- Scripts that only need local helpers (`GM_addStyle`, `GM_setClipboard`, `GM_registerMenuCommand`, ...) run in the page world, so `unsafeWindow` can reach page variables; scripts that use storage/network GM functions run in the isolated sandbox world.
+- Three one-click demo scripts in the dashboard for first-time testing.
 
 ### Changed
 - **No script restrictions** — the content blocklist (`document.cookie`, `WebSocket`, `eval`, `chrome.*`, `window.top`, ...) and the 200,000-character size cap were removed. Whatever the user installs is what runs.
 - Minimum Chrome version is now 120. New permissions: `userScripts`, `unlimitedStorage`.
 - Legacy per-domain scripts are migrated automatically to `@match *://host/*` + `*://*.host/*` userscripts (the old data is left untouched).
 
+### Removed
+- The notification bell (🔔) in the dashboard header and its panel.
+
 ### Known limitations
 - Users must enable "Allow User Scripts" for the extension once in `chrome://extensions` (Chrome requirement; Tampermonkey needs the same).
-- Scripts using `@grant GM_*` run in the isolated user-script world, where `unsafeWindow` cannot read the page's own JS variables. Use `@grant none` (or `@inject-into page`) for that.
+- Scripts that use storage/network `GM_*` functions run in the isolated sandbox world, where `unsafeWindow` cannot read the page's own JS variables. Use `@grant none` (or `@inject-into page`, which disables those functions) for that.
+- Not implemented yet: `GM_cookie`, `GM_getTab/saveTab`, notification click callbacks, cross-tab `GM_addValueChangeListener` events, and setting forbidden headers (`Cookie`, `Referer`, `User-Agent`) in `GM_xmlhttpRequest`.
 - Scripts run once per page load (as in Tampermonkey); SPA route changes do not re-run them.
 - Backup export/import does not include the new userscripts yet.
 

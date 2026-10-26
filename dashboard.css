@@ -3123,3 +3123,4 @@ body[data-theme="light"] #safeDomainsList::-webkit-scrollbar-thumb:hover {
 .script-warn { margin-top: 4px; font-size: 12px; color: var(--danger, #e5534b); }
 .script-input-row { flex-wrap: wrap; }
 .script-input-row input#scriptImportUrl { flex: 1 1 260px; min-width: 200px; }
+.script-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }

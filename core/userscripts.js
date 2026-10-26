@@ -115,15 +115,10 @@ const CorsairUserScripts = (() => {
     return { meta, hasHeader: true, headerText: m[0] };
   }
 
-  /** True when the script wants the GM_* API (needs the isolated USER_SCRIPT world). */
-  function needsGM(meta) {
-    return (meta.grant || []).some(g => /^GM[._]/i.test(g));
-  }
-
   function chooseWorld(meta) {
     if (meta.injectInto === 'page') return 'MAIN';
     if (meta.injectInto === 'content') return 'USER_SCRIPT';
-    return needsGM(meta) ? 'USER_SCRIPT' : 'MAIN';
+    return needsBridge(meta) ? 'USER_SCRIPT' : 'MAIN';
   }
 
   /* ============================================================
@@ -283,6 +278,363 @@ const CorsairUserScripts = (() => {
   }
 
   /* ============================================================
+     GM_* RUNTIME (runs inside the page / user-script world)
+     ------------------------------------------------------------
+     This function is serialised with toString() and injected, so it
+     must stay fully self-contained: no references to module scope.
+     ============================================================ */
+  function gmRuntime(ctx) {
+    'use strict';
+    const hasBridge = !!(ctx.bridge && typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage);
+    const send = (op, data) => {
+      if (!hasBridge) return Promise.reject(new Error('This GM_* function needs the sandbox world (remove @inject-into page).'));
+      return chrome.runtime.sendMessage({ __cu: 1, id: ctx.id, op: op, data: data });
+    };
+    if (ctx.wantsBridge && !hasBridge) {
+      console.warn('[Corsair Userscripts] "' + ctx.name + '" uses GM_* functions that need the sandbox world; they are disabled in page mode.');
+    }
+
+    const clone = (v) => {
+      if (v === undefined) return undefined;
+      try { return JSON.parse(JSON.stringify(v)); } catch (e) { return v; }
+    };
+    const bytesToB64 = (buf) => {
+      const b = new Uint8Array(buf);
+      let s = '';
+      for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+      return btoa(s);
+    };
+    const b64ToBytes = (b64) => {
+      const s = atob(b64);
+      const b = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+      return b;
+    };
+    const impl = {};
+
+    /* ---------- values (synchronous cache, async persistence) ---------- */
+    let values = {};
+    const listeners = new Map();
+    let listenerSeq = 1;
+    const ready = (ctx.needValues && hasBridge)
+      ? send('vals:get').then((r) => { values = (r && r.values) || {}; }).catch(() => {})
+      : Promise.resolve();
+    const has = (k) => Object.prototype.hasOwnProperty.call(values, k);
+    const fire = (k, o, n) => {
+      listeners.forEach((l) => {
+        if (l.key === k) { try { l.cb(k, o, n, false); } catch (e) { console.error(e); } }
+      });
+    };
+    impl.getvalue = (k, d) => (has(k) ? clone(values[k]) : d);
+    impl.setvalue = (k, v) => {
+      const o = values[k];
+      values[k] = clone(v);
+      fire(k, o, values[k]);
+      send('vals:set', { k: k, v: values[k] }).catch(() => {});
+    };
+    impl.deletevalue = (k) => {
+      if (!has(k)) return;
+      const o = values[k];
+      delete values[k];
+      fire(k, o, undefined);
+      send('vals:del', { k: k }).catch(() => {});
+    };
+    impl.listvalues = () => Object.keys(values);
+    impl.getvalues = (keys) => {
+      const out = {};
+      if (Array.isArray(keys)) keys.forEach((k) => { out[k] = impl.getvalue(k); });
+      else if (keys && typeof keys === 'object') Object.keys(keys).forEach((k) => { out[k] = impl.getvalue(k, keys[k]); });
+      else Object.keys(values).forEach((k) => { out[k] = clone(values[k]); });
+      return out;
+    };
+    impl.setvalues = (obj) => { Object.keys(obj || {}).forEach((k) => impl.setvalue(k, obj[k])); };
+    impl.deletevalues = (keys) => { (keys || []).forEach((k) => impl.deletevalue(k)); };
+    impl.addvaluechangelistener = (key, cb) => { const id = listenerSeq++; listeners.set(id, { key: key, cb: cb }); return id; };
+    impl.removevaluechangelistener = (id) => { listeners.delete(id); };
+
+    /* ---------- GM_xmlhttpRequest (cross-origin, performed by the extension) ---------- */
+    impl.xmlhttprequest = (d) => {
+      d = d || {};
+      const reqId = 'x' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      let finished = false;
+      const call = (name, arg) => {
+        const f = d[name];
+        if (typeof f === 'function') { try { f.call(d, arg); } catch (e) { console.error(e); } }
+      };
+      const fail = (kind, message, url) => {
+        const e = {
+          readyState: 4, status: 0, statusText: '', responseText: '', response: null,
+          responseHeaders: '', finalUrl: url || d.url, context: d.context, error: message
+        };
+        if (kind === 'timeout') call('ontimeout', e);
+        else if (kind === 'abort') call('onabort', e);
+        else call('onerror', e);
+        call('onloadend', e);
+      };
+      (async () => {
+        let url;
+        try { url = new URL(d.url, location.href).href; }
+        catch (e) { finished = true; fail('error', 'Invalid URL', d.url); return; }
+
+        const headers = Object.assign({}, d.headers || {});
+        if (d.user) headers['Authorization'] = 'Basic ' + btoa(d.user + ':' + (d.password || ''));
+        const req = {
+          reqId: reqId, url: url, method: String(d.method || 'GET').toUpperCase(), headers: headers,
+          anonymous: !!d.anonymous, timeout: d.timeout | 0, redirect: d.redirect || 'follow',
+          responseType: d.responseType || ''
+        };
+        const data = d.data;
+        if (data !== undefined && data !== null) {
+          if (typeof data === 'string') {
+            req.body = data;
+          } else {
+            try {
+              const wrapped = new Response(data);
+              const ct = wrapped.headers.get('content-type');
+              req.bodyB64 = bytesToB64(await wrapped.arrayBuffer());
+              const hasCT = Object.keys(headers).some((h) => h.toLowerCase() === 'content-type');
+              if (ct && !hasCT) headers['Content-Type'] = ct;
+            } catch (e) { finished = true; fail('error', 'Unsupported request body', url); return; }
+          }
+        }
+
+        let r;
+        try { r = await send('xhr', req); }
+        catch (e) { r = { ok: false, kind: 'error', error: String((e && e.message) || e) }; }
+        if (finished) return;
+        finished = true;
+
+        if (!r || !r.ok) { fail(r && r.kind, (r && r.error) || 'Network error', url); return; }
+
+        const raw = r.res;
+        const rt = req.responseType;
+        let response;
+        let responseText = '';
+        if (rt === 'arraybuffer') response = b64ToBytes(raw.b64).buffer;
+        else if (rt === 'blob') response = new Blob([b64ToBytes(raw.b64)], { type: raw.mime || '' });
+        else {
+          responseText = raw.text || '';
+          if (rt === 'json') { try { response = JSON.parse(responseText); } catch (e) { response = null; } }
+          else response = responseText;
+        }
+        const res = {
+          readyState: 4, status: raw.status, statusText: raw.statusText, responseHeaders: raw.responseHeaders,
+          finalUrl: raw.finalUrl, response: response, responseText: responseText, responseXML: null, context: d.context
+        };
+        const size = (raw.text ? raw.text.length : 0);
+        call('onreadystatechange', res);
+        call('onprogress', Object.assign({ lengthComputable: true, loaded: size, total: size }, res));
+        call('onload', res);
+        call('onloadend', res);
+      })();
+      return {
+        abort: () => {
+          if (finished) return;
+          finished = true;
+          send('xhr-abort', { reqId: reqId }).catch(() => {});
+          fail('abort', 'Aborted', d.url);
+        }
+      };
+    };
+    impl.xmlhttprequestp = (d) => {
+      let ctl;
+      const p = new Promise((resolve, reject) => {
+        d = d || {};
+        const wrap = (name, fn) => {
+          const orig = d[name];
+          return function (r) { if (typeof orig === 'function') orig.call(d, r); fn(r); };
+        };
+        ctl = impl.xmlhttprequest(Object.assign({}, d, {
+          onload: wrap('onload', resolve),
+          onerror: wrap('onerror', reject),
+          ontimeout: wrap('ontimeout', reject),
+          onabort: wrap('onabort', reject)
+        }));
+      });
+      p.abort = ctl.abort;
+      return p;
+    };
+
+    /* ---------- notifications, tabs, downloads ---------- */
+    impl.notification = (a, b, c, e) => {
+      let o = {};
+      if (a && typeof a === 'object') o = Object.assign({}, a);
+      else { o.text = a; o.title = b; o.image = c; o.onclick = e; }
+      return send('notify', {
+        title: String(o.title || ''), text: String(o.text || ''),
+        image: o.image ? String(o.image) : '', timeout: o.timeout | 0
+      }).catch(() => {});
+    };
+    impl.opentab = (url, opts) => {
+      const o = (typeof opts === 'boolean') ? { active: !opts } : (opts || {});
+      const tab = { closed: false, onclose: null, tabId: null, close: () => { if (tab.tabId != null) send('tab-close', { tabId: tab.tabId }).catch(() => {}); } };
+      let abs = url;
+      try { abs = new URL(url, location.href).href; } catch (e) {}
+      send('open-tab', { url: abs, active: o.active !== false && !o.background && !o.loadInBackground })
+        .then((r) => { if (r) tab.tabId = r.tabId; }).catch(() => {});
+      return tab;
+    };
+    impl.download = (a, b) => {
+      const o = (a && typeof a === 'object') ? a : { url: a, name: b };
+      const cb = (n, arg) => { if (typeof o[n] === 'function') { try { o[n](arg); } catch (e) { console.error(e); } } };
+      let abs = o.url;
+      try { abs = new URL(o.url, location.href).href; } catch (e) {}
+      send('download', { url: abs, name: o.name || '', saveAs: !!o.saveAs })
+        .then((r) => { if (r && r.ok) { cb('onload', {}); } else { cb('onerror', { error: 'not_succeeded', details: r && r.error }); } })
+        .catch((e) => cb('onerror', { error: 'not_succeeded', details: String(e && e.message) }));
+      return { abort: () => {} };
+    };
+
+    /* ---------- local helpers (no bridge needed) ---------- */
+    impl.log = function () { console.log.apply(console, arguments); };
+    impl.addstyle = (css) => {
+      const s = document.createElement('style');
+      s.textContent = String(css);
+      (document.head || document.documentElement).appendChild(s);
+      return s;
+    };
+    impl.addelement = (a, b, c) => {
+      let parent, tag, attrs;
+      if (typeof a === 'string') { tag = a; attrs = b || {}; parent = document.head || document.documentElement; }
+      else { parent = a; tag = b; attrs = c || {}; }
+      const el = document.createElement(tag);
+      Object.keys(attrs).forEach((k) => {
+        if (k === 'textContent') el.textContent = attrs[k];
+        else el.setAttribute(k, attrs[k]);
+      });
+      parent.appendChild(el);
+      return el;
+    };
+    impl.setclipboard = (text) => {
+      const s = String(text);
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = s;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+        (document.body || document.documentElement).appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        ta.remove();
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(s).catch(fallback);
+          return;
+        }
+      } catch (e) {}
+      fallback();
+    };
+    impl.getresourcetext = (name) => {
+      const r = ctx.resources && ctx.resources[name];
+      return r && typeof r.text === 'string' ? r.text : null;
+    };
+    impl.getresourceurl = (name) => {
+      const r = ctx.resources && ctx.resources[name];
+      return r ? r.dataUrl : null;
+    };
+
+    /* ---------- menu commands (small floating menu, top frame only) ---------- */
+    const commands = new Map();
+    let cmdSeq = 1;
+    let menuHost = null;
+    let menuList = null;
+    const renderMenu = () => {
+      if (window.top !== window) return;
+      if (!commands.size) { if (menuHost) menuHost.style.display = 'none'; return; }
+      if (!menuHost) {
+        menuHost = document.createElement('div');
+        menuHost.setAttribute('data-corsair-gm-menu', ctx.id);
+        const root = menuHost.attachShadow({ mode: 'open' });
+        const slot = document.querySelectorAll('[data-corsair-gm-menu]').length;
+        root.innerHTML =
+          '<style>' +
+          ':host{all:initial}' +
+          '.pill{position:fixed;right:12px;bottom:' + (12 + slot * 38) + 'px;z-index:2147483647;font:12px/1 system-ui,sans-serif;direction:ltr}' +
+          'button{all:unset;cursor:pointer;background:#2b1b4d;color:#fff;border:1px solid #7c5cff;border-radius:999px;padding:7px 11px;opacity:.55}' +
+          'button:hover{opacity:1}' +
+          '.list{display:none;position:absolute;right:0;bottom:34px;background:#1b1230;border:1px solid #7c5cff;border-radius:10px;padding:6px;min-width:190px;max-width:320px}' +
+          '.pill.open .list{display:block}' +
+          '.item{display:block;width:auto;padding:7px 9px;border-radius:6px;color:#fff;opacity:1;background:none;border:0;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+          '.item:hover{background:#3a2766}' +
+          '</style><div class="pill"><div class="list"></div><button class="toggle"></button></div>';
+        const pill = root.querySelector('.pill');
+        menuList = root.querySelector('.list');
+        root.querySelector('.toggle').addEventListener('click', () => pill.classList.toggle('open'));
+        (document.body || document.documentElement).appendChild(menuHost);
+      }
+      menuHost.style.display = '';
+      const root = menuHost.shadowRoot;
+      root.querySelector('.toggle').textContent = '\u{1F9E9} ' + (ctx.name || 'Script') + ' (' + commands.size + ')';
+      menuList.textContent = '';
+      commands.forEach((c) => {
+        const b = document.createElement('button');
+        b.className = 'item';
+        b.textContent = c.name;
+        b.addEventListener('click', () => {
+          root.querySelector('.pill').classList.remove('open');
+          try { c.fn(); } catch (e) { console.error(e); }
+        });
+        menuList.appendChild(b);
+      });
+    };
+    impl.registermenucommand = (name, fn) => {
+      const id = cmdSeq++;
+      commands.set(id, { name: String(name), fn: fn });
+      const go = () => { try { renderMenu(); } catch (e) { console.error(e); } };
+      if (document.body) go(); else document.addEventListener('DOMContentLoaded', go, { once: true });
+      return id;
+    };
+    impl.unregistermenucommand = (id) => { commands.delete(id); try { renderMenu(); } catch (e) {} };
+
+    return { impl: impl, ready: ready };
+  }
+
+  /** Grants that need the extension bridge (and therefore the isolated user-script world). */
+  const BRIDGE_KEYS = new Set([
+    'getvalue', 'setvalue', 'deletevalue', 'listvalues', 'getvalues', 'setvalues', 'deletevalues',
+    'addvaluechangelistener', 'removevaluechangelistener',
+    'xmlhttprequest', 'notification', 'opentab', 'download'
+  ]);
+  const VALUE_KEYS = new Set([
+    'getvalue', 'setvalue', 'deletevalue', 'listvalues', 'getvalues', 'setvalues', 'deletevalues',
+    'addvaluechangelistener', 'removevaluechangelistener'
+  ]);
+
+  // [normalised key, GM_ name, GM. name]
+  const GM_API = [
+    ['getvalue', 'GM_getValue', 'getValue'], ['setvalue', 'GM_setValue', 'setValue'],
+    ['deletevalue', 'GM_deleteValue', 'deleteValue'], ['listvalues', 'GM_listValues', 'listValues'],
+    ['getvalues', 'GM_getValues', 'getValues'], ['setvalues', 'GM_setValues', 'setValues'],
+    ['deletevalues', 'GM_deleteValues', 'deleteValues'],
+    ['addvaluechangelistener', 'GM_addValueChangeListener', 'addValueChangeListener'],
+    ['removevaluechangelistener', 'GM_removeValueChangeListener', 'removeValueChangeListener'],
+    ['xmlhttprequest', 'GM_xmlhttpRequest', 'xmlHttpRequest'],
+    ['notification', 'GM_notification', 'notification'], ['opentab', 'GM_openInTab', 'openInTab'],
+    ['download', 'GM_download', 'download'], ['setclipboard', 'GM_setClipboard', 'setClipboard'],
+    ['addstyle', 'GM_addStyle', 'addStyle'], ['addelement', 'GM_addElement', 'addElement'],
+    ['log', 'GM_log', 'log'],
+    ['registermenucommand', 'GM_registerMenuCommand', 'registerMenuCommand'],
+    ['unregistermenucommand', 'GM_unregisterMenuCommand', 'unregisterMenuCommand'],
+    ['getresourcetext', 'GM_getResourceText', 'getResourceText'],
+    ['getresourceurl', 'GM_getResourceURL', 'getResourceUrl']
+  ];
+
+  function grantedKeys(meta) {
+    const out = new Set();
+    for (const g of (meta.grant || [])) {
+      const m = /^GM[._](\w+)$/i.exec(g);
+      if (m) out.add(m[1].toLowerCase());
+    }
+    return out;
+  }
+
+  /** True when the script uses GM_* functions that need the extension bridge. */
+  function needsBridge(meta) {
+    for (const k of grantedKeys(meta)) if (BRIDGE_KEYS.has(k)) return true;
+    return false;
+  }
+
+  /* ============================================================
      SOURCE BUILDER
      ============================================================ */
   function runAtToChrome(runAt) {
@@ -339,13 +691,34 @@ const CorsairUserScripts = (() => {
       );
     }
 
-    parts.push(
+    const world = chooseWorld(meta);
+    const keys = grantedKeys(meta);
+    const resources = {};
+    for (const [name, r] of Object.entries(record.resources || {})) {
+      resources[name] = { text: typeof r.text === 'string' ? r.text : null, dataUrl: r.dataUrl || '' };
+    }
+    const ctx = {
+      id: record.id,
+      name: meta.name,
+      bridge: world === 'USER_SCRIPT',
+      wantsBridge: needsBridge(meta),
+      needValues: Array.from(keys).some(k => VALUE_KEYS.has(k)),
+      resources
+    };
+
+    let prelude =
       'const GM_info=' + JSON.stringify(info) + ';' +
       'const unsafeWindow=window;' +
-      'const GM_log=function(){console.log.apply(console,arguments)};' +
-      'const GM_addStyle=function(css){var s=document.createElement("style");s.textContent=String(css);(document.head||document.documentElement).appendChild(s);return s};' +
-      'const GM={info:GM_info,log:GM_log,addStyle:function(c){return Promise.resolve(GM_addStyle(c))}};'
-    );
+      'const __gm=(' + gmRuntime.toString() + ')(' + JSON.stringify(ctx) + ');' +
+      'await __gm.ready;' +
+      'const GM={info:GM_info};';
+    for (const [key, gmName, dotName] of GM_API) {
+      if (!keys.has(key)) continue;
+      prelude += 'const ' + gmName + '=__gm.impl.' + key + ';';
+      if (key === 'xmlhttprequest') prelude += 'GM.' + dotName + '=__gm.impl.xmlhttprequestp;';
+      else prelude += 'GM.' + dotName + '=function(){var a=arguments;return Promise.resolve().then(function(){return __gm.impl.' + key + '.apply(null,a)})};';
+    }
+    parts.push(prelude);
 
     // @require libraries first, then the user's own code
     const reqs = record.requires || {};
@@ -757,7 +1130,7 @@ const CorsairUserScripts = (() => {
     await withLock(async () => {
       const ids = (await readIndex()).filter(x => x !== id);
       await writeIndex(ids);
-      await chrome.storage.local.remove(REC_PREFIX + id);
+      await chrome.storage.local.remove([REC_PREFIX + id, VALS_PREFIX + id]);
     });
     await sync();
     return { ok: true };
@@ -780,6 +1153,169 @@ const CorsairUserScripts = (() => {
     try { code = await fetchText(u); }
     catch (e) { return { ok: false, error: `Download failed: ${e && e.message}` }; }
     return save({ code, sourceUrl: u });
+  }
+
+  /* ============================================================
+     GM BRIDGE (extension side)
+     Messages arrive from user-script worlds via
+     chrome.runtime.onUserScriptMessage (wired up in background.js).
+     ============================================================ */
+  const VALS_PREFIX = 'cus:vals:';
+  const _valChains = new Map();
+  const _xhrControllers = new Map();
+  const _openedTabs = new Set();
+
+  function withValsLock(id, fn) {
+    const prev = _valChains.get(id) || Promise.resolve();
+    const run = prev.then(() => fn());
+    const tail = run.catch(() => {});
+    _valChains.set(id, tail);
+    tail.then(() => { if (_valChains.get(id) === tail) _valChains.delete(id); });
+    return run;
+  }
+
+  async function readVals(id) {
+    const k = VALS_PREFIX + id;
+    const r = await chrome.storage.local.get(k);
+    return r[k] && typeof r[k] === 'object' ? r[k] : {};
+  }
+
+  function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  async function gmXhr(req) {
+    const ctrl = new AbortController();
+    _xhrControllers.set(req.reqId, ctrl);
+    let timedOut = false;
+    let timer = null;
+    if (req.timeout > 0) timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, req.timeout);
+    try {
+      const init = {
+        method: req.method || 'GET',
+        headers: req.headers || {},
+        credentials: req.anonymous ? 'omit' : 'include',
+        redirect: req.redirect === 'manual' || req.redirect === 'error' ? req.redirect : 'follow',
+        cache: 'no-store',
+        signal: ctrl.signal
+      };
+      if (init.method !== 'GET' && init.method !== 'HEAD') {
+        if (req.bodyB64) init.body = base64ToBytes(req.bodyB64);
+        else if (typeof req.body === 'string') init.body = req.body;
+      }
+      const r = await fetch(req.url, init);
+      const responseHeaders = Array.from(r.headers.entries()).map(([k, v]) => `${k}: ${v}`).join('\r\n') + '\r\n';
+      const mime = (r.headers.get('content-type') || '').split(';')[0].trim();
+      const res = { status: r.status, statusText: r.statusText, responseHeaders, finalUrl: r.url || req.url, mime };
+      if (req.responseType === 'arraybuffer' || req.responseType === 'blob') {
+        res.b64 = bytesToBase64(await r.arrayBuffer());
+      } else {
+        res.text = await r.text();
+      }
+      return { ok: true, res };
+    } catch (e) {
+      if (timedOut) return { ok: false, kind: 'timeout', error: 'Timeout' };
+      if (ctrl.__userAbort) return { ok: false, kind: 'abort', error: 'Aborted' };
+      return { ok: false, kind: 'error', error: (e && e.message) || 'Network error' };
+    } finally {
+      if (timer) clearTimeout(timer);
+      _xhrControllers.delete(req.reqId);
+    }
+  }
+
+  function safeDownloadName(name) {
+    return String(name || '')
+      .replace(/[\\/]+/g, '/')
+      .split('/')
+      .filter(seg => seg && seg !== '.' && seg !== '..')
+      .join('/')
+      .replace(/[<>:"|?*\x00-\x1f]/g, '_')
+      .slice(0, 200);
+  }
+
+  /** Handle one message from a user script. Returns the response object. */
+  async function handleGmMessage(msg, sender) {
+    if (!msg || msg.__cu !== 1 || typeof msg.id !== 'string' || !msg.id.startsWith(REG_PREFIX)) {
+      return { ok: false, error: 'bad-message' };
+    }
+    const id = msg.id;
+    const data = msg.data || {};
+
+    switch (msg.op) {
+      case 'vals:get':
+        return { ok: true, values: await readVals(id) };
+
+      case 'vals:set':
+        return withValsLock(id, async () => {
+          const vals = await readVals(id);
+          vals[String(data.k)] = data.v;
+          await chrome.storage.local.set({ [VALS_PREFIX + id]: vals });
+          return { ok: true };
+        });
+
+      case 'vals:del':
+        return withValsLock(id, async () => {
+          const vals = await readVals(id);
+          delete vals[String(data.k)];
+          await chrome.storage.local.set({ [VALS_PREFIX + id]: vals });
+          return { ok: true };
+        });
+
+      case 'xhr':
+        return gmXhr(data);
+
+      case 'xhr-abort': {
+        const c = _xhrControllers.get(data.reqId);
+        if (c) { c.__userAbort = true; c.abort(); }
+        return { ok: true };
+      }
+
+      case 'notify': {
+        const nid = 'gm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        await chrome.notifications.create(nid, {
+          type: 'basic',
+          iconUrl: data.image || chrome.runtime.getURL('icons/icon128.png'),
+          title: data.title || 'Userscript',
+          message: data.text || ' '
+        });
+        if (data.timeout > 0) setTimeout(() => { try { chrome.notifications.clear(nid); } catch {} }, data.timeout);
+        return { ok: true };
+      }
+
+      case 'open-tab': {
+        const opts = { url: String(data.url || ''), active: data.active !== false };
+        if (sender && sender.tab && sender.tab.id != null) opts.openerTabId = sender.tab.id;
+        const tab = await chrome.tabs.create(opts);
+        if (tab && tab.id != null) _openedTabs.add(tab.id);
+        return { ok: true, tabId: tab && tab.id };
+      }
+
+      case 'tab-close': {
+        if (_openedTabs.has(data.tabId)) {
+          _openedTabs.delete(data.tabId);
+          try { await chrome.tabs.remove(data.tabId); } catch {}
+        }
+        return { ok: true };
+      }
+
+      case 'download': {
+        try {
+          const opts = { url: String(data.url || ''), saveAs: Boolean(data.saveAs) };
+          const name = safeDownloadName(data.name);
+          if (name) opts.filename = name;
+          const downloadId = await chrome.downloads.download(opts);
+          return { ok: true, downloadId };
+        } catch (e) {
+          return { ok: false, error: (e && e.message) || 'download failed' };
+        }
+      }
+
+      default:
+        return { ok: false, error: 'unknown-op' };
+    }
   }
 
   /* ============================================================
@@ -858,7 +1394,10 @@ const CorsairUserScripts = (() => {
     buildPlan,
     buildSource,
     chooseWorld,
-    needsGM,
+    needsBridge,
+    needsGM: needsBridge,
+    handleGmMessage,
+    gmRuntime,
     legacyToUserscript,
     checkAvailability,
     syncRegistrations,

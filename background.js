@@ -301,6 +301,15 @@ if (typeof CorsairUserScripts !== 'undefined') {
   CorsairUserScripts.init().catch(() => {});
   chrome.runtime.onInstalled.addListener(() => { CorsairUserScripts.init().then(() => CorsairUserScripts.sync()).catch(() => {}); });
   chrome.runtime.onStartup.addListener(() => { CorsairUserScripts.sync().catch(() => {}); });
+
+  // GM_* bridge: messages sent from the isolated user-script world
+  if (chrome.runtime.onUserScriptMessage) {
+    chrome.runtime.onUserScriptMessage.addListener((msg, sender, sendResponse) => {
+      CorsairUserScripts.handleGmMessage(msg, sender)
+        .then(sendResponse, (e) => sendResponse({ ok: false, error: (e && e.message) || 'error' }));
+      return true;
+    });
+  }
 }
 
 /* ============================================================

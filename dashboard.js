@@ -252,7 +252,6 @@ function buildLangMenu() {
       renderSettings();
       renderRecentActivity();
       renderAnalytics();
-      renderNotifications();
       renderApiStatus();
       const titleEl = $('viewTitle');
       if (titleEl) titleEl.textContent = getViewTitle(state.activeView);
@@ -288,124 +287,6 @@ document.addEventListener('click', (e) => {
   menu.classList.remove('open');
 });
 
-/* ============================================================
-   NOTIFICATION CENTER
-   ============================================================ */
-const NOTIF_LAST_SEEN_KEY = 'notifCenterLastSeen';
-let _notifLastSeen = 0;
-
-async function loadNotifLastSeen() {
-  try {
-    const res = await chrome.storage.local.get(NOTIF_LAST_SEEN_KEY);
-    _notifLastSeen = Number(res?.[NOTIF_LAST_SEEN_KEY]) || 0;
-  } catch { _notifLastSeen = 0; }
-}
-
-function saveNotifLastSeen(ts) {
-  _notifLastSeen = ts;
-  try { chrome.storage.local.set({ [NOTIF_LAST_SEEN_KEY]: ts }); } catch {}
-}
-
-function notifRelativeTime(ts) {
-  const diffMs = Date.now() - Number(ts || 0);
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return t('notif.justNow', 'Just now');
-  if (min < 60) return t('notif.minutesAgo', '{n}m ago').replace('{n}', String(min));
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return t('notif.hoursAgo', '{n}h ago').replace('{n}', String(hr));
-  const day = Math.floor(hr / 24);
-  return t('notif.daysAgo', '{n}d ago').replace('{n}', String(day));
-}
-
-function notifNotableEvents() {
-  return state.events
-    .filter(e => e.severity === 'high' || e.severity === 'medium')
-    .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
-}
-
-function renderNotifications() {
-  const notable = notifNotableEvents();
-  const unread = notable.filter(e => Number(e.timestamp) > _notifLastSeen).length;
-
-  const badge = $('notifBadge');
-  if (badge) {
-    if (unread > 0) {
-      badge.textContent = unread > 99 ? '99+' : String(unread);
-      badge.hidden = false;
-      badge.style.display = 'inline-block';
-    } else {
-      badge.hidden = true;
-      badge.style.display = 'none';
-    }
-  }
-
-  const list = $('notifList');
-  if (!list) return;
-  const top = notable.slice(0, 20);
-  if (!top.length) {
-    list.innerHTML = `<div class="empty" style="padding:20px 10px;">${escapeHtml(t('notif.empty', "You're all caught up — no recent alerts."))}</div>`;
-    return;
-  }
-  list.innerHTML = top.map(e => {
-    const sev = e.severity || 'info';
-    const icon = TYPE_ICONS[e.type] || (sev === 'high' ? '⚠️' : '🔔');
-    const title = `${analyticsTypeLabel(e.type)}${e.domain ? ` · ${e.domain}` : ''}`;
-    const meta = `${notifRelativeTime(e.timestamp)}${e.destination ? ` → ${e.destination}` : ''}`;
-    return `
-      <div class="notif-item sev-${escapeHtml(sev)}">
-        <div class="notif-item-icon">${icon}</div>
-        <div class="notif-item-body">
-          <div class="notif-item-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
-          <div class="notif-item-meta" title="${escapeHtml(meta)}">${escapeHtml(meta)}</div>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-function closeNotifPanel() {
-  const panel = $('notifPanel');
-  if (panel) panel.classList.remove('open');
-}
-
-function markNotificationsRead() {
-  saveNotifLastSeen(Date.now() + 1);
-  renderNotifications();
-}
-
-safeOn('notifBell', 'click', (e) => {
-  e.stopPropagation();
-  const panel = $('notifPanel');
-  if (!panel) return;
-  const opening = !panel.classList.contains('open');
-  panel.classList.toggle('open', opening);
-  if (opening) markNotificationsRead();
-});
-
-safeOn('notifMarkAll', 'click', (e) => {
-  e.stopPropagation();
-  markNotificationsRead();
-  try {
-    console.debug('[Corsair notif] marked read; _notifLastSeen =',
-      _notifLastSeen,
-      '| events =', state.events.length,
-      '| notable =', notifNotableEvents().length);
-  } catch {}
-});
-
-safeOn('notifViewAll', 'click', (e) => {
-  try { e.preventDefault(); } catch {}
-  try { e.stopPropagation(); } catch {}
-  closeNotifPanel();
-  switchView('activity');
-});
-
-document.addEventListener('click', (e) => {
-  const panel = $('notifPanel');
-  if (!panel || !panel.classList.contains('open')) return;
-  if (e.target.closest && e.target.closest('#notifCenter')) return;
-  closeNotifPanel();
-});
-
 if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area !== 'local' || !changes.activityLog) return;
@@ -415,7 +296,6 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
       renderRecentActivity();
       renderEvents();
       renderAnalytics();
-      renderNotifications();
     } catch {}
   });
 }
@@ -498,6 +378,81 @@ const USERSCRIPT_TEMPLATE = [
   '})();',
   ''
 ].join('\n');
+
+const USERSCRIPT_DEMOS = {
+  hello: [
+    '// ==UserScript==',
+    '// @name         Demo 1: Hello banner',
+    '// @namespace    https://corsair.local/demo',
+    '// @version      1.0',
+    '// @description  Shows a purple banner on example.com to prove userscripts work',
+    '// @match        https://example.com/*',
+    '// @grant        none',
+    '// ==/UserScript==',
+    '',
+    "const bar = document.createElement('div');",
+    "bar.textContent = '✅ Corsair userscripts are working!';",
+    "bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;padding:10px;text-align:center;background:#6d28d9;color:#fff;font:600 15px system-ui';",
+    'document.documentElement.appendChild(bar);',
+    ''
+  ].join('\n'),
+  counter: [
+    '// ==UserScript==',
+    '// @name         Demo 2: Visit counter',
+    '// @namespace    https://corsair.local/demo',
+    '// @version      1.0',
+    '// @description  Counts your visits with GM_setValue and adds a menu command',
+    '// @match        https://example.com/*',
+    '// @grant        GM_getValue',
+    '// @grant        GM_setValue',
+    '// @grant        GM_addStyle',
+    '// @grant        GM_registerMenuCommand',
+    '// ==/UserScript==',
+    '',
+    "const visits = GM_getValue('visits', 0) + 1;",
+    "GM_setValue('visits', visits);",
+    "GM_addStyle('#cu-visits{position:fixed;top:56px;left:12px;z-index:2147483647;padding:8px 12px;border-radius:8px;background:#111;color:#fff;font:14px system-ui}');",
+    "const el = document.createElement('div');",
+    "el.id = 'cu-visits';",
+    "el.textContent = 'Visit #' + visits + ' (saved between page loads)';",
+    'document.body.appendChild(el);',
+    "GM_registerMenuCommand('Reset counter', () => { GM_setValue('visits', 0); el.textContent = 'Counter reset'; });",
+    ''
+  ].join('\n'),
+  xhr: [
+    '// ==UserScript==',
+    '// @name         Demo 3: Cross-site request',
+    '// @namespace    https://corsair.local/demo',
+    '// @version      1.0',
+    '// @description  Calls another website with GM_xmlhttpRequest (no CORS limits)',
+    '// @match        https://example.com/*',
+    '// @grant        GM_xmlhttpRequest',
+    '// @connect      api.github.com',
+    '// ==/UserScript==',
+    '',
+    "const box = document.createElement('div');",
+    "box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;padding:10px;text-align:center;background:#065f46;color:#fff;font:15px system-ui';",
+    "box.textContent = 'Loading from api.github.com…';",
+    'document.documentElement.appendChild(box);',
+    'GM_xmlhttpRequest({',
+    "  method: 'GET',",
+    "  url: 'https://api.github.com/zen',",
+    "  onload: (r) => { box.textContent = 'GitHub says: ' + r.responseText; },",
+    "  onerror: () => { box.textContent = 'Request failed'; box.style.background = '#991b1b'; }",
+    '});',
+    ''
+  ].join('\n')
+};
+
+async function installUserscriptDemo(key) {
+  const code = USERSCRIPT_DEMOS[key];
+  if (!code) return;
+  const res = await send({ type: 'us-save', code });
+  if (reportSaveResult(res)) {
+    showToast('Demo installed. Now open example.com in a new tab.');
+    await refresh();
+  }
+}
 
 function renderUserscriptStatus() {
   const el = $('usStatus');
@@ -2345,7 +2300,6 @@ async function refresh() {
   renderNewStats();
   renderRecentActivity();
   renderAnalytics();
-  renderNotifications();
   refreshActivityTypeFilter();
   renderEvents();
   renderEvidence();
@@ -3371,6 +3325,8 @@ safeOn('blockedDomainBtn', 'click', addBlockedDomain);
 safeOn('blockedDomainInput', 'keydown', e => { if (e.key === 'Enter') addBlockedDomain(); });
 
 safeOn('scriptNewBtn', 'click', () => openEditor(null));
+document.querySelectorAll('[data-us-demo]').forEach(btn => btn.addEventListener('click', () => installUserscriptDemo(btn.dataset.usDemo)));
+safeOn('scriptOpenExample', 'click', () => chrome.tabs.create({ url: 'https://example.com/' }));
 safeOn('scriptImportBtn', 'click', importUserscriptFromUrl);
 safeOn('scriptImportUrl', 'keydown', e => { if (e.key === 'Enter') importUserscriptFromUrl(); });
 safeOn('scriptImportFileBtn', 'click', () => { const f = $('scriptImportFile'); if (f) f.click(); });
@@ -3756,7 +3712,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
 (async () => {
   initNavigation();
   initAnalytics();
-  await loadNotifLastSeen();
   await initLanguage();
   await initTheme();
   await refresh();
