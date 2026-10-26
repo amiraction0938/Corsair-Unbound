@@ -22,6 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimum Chrome version is now 120. New permissions: `userScripts`, `unlimitedStorage`.
 - Legacy per-domain scripts are migrated automatically to `@match *://host/*` + `*://*.host/*` userscripts (the old data is left untouched).
 
+### Fixed
+- **Userscript list could not be scrolled** once it filled up: the cards were shrinking inside the flex column instead of overflowing. The list now scrolls inside a bounded height with a visible scrollbar, and a just-saved script is scrolled into view and highlighted.
+- Editor: closing with Esc, the X button or a click on the backdrop silently discarded unsaved code. It now asks first. The Tab key no longer breaks Ctrl+Z, and the unsaved marker clears when you undo back to the saved text.
+- Userscripts that redeclare `unsafeWindow`, `GM_info` or a `GM_*` helper with `var`/`function` crashed with a SyntaxError; these names are now function parameters.
+- Importing two scripts without an `@name` could overwrite each other; scripts are now matched by source URL first and by `@name`/`@namespace` only when the header really has a name. Re-importing the same URL updates in place even if the name changed.
+- Simplified the registration sync (single mutex) and added a test for rapid consecutive saves.
+- After turning on "Allow User Scripts", returning to the dashboard re-checks automatically and registers your scripts, without a manual reload.
+
+### Added (dashboard)
+- Each userscript card shows its target domains as tidy colour-coded badges in the top-right corner ("All sites", "Local files" and regex rules get their own style; extra domains collapse into a "+N" badge with a tooltip).
+- Search box and script counter above the list; scripts are sorted alphabetically.
+
 ### Removed
 - The notification bell (🔔) in the dashboard header and its panel.
 

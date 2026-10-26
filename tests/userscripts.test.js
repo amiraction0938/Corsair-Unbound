@@ -427,3 +427,53 @@ describe('CorsairUserScripts — GM_* API end to end', () => {
     expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:get', id: script.id }, {})).values).toEqual({});
   });
 });
+
+describe('CorsairUserScripts — regression tests for fixed bugs', () => {
+  beforeEach(() => {
+    installChromeMock();
+    installUserScriptsMock();
+    globalThis.fetch = async () => ({ ok: true, text: async () => '', headers: { get: () => '' }, arrayBuffer: async () => new ArrayBuffer(0) });
+    loadCore('core/userscripts.js');
+  });
+
+  it('userscripts can redeclare unsafeWindow / GM_info / GM_* with var or function', async () => {
+    const code = '// ==UserScript==\n// @name Redecl\n// @match *://*/*\n// @grant GM_addStyle\n// ==/UserScript==\n' +
+      'var unsafeWindow = window.unsafeWindow || window;\nvar GM_info = GM_info || {};\nfunction GM_addStyle(c){ return "mine"; }\nconsole.log("ok", typeof unsafeWindow, GM_addStyle("x"));';
+    const { meta } = CorsairUserScripts.parseMetadata(code);
+    const src = CorsairUserScripts.buildSource({ id: 'cu-r', code, meta }, CorsairUserScripts.buildPlan(meta));
+    const logs = [];
+    const ctx = vm.createContext({
+      location: { href: 'https://x.com/' }, window: {}, console: { log: (...a) => logs.push(a.join(' ')), warn() {}, error: (...a) => logs.push('ERR ' + a.join(' ')) },
+      document: { body: {}, head: { appendChild() {} }, documentElement: {}, createElement: () => ({}), addEventListener() {} },
+      MutationObserver: class { observe() {} disconnect() {} }, URL, setTimeout
+    });
+    vm.runInContext(src, ctx);
+    await new Promise(r => setTimeout(r, 30));
+    expect(logs.join('\n')).not.toMatch(/ERR/);
+    expect(logs).toContain('ok object mine');
+  });
+
+  it('two header-less scripts imported from different URLs do not overwrite each other', async () => {
+    await CorsairUserScripts.save({ code: 'console.log(1)', sourceUrl: 'https://a.test/one.user.js' });
+    await CorsairUserScripts.save({ code: 'console.log(2)', sourceUrl: 'https://a.test/two.user.js' });
+    expect(await CorsairUserScripts.list()).toHaveLength(2);
+  });
+
+  it('re-importing the same URL updates in place even if the @name changed', async () => {
+    const v1 = '// ==UserScript==\n// @name Old name\n// @match *://*/*\n// ==/UserScript==';
+    const v2 = '// ==UserScript==\n// @name New name\n// @match *://*/*\n// ==/UserScript==';
+    await CorsairUserScripts.save({ code: v1, sourceUrl: 'https://a.test/s.user.js' });
+    await CorsairUserScripts.save({ code: v2, sourceUrl: 'https://a.test/s.user.js' });
+    const list = await CorsairUserScripts.list();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('New name');
+  });
+
+  it('rapid consecutive saves leave exactly the right registrations', async () => {
+    const mk = (n) => `// ==UserScript==\n// @name S${n}\n// @match https://s${n}.test/*\n// ==/UserScript==`;
+    await Promise.all([1, 2, 3, 4, 5].map(n => CorsairUserScripts.save({ code: mk(n) })));
+    expect(await CorsairUserScripts.list()).toHaveLength(5);
+    const regs = await chrome.userScripts.getScripts();
+    expect(regs).toHaveLength(5);
+  });
+});

@@ -24,6 +24,8 @@ const state = {
   userBlocked: [],
   customScripts: [],
   userscriptAvailability: null,
+  scriptQuery: '',
+  highlightScriptId: '',
   extensionId: '',
   safeDomainSearch: '',
   safeDomainSelected: new Set(),
@@ -491,26 +493,107 @@ function renderUserscriptStatus() {
   el.append(title, ol, btn);
 }
 
+/** Turn @match/@include rules into short, de-duplicated domain labels. */
+function usTargetDomains(patterns) {
+  const out = [];
+  const seen = new Set();
+  const add = (label, kind) => { if (!seen.has(label)) { seen.add(label); out.push({ label, kind }); } };
+  for (const raw of patterns || []) {
+    const p = String(raw || '').trim();
+    if (!p) continue;
+    if (p === '<all_urls>' || p === '*') { add('All sites', 'all'); continue; }
+    if (/^\/.+\/[a-z]*$/.test(p)) { add('Custom regex', 'regex'); continue; }
+    const m = /^([a-z*]+):\/\/([^/]*)/i.exec(p.replace(/^http\*:/i, '*:'));
+    if (!m) { add(p.length > 26 ? p.slice(0, 25) + '…' : p, 'other'); continue; }
+    if (m[1].toLowerCase() === 'file') { add('Local files', 'other'); continue; }
+    let host = m[2].toLowerCase();
+    if (host === '*' || host === '') { add('All sites', 'all'); continue; }
+    host = host.replace(/^\*\./, '');
+    add(host, 'domain');
+  }
+  return out;
+}
+
+function usDomainHue(label) {
+  let h = 0;
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+function usBuildDomainChips(item) {
+  const wrap = document.createElement('div');
+  wrap.className = 'script-domains';
+  const domains = usTargetDomains(item.matches);
+  if (!domains.length) return wrap;
+
+  const MAX = 3;
+  domains.slice(0, MAX).forEach(d => {
+    const chip = document.createElement('span');
+    chip.className = 'domain-chip' + (d.kind === 'domain' ? '' : ' ' + d.kind);
+    if (d.kind === 'domain') chip.style.setProperty('--h', String(usDomainHue(d.label)));
+    chip.title = d.label;
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = d.label;
+    chip.append(dot, label);
+    wrap.appendChild(chip);
+  });
+  if (domains.length > MAX) {
+    const more = document.createElement('span');
+    more.className = 'domain-chip more';
+    more.textContent = '+' + (domains.length - MAX);
+    more.title = domains.slice(MAX).map(d => d.label).join('\n');
+    wrap.appendChild(more);
+  }
+  return wrap;
+}
+
 function renderCustomScripts() {
   const box = $('scriptList');
   if (!box) return;
   box.innerHTML = '';
   renderUserscriptStatus();
 
-  if (!state.customScripts.length) {
+  const total = state.customScripts.length;
+  const countEl = $('scriptCount');
+
+  if (!total) {
+    if (countEl) countEl.textContent = '';
     box.innerHTML = '<div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>';
     return;
   }
 
-  for (const item of state.customScripts) {
+  const q = (state.scriptQuery || '').trim().toLowerCase();
+  const sorted = [...state.customScripts].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
+  const visible = sorted.filter(item => {
+    if (!q) return true;
+    const hay = [item.name, item.description, ...usTargetDomains(item.matches).map(d => d.label)].join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (countEl) countEl.textContent = q ? `${visible.length} / ${total}` : `${total} script${total === 1 ? '' : 's'}`;
+
+  if (!visible.length) {
+    box.innerHTML = '<div class="empty">No scripts match your search.</div>';
+    return;
+  }
+
+  let flashEl = null;
+
+  for (const item of visible) {
     const enabled = item.enabled !== false;
     const row = document.createElement('div');
     row.className = 'script-item' + (enabled ? '' : ' disabled');
+    row.dataset.id = item.id;
+    if (state.highlightScriptId && state.highlightScriptId === item.id) flashEl = row;
 
     const head = document.createElement('div');
     head.className = 'script-item-head';
 
     const left = document.createElement('div');
+    left.className = 'script-main';
     const title = document.createElement('div');
     title.className = 'script-host';
     title.textContent = item.name + (item.version ? '  v' + item.version : '');
@@ -578,7 +661,12 @@ function renderCustomScripts() {
     });
 
     actions.append(toggleLabel, editBtn, delBtn);
-    head.append(left, actions);
+
+    const side = document.createElement('div');
+    side.className = 'script-side';
+    side.append(usBuildDomainChips(item), actions);
+
+    head.append(left, side);
     row.appendChild(head);
 
     const preview = document.createElement('div');
@@ -592,11 +680,19 @@ function renderCustomScripts() {
 
     box.appendChild(row);
   }
+
+  // Bring a just-saved script into view (the list is alphabetical and scrollable)
+  if (flashEl) {
+    state.highlightScriptId = '';
+    flashEl.classList.add('flash');
+    setTimeout(() => { try { flashEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch {} }, 30);
+  }
 }
 
 function reportSaveResult(res, fallbackName) {
   if (!res?.ok) { showToast(res?.error || 'Failed to save', 'error'); return false; }
   const name = res.script?.name || fallbackName || 'script';
+  if (res.script?.id) state.highlightScriptId = res.script.id;
   if (res.sync && res.sync.ok === false) {
     showToast(`Saved "${name}", but it is not active yet: allow user scripts for this extension (see the notice above).`, 'error');
   } else if (res.sync?.errors?.length) {
@@ -643,7 +739,7 @@ async function openEditor(id) {
     name = res.script.name;
   }
 
-  state.editingScript = { id: id || null, code, originalCode: id ? code : '' };
+  state.editingScript = { id: id || null, code, originalCode: code, isNew: !id };
   const modal = $('editorModal');
   if (!modal) return;
 
@@ -655,7 +751,7 @@ async function openEditor(id) {
   if (hostEl) hostEl.textContent = name;
   if (fileEl) fileEl.textContent = name.replace(/[^a-z0-9.-]/gi, '_') + '.user.js';
   if (ta) { ta.value = code; ta.focus(); }
-  if (tab) tab.classList.toggle('dirty', !id);
+  if (tab) tab.classList.remove('dirty');
 
   updateLineNumbers();
   modal.hidden = false;
@@ -666,6 +762,17 @@ function closeEditor() {
   const modal = $('editorModal');
   if (modal) modal.hidden = true;
   state.editingScript = null;
+}
+
+function isEditorDirty() {
+  const ta = $('editorCode');
+  return !!(state.editingScript && ta && ta.value !== state.editingScript.originalCode);
+}
+
+/** User-initiated close (X button, backdrop click, Esc): never lose unsaved code silently. */
+function requestCloseEditor() {
+  if (isEditorDirty() && !confirm(t('scripts.discard', 'You have unsaved changes. Discard them?'))) return;
+  closeEditor();
 }
 
 async function saveEditor() {
@@ -708,11 +815,15 @@ safeOn('editorCode', 'keydown', (e) => {
   if (!ta) return;
   if (e.key === 'Tab') {
     e.preventDefault();
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const val = ta.value;
-    ta.value = val.substring(0, start) + '  ' + val.substring(end);
-    ta.selectionStart = ta.selectionEnd = start + 2;
+    // insertText keeps the browser's undo history (Ctrl+Z) intact
+    let done = false;
+    try { done = document.execCommand('insertText', false, '  '); } catch {}
+    if (!done) {
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+      ta.selectionStart = ta.selectionEnd = start + 2;
+    }
     updateLineNumbers();
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -721,16 +832,14 @@ safeOn('editorCode', 'keydown', (e) => {
   }
   if (e.key === 'Escape') {
     e.preventDefault();
-    closeEditor();
+    requestCloseEditor();
   }
 });
 
 safeOn('editorCode', 'input', () => {
   updateLineNumbers();
   const tab = $('editorTab');
-  if (tab && state.editingScript && $('editorCode').value !== state.editingScript.originalCode) {
-    tab.classList.add('dirty');
-  }
+  if (tab && state.editingScript) tab.classList.toggle('dirty', isEditorDirty());
 });
 
 safeOn('editorCode', 'scroll', () => {
@@ -740,10 +849,10 @@ safeOn('editorCode', 'scroll', () => {
 });
 
 safeOn('editorSave', 'click', saveEditor);
-safeOn('editorClose', 'click', closeEditor);
+safeOn('editorClose', 'click', requestCloseEditor);
 
 safeOn('editorModal', 'click', (e) => {
-  if (e.target && e.target.id === 'editorModal') closeEditor();
+  if (e.target && e.target.id === 'editorModal') requestCloseEditor();
 });
 
 /* ============================================================
@@ -3325,6 +3434,21 @@ safeOn('blockedDomainBtn', 'click', addBlockedDomain);
 safeOn('blockedDomainInput', 'keydown', e => { if (e.key === 'Enter') addBlockedDomain(); });
 
 safeOn('scriptNewBtn', 'click', () => openEditor(null));
+safeOn('scriptSearch', 'input', (e) => { state.scriptQuery = e.target.value || ''; renderCustomScripts(); });
+window.addEventListener('focus', async () => {
+  const av = state.userscriptAvailability;
+  if (!av || av.ok) return;
+  try {
+    const res = await send({ type: 'us-list' });
+    if (res?.availability?.ok) {
+      await send({ type: 'us-sync' });
+      state.userscriptAvailability = res.availability;
+      state.customScripts = res.scripts || [];
+      renderCustomScripts();
+      showToast('User scripts are now enabled ✓');
+    }
+  } catch {}
+});
 document.querySelectorAll('[data-us-demo]').forEach(btn => btn.addEventListener('click', () => installUserscriptDemo(btn.dataset.usDemo)));
 safeOn('scriptOpenExample', 'click', () => chrome.tabs.create({ url: 'https://example.com/' }));
 safeOn('scriptImportBtn', 'click', importUserscriptFromUrl);

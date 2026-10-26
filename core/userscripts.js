@@ -706,18 +706,23 @@ const CorsairUserScripts = (() => {
       resources
     };
 
+    // GM_* names are passed as PARAMETERS of the inner function (not const),
+    // so userscripts may freely redeclare them with `var` or `function`.
     let prelude =
-      'const GM_info=' + JSON.stringify(info) + ';' +
-      'const unsafeWindow=window;' +
+      'const __info=' + JSON.stringify(info) + ';' +
       'const __gm=(' + gmRuntime.toString() + ')(' + JSON.stringify(ctx) + ');' +
       'await __gm.ready;' +
-      'const GM={info:GM_info};';
+      'const __GM={info:__info};';
+    const paramNames = ['GM_info', 'unsafeWindow', 'GM'];
+    const paramArgs = ['__info', 'window', '__GM'];
     for (const [key, gmName, dotName] of GM_API) {
       if (!keys.has(key)) continue;
-      prelude += 'const ' + gmName + '=__gm.impl.' + key + ';';
-      if (key === 'xmlhttprequest') prelude += 'GM.' + dotName + '=__gm.impl.xmlhttprequestp;';
-      else prelude += 'GM.' + dotName + '=function(){var a=arguments;return Promise.resolve().then(function(){return __gm.impl.' + key + '.apply(null,a)})};';
+      paramNames.push(gmName);
+      paramArgs.push('__gm.impl.' + key);
+      if (key === 'xmlhttprequest') prelude += '__GM.' + dotName + '=__gm.impl.xmlhttprequestp;';
+      else prelude += '__GM.' + dotName + '=function(){var a=arguments;return Promise.resolve().then(function(){return __gm.impl.' + key + '.apply(null,a)})};';
     }
+    prelude += 'await (async function(' + paramNames.join(',') + '){';
     parts.push(prelude);
 
     // @require libraries first, then the user's own code
@@ -732,6 +737,7 @@ const CorsairUserScripts = (() => {
     }
 
     parts.push('\n' + String(record.code || '') + '\n');
+    parts.push('}).call(window,' + paramArgs.join(',') + ');');
     parts.push('})().catch(function(e){console.error("[Corsair Userscripts] ' + safeSourceName(meta.name) + ':",e)});');
     parts.push('\n//# sourceURL=corsair-userscript/' + safeSourceName(meta.name) + '.user.js');
 
@@ -1044,17 +1050,8 @@ const CorsairUserScripts = (() => {
     return { i: inc, e: exc };
   }
 
-  let _syncPromise = null;
   function sync() {
-    // Coalesce overlapping sync requests, but always run once more afterwards
-    if (_syncPromise) {
-      _syncPromise = _syncPromise.then(() => withLock(syncRegistrations), () => withLock(syncRegistrations));
-    } else {
-      _syncPromise = withLock(syncRegistrations);
-    }
-    const p = _syncPromise;
-    p.finally(() => { if (_syncPromise === p) _syncPromise = null; }).catch(() => {});
-    return p;
+    return withLock(syncRegistrations);
   }
 
   /* ============================================================
@@ -1071,8 +1068,12 @@ const CorsairUserScripts = (() => {
     return { ...summarize(rec), code: rec.code || '' };
   }
 
-  function findByIdentity(records, meta) {
-    if (!meta.name) return null;
+  function findByIdentity(records, meta, hasName, sourceUrl) {
+    if (sourceUrl) {
+      const bySource = records.find(r => r.sourceUrl && r.sourceUrl === sourceUrl);
+      if (bySource) return bySource;
+    }
+    if (!hasName) return null;
     return records.find(r => r.meta && r.meta.name === meta.name && (r.meta.namespace || '') === (meta.namespace || '')) || null;
   }
 
@@ -1083,13 +1084,14 @@ const CorsairUserScripts = (() => {
   async function save(input) {
     const code = String(input && input.code != null ? input.code : '');
     const { meta } = parseMetadata(code);
+    const hasName = Boolean(meta.name);
     if (!meta.name) meta.name = 'Untitled script';
 
     let previous = null;
     let id = input && input.id ? String(input.id) : '';
     if (id) previous = await readRecord(id);
     if (!previous && !id && input && input.sourceUrl) {
-      previous = findByIdentity(await readAll(), meta);
+      previous = findByIdentity(await readAll(), meta, hasName, input.sourceUrl);
       if (previous) id = previous.id;
     }
     if (!id) id = newId();
