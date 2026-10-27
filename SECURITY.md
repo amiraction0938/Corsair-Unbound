@@ -30,7 +30,7 @@ The active VirusTotal key is stored outside the ordinary settings payload and us
 
 This reduces ordinary plaintext storage exposure, but it is not a password-manager-grade vault. The extension must recover the key at runtime, so a compromised extension build or highly privileged local attacker may still recover or misuse it.
 
-Backup/export paths remove legacy plaintext fields such as vtApiKey before writing portable settings.
+Backup/export paths remove legacy plaintext fields such as vtApiKey from the portable settings. API keys are included in a separate `apiKeys` block only when the user keeps the "Include API keys" option ticked (default on); the file then contains them in plain text and must be kept private. Userscripts and their saved values are always part of a backup.
 
 ## Message boundary
 

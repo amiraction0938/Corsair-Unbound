@@ -94,7 +94,7 @@ Corsair Unbound هیچ VirusTotal API Key واقعی را به‌صورت hard-c
 - هیچ سرور Corsair Unbound کلید را دریافت نمی‌کند
 - درخواست‌های VirusTotal در صورت فعال بودن قابلیت مستقیماً به VirusTotal ارسال می‌شوند
 - دامنه‌های allowlisted عمداً برای lookup به VirusTotal فرستاده نمی‌شوند
-- backup/export فیلدهای قدیمی plaintext API key را حذف می‌کند
+- backup/export فیلدهای قدیمی plaintext API key را از بخش تنظیمات حذف می‌کند. کلیدهای API (VirusTotal و URLhaus) فقط وقتی در بلوک جداگانه‌ی `apiKeys` ذخیره می‌شوند که کاربر گزینه‌ی «کلیدهای API هم در بکاپ باشند» را تیک‌دار نگه دارد؛ داشبورد هشدار می‌دهد که فایل در آن حالت کلیدها را به‌صورت متن ساده دارد
 - سیاست امنیتی پروژه commit کردن API key، token، password، cookie و private key را ممنوع می‌کند
 
 ### نکته مهم درباره storage

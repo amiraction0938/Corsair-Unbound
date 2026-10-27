@@ -37,6 +37,7 @@
       </div>
 
       <nav class="sidebar-nav" id="sidebarNav">
+        <div class="nav-group-title" data-en="Monitor" data-fa="پایش">Monitor</div>
         <button class="nav-item active" data-view="overview">
           <span class="nav-icon">📊</span>
           <span class="nav-label" data-i18n="nav.overview">Overview</span>
@@ -49,6 +50,7 @@
           <span class="nav-icon">📜</span>
           <span class="nav-label" data-i18n="nav.activity">Activity</span>
         </button>
+        <div class="nav-group-title" data-en="Protection" data-fa="محافظت">Protection</div>
         <button class="nav-item" data-view="domains">
           <span class="nav-icon">🔬</span>
           <span class="nav-label" data-i18n="nav.domains">Domain Intelligence</span>
@@ -61,10 +63,16 @@
           <span class="nav-icon">🔐</span>
           <span class="nav-label" data-i18n="nav.privacy">Privacy</span>
         </button>
+        <div class="nav-group-title" data-en="Tools" data-fa="ابزارها">Tools</div>
+        <button class="nav-item" data-view="scripts">
+          <span class="nav-icon">🧩</span>
+          <span class="nav-label" data-en="Userscripts" data-fa="اسکریپت‌ها">Userscripts</span>
+        </button>
         <button class="nav-item" data-view="api">
           <span class="nav-icon">🔑</span>
           <span class="nav-label" data-i18n="nav.api">API &amp; Intelligence</span>
         </button>
+        <div class="nav-group-title" data-en="System" data-fa="سیستم">System</div>
         <button class="nav-item" data-view="settings">
           <span class="nav-icon">⚙️</span>
           <span class="nav-label" data-i18n="nav.settings">Settings</span>
@@ -344,37 +352,6 @@
             </div>
           </div>
         </div>
-
-        <div class="panel custom-scripts-panel">
-          <div class="panel-head">
-            <div>
-              <h2>🧩 Userscripts</h2>
-              <div class="muted">Install and write Tampermonkey-style userscripts. Supports @match, @include, @exclude, @run-at, @require, @resource and @grant headers. No code restrictions.</div>
-            </div>
-          </div>
-          <div id="usStatus" class="us-status" hidden></div>
-          <div class="script-input-row">
-            <button id="scriptNewBtn" class="btn-primary" type="button">+ New script</button>
-            <input id="scriptImportUrl" placeholder="https://example.com/script.user.js" autocomplete="off" spellcheck="false">
-            <button id="scriptImportBtn" class="tool-btn" type="button">Import URL</button>
-            <button id="scriptImportFileBtn" class="tool-btn" type="button">Import file</button>
-            <input type="file" id="scriptImportFile" accept=".js,.user.js,text/javascript" multiple hidden>
-          </div>
-          <div class="script-toolbar">
-            <input id="scriptSearch" type="search" placeholder="Search scripts or domains…" autocomplete="off" spellcheck="false">
-            <span id="scriptCount" class="muted"></span>
-          </div>
-          <div class="script-examples">
-            <span class="muted">Try a demo (works on example.com):</span>
-            <button class="tool-btn" type="button" data-us-demo="hello">1. Hello banner</button>
-            <button class="tool-btn" type="button" data-us-demo="counter">2. Visit counter</button>
-            <button class="tool-btn" type="button" data-us-demo="xhr">3. Cross-site request</button>
-            <button class="tool-btn" type="button" id="scriptOpenExample">Open example.com</button>
-          </div>
-          <div id="scriptList" class="script-list">
-            <div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>
-          </div>
-        </div>
       </section>
 
       <!-- ============ VIEW: PRIVACY ============ -->
@@ -400,6 +377,57 @@
             <button id="wipeAllData" class="tool-btn danger-btn" data-i18n="privacy.wipe">🗑 Wipe ALL Local Data</button>
             <span class="muted" data-i18n="privacy.wipeNote">This removes everything. Cannot be undone.</span>
           </div>
+        </div>
+      </section>
+
+      <!-- ============ VIEW: USERSCRIPTS ============ -->
+      <section class="view" id="view-scripts">
+        <div class="panel custom-scripts-panel">
+          <div class="panel-head">
+            <div>
+              <h2>🧩 Userscripts</h2>
+              <div class="muted">Install and write Tampermonkey-style userscripts. Supports @match, @include, @exclude, @run-at, @require, @resource and @grant headers. No code restrictions.</div>
+            </div>
+          </div>
+          <div id="usStatus" class="us-status" hidden></div>
+          <div class="script-input-row">
+            <button id="scriptNewBtn" class="btn-primary" type="button">+ New script</button>
+            <input id="scriptImportUrl" placeholder="https://example.com/script.user.js" autocomplete="off" spellcheck="false">
+            <button id="scriptImportBtn" class="tool-btn" type="button">Import URL</button>
+            <button id="scriptImportFileBtn" class="tool-btn" type="button">Import file</button>
+            <input type="file" id="scriptImportFile" accept=".js,.user.js,text/javascript" multiple hidden>
+          </div>
+          <div class="script-toolbar">
+            <input id="scriptSearch" class="script-search" type="search" placeholder="Search scripts or domains…" autocomplete="off" spellcheck="false">
+            <span id="scriptCount" class="muted"></span>
+          </div>
+          <div class="script-examples">
+            <span class="muted">Try a demo (works on example.com):</span>
+            <button class="tool-btn" type="button" data-us-demo="hello">1. Hello banner</button>
+            <button class="tool-btn" type="button" data-us-demo="counter">2. Visit counter</button>
+            <button class="tool-btn" type="button" data-us-demo="xhr">3. Cross-site request</button>
+            <button class="tool-btn" type="button" id="scriptOpenExample">Open example.com</button>
+          </div>
+          <div id="scriptList" class="script-list">
+            <div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>
+          </div>
+        </div>
+        <div class="panel us-guide-panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="usGuideTitle">📘 How userscripts work</h2>
+              <div class="muted" id="usGuideSubtitle">Everything you (or an AI) need to know to write a working script.</div>
+            </div>
+            <div class="us-guide-lang" role="group" aria-label="Guide language">
+              <button type="button" class="us-chip-btn" data-guide-lang="en">English</button>
+              <button type="button" class="us-chip-btn" data-guide-lang="fa">فارسی</button>
+            </div>
+          </div>
+          <div class="us-tabs" role="tablist">
+            <button type="button" class="us-tab active" data-guide-tab="how" id="usTabHow">How it works</button>
+            <button type="button" class="us-tab" data-guide-tab="prompt" id="usTabPrompt">Prompt for AI</button>
+          </div>
+          <div id="usGuide" class="us-guide"></div>
         </div>
       </section>
 
@@ -492,6 +520,13 @@
               <span class="switch-caption" data-i18n="backup.restoreTelemetry">Restore telemetry on import</span>
             </label>
           </div>
+          <label class="backup-option">
+            <input type="checkbox" id="exportIncludeSecrets" checked>
+            <span>
+              <strong data-en="Include API keys in the backup" data-fa="کلیدهای API هم در بکاپ باشند">Include API keys in the backup</strong>
+              <small data-en="VirusTotal and URLhaus keys are saved in the file in plain text, so keep it private. Userscripts and their saved values are always included." data-fa="کلید VirusTotal و URLhaus داخل فایل به‌صورت متن ساده ذخیره می‌شوند؛ پس فایل را جای امن نگه دارید. اسکریپت‌ها و مقدارهای ذخیره‌شده‌شان همیشه در بکاپ هستند.">VirusTotal and URLhaus keys are saved in the file in plain text, so keep it private. Userscripts and their saved values are always included.</small>
+            </span>
+          </label>
           <div class="backup-row">
             <button id="exportConfig2" class="tool-btn" data-i18n="backup.download">⬇ Download Backup</button>
             <button id="importConfig2" class="tool-btn" data-i18n="backup.choose">⬆ Restore from File</button>

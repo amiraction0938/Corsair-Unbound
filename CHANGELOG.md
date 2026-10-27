@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each userscript card shows its target domains as tidy colour-coded badges in the top-right corner ("All sites", "Local files" and regex rules get their own style; extra domains collapse into a "+N" badge with a tooltip).
 - Search box and script counter above the list; scripts are sorted alphabetically.
 
+### Added (backup, guide, layout)
+- **Backups now include your userscripts** (code, enabled state, cached `@require`/`@resource`, and the values saved with `GM_setValue`) and, optionally, your **API keys** (VirusTotal and URLhaus). A new "Include API keys in the backup" checkbox (on by default) sits above the backup buttons; the confirmation dialog states clearly whether the file holds keys in plain text. Backup format v12; older backups still import, and their per-domain scripts are converted to userscripts.
+- **Userscript guide in English and Persian** with a one-click "Prompt for AI" tab: header reference, page vs sandbox mode, every GM function, gotchas, and a ready prompt plus a checklist of what to tell an AI so it writes a correct script.
+- Dashboard reorganised: the sidebar is grouped (Monitor / Protection / Tools / System), Userscripts has its own page (it used to sit inside Security), and the Settings page is split into labelled groups (Protection, Threat intelligence, Alerts & banners, Logging). No setting was removed or renamed.
+- The userscript search box now has proper styling.
+
+### Fixed (backup)
+- The tour text claimed the API key is "never included in backups" and "never written to disk"; both statements were out of date and are corrected (README, SECURITY.md and README.fa.md as well).
+
 ### Removed
 - The notification bell (🔔) in the dashboard header and its panel.
 

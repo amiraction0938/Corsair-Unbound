@@ -88,7 +88,7 @@ Corsair Unbound does not ship with a hard-coded VirusTotal API key.
 - There are no Corsair Unbound servers receiving the key.
 - VirusTotal requests are sent directly to VirusTotal when the feature is enabled.
 - Allowlisted domains are intentionally skipped for VirusTotal lookups.
-- Backup/export logic removes legacy plaintext API-key fields.
+- Backup/export removes legacy plaintext API-key fields from the settings block. API keys (VirusTotal, URLhaus) are written to a separate `apiKeys` block only when the user keeps the "Include API keys" option ticked; the dashboard warns that the file then holds secrets in plain text.
 - The repository security policy prohibits committing API keys, tokens, passwords, cookies, or private keys.
 
 ### Important storage limitation

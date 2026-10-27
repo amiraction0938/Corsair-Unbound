@@ -3196,3 +3196,120 @@ body[data-theme="light"] .domain-chip { color: hsl(var(--h) 65% 28%); background
   25%  { box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.35); border-color: #7c5cff; }
   100% { box-shadow: 0 0 0 0 rgba(124, 92, 255, 0); }
 }
+
+/* ===== Sidebar groups ===== */
+.nav-group-title {
+  margin: 14px 14px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nav-group-title:first-child { margin-top: 2px; }
+body.sidebar-collapsed .nav-group-title { visibility: hidden; height: 6px; margin: 6px 0 0; }
+
+/* ===== Userscripts: search toolbar ===== */
+.script-toolbar {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.script-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 12px 9px 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card2) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>") no-repeat 12px 50% / 16px 16px;
+  color: var(--text);
+  font: 13px var(--font-sans);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.script-search::placeholder { color: var(--text-dim); }
+.script-search:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+.script-search::-webkit-search-cancel-button { filter: invert(0.6); cursor: pointer; }
+body[data-theme="light"] .script-search { background-color: #fff; }
+body.lang-rtl-text .script-search { padding: 9px 36px 9px 12px; background-position: calc(100% - 12px) 50%; }
+#scriptCount {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ===== Userscripts: guide ===== */
+.us-guide-panel { margin-top: 18px; }
+.us-guide-lang { display: inline-flex; gap: 6px; }
+.us-chip-btn {
+  padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--card2); color: var(--text-muted);
+  font: 600 12px var(--font-sans);
+}
+.us-chip-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.us-tabs { display: flex; gap: 6px; margin: 4px 0 14px; border-bottom: 1px solid var(--border); }
+.us-tab {
+  padding: 9px 16px; border: none; border-bottom: 2px solid transparent; background: none; cursor: pointer;
+  color: var(--text-muted); font: 600 13px var(--font-sans); margin-bottom: -1px;
+}
+.us-tab:hover { color: var(--text); }
+.us-tab.active { color: var(--text); border-bottom-color: var(--primary); }
+.us-guide { font-size: 13.5px; line-height: 1.75; color: var(--text); }
+.us-guide[dir="rtl"] { font-family: var(--font-rtl); text-align: right; }
+.us-guide p { margin: 0 0 10px; color: var(--text-muted); }
+.us-guide-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.us-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card2); padding: 14px 16px; }
+.us-card h3 { margin: 0 0 8px; font-size: 14px; }
+.us-card.wide { grid-column: 1 / -1; }
+.us-def { display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: 6px 14px; margin: 0; }
+.us-def dt { font-family: var(--font-mono); font-size: 12px; color: #a5b4fc; word-break: break-word; direction: ltr; text-align: left; }
+.us-def dd { margin: 0; color: var(--text-muted); }
+.us-guide code {
+  font-family: var(--font-mono); font-size: 12px; padding: 1px 6px; border-radius: 5px;
+  background: rgba(124, 92, 255, 0.14); color: #c4b5fd; direction: ltr; unicode-bidi: embed;
+}
+.us-list { margin: 0; padding-inline-start: 20px; color: var(--text-muted); }
+.us-list li { margin-bottom: 6px; }
+.us-callout {
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm);
+  border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); color: var(--text);
+}
+.us-prompt-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.us-prompt {
+  margin: 0; padding: 14px 16px; max-height: 460px; overflow: auto;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg);
+  font: 12.5px/1.7 var(--font-mono); color: var(--text); white-space: pre-wrap; word-break: break-word;
+  text-align: start; /* direction comes from the dir attribute set in JS */
+}
+.us-prompt.fa { font-family: var(--font-rtl); font-size: 13px; }
+body[data-theme="light"] .us-guide code { color: #5b21b6; background: rgba(124, 92, 255, 0.12); }
+body[data-theme="light"] .us-def dt { color: #4f46e5; }
+
+/* ===== Backup option ===== */
+.backup-option {
+  display: flex; align-items: flex-start; gap: 12px; margin: 0 0 14px; padding: 12px 14px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card2);
+}
+.backup-option input { margin-top: 3px; accent-color: var(--accent); }
+.backup-option strong { display: block; font-size: 13px; }
+.backup-option small { display: block; margin-top: 2px; color: var(--text-muted); line-height: 1.6; }
+
+/* ===== Settings groups ===== */
+#settingsForm.settings-grid { display: flex; flex-direction: column; gap: 22px; }
+.settings-group-head { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; }
+.settings-group-icon {
+  width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: 10px; background: var(--card2); border: 1px solid var(--border); font-size: 17px;
+}
+.settings-group-head h3 { margin: 0; font-size: 14px; }
+.settings-group-head .muted { font-size: 12px; }
+.settings-group-body { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.settings-group-body .setting-block { grid-column: 1 / -1; }
+@media (max-width: 760px) { .settings-group-body { grid-template-columns: 1fr; } }

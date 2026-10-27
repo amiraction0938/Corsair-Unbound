@@ -1,7 +1,7 @@
 const CorsairMigration = (() => {
   'use strict';
 
-  const BACKUP_VERSION = 11;
+  const BACKUP_VERSION = 12;
 
   function validateCandidate(candidate) {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
@@ -133,6 +133,26 @@ const CorsairMigration = (() => {
       candidate.customDomainScripts = {};
     }
 
+    /* ---------- API keys (NEW in v12, optional) ---------- */
+    const cleanKeys = {};
+    if (candidate.apiKeys && typeof candidate.apiKeys === 'object' && !Array.isArray(candidate.apiKeys)) {
+      for (const name of ['virustotal', 'urlhaus']) {
+        const v = candidate.apiKeys[name];
+        if (typeof v === 'string' && /^[\x21-\x7E]{8,256}$/.test(v.trim())) cleanKeys[name] = v.trim();
+      }
+    }
+    candidate.apiKeys = cleanKeys;
+
+    /* ---------- userscripts (NEW in v12) ---------- */
+    if (candidate.userscripts != null) {
+      if (typeof CorsairUserScripts !== 'undefined') {
+        const us = CorsairUserScripts.validateBackupBlock(candidate.userscripts);
+        if (!us.ok) return { ok: false, error: us.error };
+      } else if (typeof candidate.userscripts !== 'object' || Array.isArray(candidate.userscripts)) {
+        return { ok: false, error: 'invalid-userscripts: must be an object' };
+      }
+    }
+
     /* ---------- user trusted / blocked domains ---------- */
     candidate.userTrustedDomains = sanitizeDomainList(candidate.userTrustedDomains);
     candidate.userBlockedDomains = sanitizeDomainList(candidate.userBlockedDomains);
@@ -202,7 +222,7 @@ const CorsairMigration = (() => {
     return out;
   }
 
-  async function executeImportTransaction(payload) {
+  async function executeImportCore(payload) {
     const val = validateCandidate(payload);
     if (!val.ok) {
       return { ok: false, error: val.error, rolledBack: true, inconsistent: false };
@@ -339,7 +359,52 @@ const CorsairMigration = (() => {
     });
   }
 
-  async function exportConfiguration() {
+  /**
+   * Restore the parts that live outside the transactional config
+   * (API keys, userscripts). Failures here never roll back the main
+   * import; they are reported in the result instead.
+   */
+  async function restoreExtras(candidate) {
+    const out = {};
+
+    try {
+      if (candidate.userscripts && typeof CorsairUserScripts !== 'undefined') {
+        const r = await CorsairUserScripts.restoreFromBackup(candidate.userscripts);
+        if (r.ok) out.importedUserscripts = r.restored; else out.userscriptsError = r.error;
+      } else if (candidate.customDomainScripts && Object.keys(candidate.customDomainScripts).length && typeof CorsairUserScripts !== 'undefined') {
+        // Older backup: convert the per-domain scripts into userscripts
+        out.importedUserscripts = await CorsairUserScripts.importLegacy(candidate.customDomainScripts);
+      }
+    } catch (e) { out.userscriptsError = (e && e.message) || 'userscripts-restore-failed'; }
+
+    const keys = candidate.apiKeys || {};
+    const restored = [];
+    try {
+      if (keys.virustotal) {
+        await CorsairStorage.setApiKeySecure(keys.virustotal);
+        restored.push('virustotal');
+      }
+      if (keys.urlhaus) {
+        await CorsairStorage.patchSettings({ urlhausAuthKey: keys.urlhaus });
+        try { CorsairProviderUrlhaus.invalidateAuthKeyCache(); } catch {}
+        restored.push('urlhaus');
+      }
+    } catch (e) { out.apiKeyError = (e && e.message) || 'api-key-restore-failed'; }
+    if (restored.length) out.importedApiKeys = restored;
+
+    return out;
+  }
+
+  async function executeImportTransaction(payload) {
+    const res = await executeImportCore(payload);
+    if (!res || !res.ok) return res;
+    const val = validateCandidate(payload);
+    if (val.ok) Object.assign(res, await restoreExtras(val.candidate));
+    return res;
+  }
+
+  async function exportConfiguration(options) {
+  const includeSecrets = !options || options.includeSecrets !== false;
   return CorsairStorage.withTransactionGateShared(async () => {
     const [
       profiles, settings, regressionCases, dnrRegistry,
@@ -375,12 +440,29 @@ const CorsairMigration = (() => {
       };
     } catch {}
 
-    // Strip the plaintext API key from settings if any legacy entry
-    // still has it — the key must never leave the device in a backup.
+    // API keys never travel inside `settings`. They go into the dedicated
+    // `apiKeys` block below, and only when the user chose to include them
+    // (the dashboard warns that the file then contains secrets).
     const safeSettings = { ...settings };
     delete safeSettings.vtApiKey;
     delete safeSettings.apiKey;
     delete safeSettings.urlhausAuthKey;
+
+    const apiKeys = {};
+    if (includeSecrets) {
+      try {
+        const vt = await CorsairStorage.getApiKeySecure();
+        if (vt) apiKeys.virustotal = vt;
+      } catch {}
+      if (settings && typeof settings.urlhausAuthKey === 'string' && settings.urlhausAuthKey.trim()) {
+        apiKeys.urlhaus = settings.urlhausAuthKey.trim();
+      }
+    }
+
+    let userscripts = { version: 1, scripts: [], values: {} };
+    try {
+      if (typeof CorsairUserScripts !== 'undefined') userscripts = await CorsairUserScripts.exportForBackup();
+    } catch {}
 
     // Build a human-readable summary so the user knows exactly what
     // they're about to download and can verify after restore.
@@ -389,6 +471,8 @@ const CorsairMigration = (() => {
       trustedCount: Array.isArray(userTrustedDomains) ? userTrustedDomains.length : 0,
       blockedCount: Array.isArray(userBlockedDomains) ? userBlockedDomains.length : 0,
       customScriptsCount: Object.keys(customDomainScripts || {}).length,
+      userscriptsCount: (userscripts.scripts || []).length,
+      apiKeysIncluded: Object.keys(apiKeys),
       threatCacheCount: Object.keys(threatCache || {}).length,
       regressionCasesCount: Array.isArray(regressionCases) ? regressionCases.length : 0,
       eventCount: Array.isArray(events) ? events.length : 0,
@@ -421,6 +505,8 @@ const CorsairMigration = (() => {
       graph,
       chains,
       customDomainScripts,
+      userscripts,
+      apiKeys,
       userTrustedDomains,
       userBlockedDomains,
       threatCache,

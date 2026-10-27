@@ -1339,16 +1339,8 @@ const CorsairUserScripts = (() => {
     return `${header}\n\n${String((entry && entry.code) || '')}\n`;
   }
 
-  async function migrateLegacy() {
-    const flag = await chrome.storage.local.get(MIGRATED_KEY);
-    if (flag[MIGRATED_KEY]) return { ok: true, migrated: 0, skipped: true };
-
-    let legacy = {};
-    try {
-      if (typeof CorsairStorage !== 'undefined') legacy = await CorsairStorage.get('customDomainScripts', {});
-      else legacy = (await chrome.storage.local.get('customDomainScripts')).customDomainScripts || {};
-    } catch { legacy = {}; }
-
+  /** Convert a legacy { host: {code, enabled} } map into userscripts. Skips hosts already converted. */
+  async function importLegacy(legacy) {
     let migrated = 0;
     const existing = await readAll();
     for (const [host, entry] of Object.entries(legacy || {})) {
@@ -1372,9 +1364,135 @@ const CorsairUserScripts = (() => {
       });
       migrated++;
     }
+    if (migrated) await sync();
+    return migrated;
+  }
 
+  async function migrateLegacy() {
+    const flag = await chrome.storage.local.get(MIGRATED_KEY);
+    if (flag[MIGRATED_KEY]) return { ok: true, migrated: 0, skipped: true };
+
+    let legacy = {};
+    try {
+      if (typeof CorsairStorage !== 'undefined') legacy = await CorsairStorage.get('customDomainScripts', {});
+      else legacy = (await chrome.storage.local.get('customDomainScripts')).customDomainScripts || {};
+    } catch { legacy = {}; }
+
+    const migrated = await importLegacy(legacy);
     await chrome.storage.local.set({ [MIGRATED_KEY]: true });
     return { ok: true, migrated };
+  }
+
+  /* ============================================================
+     BACKUP / RESTORE
+     ============================================================ */
+  /** Everything needed to rebuild the user's scripts on another install. */
+  async function exportForBackup() {
+    const records = await readAll();
+    const values = {};
+    for (const r of records) {
+      const v = await readVals(r.id);
+      if (Object.keys(v).length) values[r.id] = v;
+    }
+    return {
+      version: 1,
+      scripts: records.map(r => ({
+        id: r.id,
+        code: String(r.code || ''),
+        enabled: r.enabled !== false,
+        sourceUrl: r.sourceUrl || '',
+        migratedFrom: r.migratedFrom || '',
+        createdAt: r.createdAt || 0,
+        updatedAt: r.updatedAt || 0,
+        requires: r.requires || {},
+        resources: r.resources || {}
+      })),
+      values
+    };
+  }
+
+  /** Check the shape of a backup block without touching its code. */
+  function validateBackupBlock(data) {
+    if (data == null) return { ok: true, scripts: [], values: {} };
+    if (typeof data !== 'object' || Array.isArray(data)) return { ok: false, error: 'invalid-userscripts: must be an object' };
+    if (!Array.isArray(data.scripts)) return { ok: false, error: 'invalid-userscripts: scripts must be an array' };
+    const scripts = [];
+    for (const s of data.scripts) {
+      if (!s || typeof s !== 'object' || typeof s.code !== 'string') continue;
+      scripts.push({
+        id: typeof s.id === 'string' && /^cu-[a-z0-9]{6,40}$/i.test(s.id) ? s.id : '',
+        code: s.code,
+        enabled: s.enabled !== false,
+        sourceUrl: typeof s.sourceUrl === 'string' ? s.sourceUrl : '',
+        migratedFrom: typeof s.migratedFrom === 'string' ? s.migratedFrom : '',
+        createdAt: Number(s.createdAt) || 0,
+        updatedAt: Number(s.updatedAt) || 0,
+        requires: s.requires && typeof s.requires === 'object' && !Array.isArray(s.requires) ? s.requires : {},
+        resources: s.resources && typeof s.resources === 'object' && !Array.isArray(s.resources) ? s.resources : {}
+      });
+    }
+    const values = {};
+    if (data.values && typeof data.values === 'object' && !Array.isArray(data.values)) {
+      for (const [id, v] of Object.entries(data.values)) {
+        if (v && typeof v === 'object' && !Array.isArray(v)) values[id] = v;
+      }
+    }
+    return { ok: true, scripts, values };
+  }
+
+  /** Replace the user's scripts with those from a backup. */
+  async function restoreFromBackup(data) {
+    const val = validateBackupBlock(data);
+    if (!val.ok) return { ok: false, error: val.error, restored: 0 };
+
+    const now = Date.now();
+    const incoming = [];
+    const idMap = new Map();
+    for (const s of val.scripts) {
+      const id = s.id || newId();
+      idMap.set(s.id, id);
+      const { meta } = parseMetadata(s.code);
+      if (!meta.name) meta.name = 'Untitled script';
+      incoming.push({
+        id, code: s.code, meta, enabled: s.enabled,
+        createdAt: s.createdAt || now, updatedAt: s.updatedAt || now,
+        sourceUrl: s.sourceUrl, migratedFrom: s.migratedFrom,
+        requires: s.requires, resources: s.resources,
+        regSig: '', lastError: ''
+      });
+    }
+
+    await withLock(async () => {
+      const oldIds = await readIndex();
+      const removeKeys = [];
+      for (const id of oldIds) removeKeys.push(REC_PREFIX + id, VALS_PREFIX + id);
+      if (removeKeys.length) await chrome.storage.local.remove(removeKeys);
+
+      const batch = {};
+      for (const rec of incoming) batch[REC_PREFIX + rec.id] = rec;
+      for (const [oldId, v] of Object.entries(val.values)) {
+        const id = idMap.get(oldId) || oldId;
+        if (incoming.some(r => r.id === id)) batch[VALS_PREFIX + id] = v;
+      }
+      batch[INDEX_KEY] = incoming.map(r => r.id);
+      batch[MIGRATED_KEY] = true;   // legacy per-domain scripts are not re-imported after a restore
+      await chrome.storage.local.set(batch);
+    });
+
+    // Re-download any @require / @resource that the backup did not carry
+    for (const rec of incoming) {
+      const needsReq = (rec.meta.require || []).some(u => typeof rec.requires[resolveUrl(u, rec.sourceUrl)] !== 'string');
+      const needsRes = (rec.meta.resource || []).some(r => !rec.resources[r.name]);
+      if (needsReq || needsRes) {
+        try {
+          await fetchDependencies(rec, rec);
+          await withLock(() => writeRecord(rec));
+        } catch {}
+      }
+    }
+
+    await sync();
+    return { ok: true, restored: incoming.length };
   }
 
   let _initPromise = null;
@@ -1411,6 +1529,10 @@ const CorsairUserScripts = (() => {
     setEnabled,
     importFromUrl,
     migrateLegacy,
+    importLegacy,
+    exportForBackup,
+    validateBackupBlock,
+    restoreFromBackup,
     init
   };
 })();

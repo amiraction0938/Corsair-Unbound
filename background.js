@@ -1403,7 +1403,7 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
 
         /* ============ CONFIG ============ */
         case 'export-config': {
-          const exportData = await CorsairMigration.exportConfiguration();
+          const exportData = await CorsairMigration.exportConfiguration({ includeSecrets: m.includeSecrets !== false });
           send({ ok: true, export: exportData, data: exportData });
           break;
         }

@@ -25,6 +25,8 @@ const state = {
   customScripts: [],
   userscriptAvailability: null,
   scriptQuery: '',
+  guideLang: '',
+  guideTab: 'how',
   highlightScriptId: '',
   extensionId: '',
   safeDomainSearch: '',
@@ -45,6 +47,18 @@ const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 const safeOn = (id, event, handler) => { const el = $(id); if (el) el.addEventListener(event, handler); };
 const t = (k, fb) => (window.CorsairI18n ? CorsairI18n.t(k, fb) : (fb || k));
+
+/* Local EN/FA text for the newer UI parts (kept out of the 8-language files). */
+const isFaUi = () => String(window.CorsairI18n?.getCurrent?.() || '').toLowerCase().startsWith('fa');
+const tx = (en, fa) => (isFaUi() ? fa : en);
+
+function applyBilingual(root) {
+  const fa = isFaUi();
+  (root || document).querySelectorAll('[data-en]').forEach(el => {
+    const txt = fa ? el.dataset.fa : el.dataset.en;
+    if (txt) el.textContent = txt;
+  });
+}
 
 /* ============================================================
    TOAST
@@ -100,12 +114,14 @@ const VIEW_KEYS = {
   domains: 'view.domains',
   security: 'view.security',
   privacy: 'view.privacy',
+  scripts: 'view.scripts',
   api: 'view.api',
   settings: 'view.settings',
   about: 'view.about'
 };
 
 function getViewTitle(viewName) {
+  if (viewName === 'scripts') return tx('Userscripts', 'اسکریپت‌ها');
   const key = VIEW_KEYS[viewName];
   const fb = viewName.charAt(0).toUpperCase() + viewName.slice(1);
   return key ? t(key, fb) : fb;
@@ -362,6 +378,319 @@ function renderProfiles() {
 /* ============================================================
    CUSTOM SCRIPTS
    ============================================================ */
+/* ============================================================
+   USERSCRIPT GUIDE (English + Persian) and "prompt for AI"
+   ============================================================ */
+const US_GUIDE = {
+  en: {
+    title: '\u{1F4D8} How userscripts work',
+    subtitle: 'Everything you (or an AI) need to know to write a working script.',
+    tabHow: 'How it works',
+    tabPrompt: 'Prompt for AI',
+    cards: [
+      {
+        h: '1. What is a userscript?', wide: true,
+        p: [
+          'A userscript is a small JavaScript file that starts with a "header": a few lines like `// @key value`. Corsair Unbound injects it automatically into every page whose address matches the header, exactly like Tampermonkey.',
+          'It needs Chrome 120 or newer, and "Allow User Scripts" must be switched on once for this extension in `chrome://extensions` > Details. If it is off, a notice appears above the script list.'
+        ]
+      },
+      {
+        h: '2. The header', wide: true,
+        def: [
+          ['@name', 'Required. The name shown in the list.'],
+          ['@match', 'Which pages to run on. Repeat the line for several sites. `https://example.com/*` = that site only, `*://*.example.com/*` = the site and all subdomains, `<all_urls>` = everywhere. A script with no @match / @include never runs.'],
+          ['@exclude / @exclude-match', 'Pages to skip.'],
+          ['@include', 'Like @match, but with `*` and `?` wildcards, or a regular expression between slashes, e.g. `/^https:\\/\\/a\\.com\\/.*$/`.'],
+          ['@run-at', 'When to run: `document-start` (earliest), `document-body`, `document-end`, `document-idle` (default, after the page loaded).'],
+          ['@grant', 'Which GM_ functions the script may use. `none` = none.'],
+          ['@require', 'URL of a library. It is downloaded once, cached, and loaded before your code (use a URL with a pinned version).'],
+          ['@resource', 'A helper file (CSS, text, image): `@resource name URL`, read with `GM_getResourceText` / `GM_getResourceURL`.'],
+          ['@noframes', 'Run only in the top page, not inside iframes.'],
+          ['@inject-into', '`page` or `content`: force the run mode (see below).'],
+          ['@version, @description, @namespace, @author', 'Informational. Importing a script with the same @name + @namespace (or from the same URL) updates the existing one instead of creating a duplicate.']
+        ]
+      },
+      {
+        h: '3. Two run modes: page or sandbox',
+        ul: [
+          '**Page mode** (`@grant none`, or only local helpers such as `GM_addStyle`): the script lives inside the page and can read the site\'s own JavaScript variables through `window` / `unsafeWindow`. Storage and network GM functions are not available.',
+          '**Sandbox mode** (when you grant `GM_getValue`, `GM_setValue`, `GM_xmlhttpRequest`, `GM_notification`, `GM_openInTab` or `GM_download`): the script sees the page DOM but not the site\'s JavaScript variables.',
+          'Rule of thumb: need the site\'s variables? Use `@grant none`. Need to save data or call another website? Grant the GM functions.'
+        ]
+      },
+      {
+        h: '4. Available GM functions',
+        def: [
+          ['GM_getValue(key, default)\nGM_setValue(key, value)\nGM_deleteValue(key)\nGM_listValues()', 'Permanent storage for this script (survives reloads). Bulk versions: `GM_getValues`, `GM_setValues`, `GM_deleteValues`.'],
+          ['GM_xmlhttpRequest({ method, url, headers, data, responseType, timeout, onload, onerror })', 'Request to ANY website, without CORS limits. The answer arrives in `onload` with `status` and `responseText`.'],
+          ['GM_addStyle(css)', 'Add CSS to the page.'],
+          ['GM_addElement(tag, attrs)', 'Create an element in the page.'],
+          ['GM_setClipboard(text)', 'Copy text to the clipboard.'],
+          ['GM_registerMenuCommand(name, fn)', 'A menu entry: a small \u{1F9E9} button appears at the bottom-right of the page.'],
+          ['GM_notification / GM_openInTab / GM_download', 'System notification / open a tab / download a file.'],
+          ['GM_getResourceText / GM_getResourceURL / GM_log / GM_info', 'Read @resource files / log to the console / info about the script.'],
+          ['GM.getValue, GM.setValue, ...', 'Promise versions (use with `await`) of all functions above.'],
+          ['', 'Only the functions you list in `@grant` are defined.']
+        ]
+      },
+      {
+        h: '5. Good to know', wide: true,
+        ul: [
+          'A script runs once per page load. On single-page sites (YouTube, X, ...) that change content without reloading, use a `MutationObserver`.',
+          'It runs in every frame of the page unless you add `@noframes`.',
+          'There are no restrictions on the code (no content filter, no size limit). Corsair does not scan or block your code, so only install scripts you trust.',
+          'It also works on sites with a strict Content-Security-Policy (such as GitHub).',
+          'Your code is wrapped in an async function, so top-level `await` and `return` work and you do not need your own IIFE.',
+          'Errors appear in the page\'s DevTools console (F12) prefixed with `[Corsair Userscripts]`.',
+          'Automatic updates from `@updateURL` are not available yet: to update a script, import its URL again.',
+          'Backups include your scripts, their saved values and (optionally) your API keys.'
+        ]
+      }
+    ],
+    promptIntro: 'To get a correct, ready-to-use script from an AI (ChatGPT, Claude, ...), always tell it:',
+    promptChecklist: [
+      'The exact site address or pattern (e.g. `https://example.com/*`).',
+      'What the script must do, in plain and precise words.',
+      'The HTML of the relevant part of the page, or the CSS selectors (in the browser: right-click the element > Inspect > right-click its line > Copy > Copy outerHTML).',
+      'When it should run (on page open, after full load, on a button click).',
+      'Whether data must be remembered between visits.',
+      'Whether it must call another website, and which domain.',
+      'Whether the site is a single-page app that changes content after loading.'
+    ],
+    promptLabel: 'Ready-made prompt (copy it and fill in the <...> parts):',
+    copy: 'Copy prompt',
+    copied: 'Copied \u2713',
+    prompt: [
+      'Write ONE complete userscript for Corsair Unbound (Tampermonkey-compatible, Chrome, Manifest V3, built on chrome.userScripts).',
+      '',
+      'GOAL: <describe exactly what the script must do, in plain words>',
+      'TARGET SITE(S): <full URLs or patterns, e.g. https://example.com/*>',
+      'PAGE DETAILS: <paste the relevant HTML, or the CSS selectors / element texts the script must find>',
+      'RUN WHEN: <on page open / after the page fully loaded / as early as possible>',
+      'NEEDS DATA SAVED BETWEEN VISITS: <yes/no - what>',
+      'NEEDS REQUESTS TO OTHER WEBSITES: <yes/no - which domains>',
+      '',
+      'RULES:',
+      '1. Output exactly one .user.js file in a single code block. It must start with a // ==UserScript== header that ends with // ==/UserScript==, followed by the code.',
+      '2. The header must contain @name, @namespace, @version, @description, one or more exact @match lines (do not guess the pattern) and @grant.',
+      '3. Use "@grant none" when no GM_ function is needed (the script then runs inside the page and can use window variables). Otherwise list ONLY the GM_ functions you really use (e.g. GM_getValue, GM_setValue, GM_xmlhttpRequest, GM_addStyle). Never call a GM_ function that is not granted.',
+      '4. Use GM_xmlhttpRequest (not fetch/XHR) for requests to other domains, and GM_getValue/GM_setValue (not localStorage) for data that must survive page reloads.',
+      '5. The script runs once per page load. If the site is a single-page app or loads content late, use a MutationObserver (or a short interval) and make the code safe to run several times (mark processed elements).',
+      '6. When you use GM_ functions the script runs in an isolated world, so do not rely on the site\'s JavaScript variables. If you need them, use "@grant none" instead.',
+      '7. The code is wrapped in an async function: top-level await and return are allowed, and you do not need your own IIFE.',
+      '8. Do not use external libraries unless really necessary; if you do, use @require with a pinned-version URL.',
+      '9. Add short comments, handle missing elements gracefully, and at the end tell me which @match and @grant lines you chose and why.'
+    ].join('\n')
+  },
+
+  fa: {
+    title: '\u{1F4D8} راهنمای اسکریپت‌ها',
+    subtitle: 'هرچه خودتان یا یک هوش مصنوعی برای نوشتن اسکریپتِ درست و کارا باید بداند.',
+    tabHow: 'سیستم چطور کار می‌کند',
+    tabPrompt: 'پرامپت برای هوش مصنوعی',
+    cards: [
+      {
+        h: '۱. اسکریپت کاربر چیست؟', wide: true,
+        p: [
+          'اسکریپت کاربر (Userscript) یک فایل جاوااسکریپت کوچک است که اولش یک «هدر» دارد؛ یعنی چند خط به شکل `// @کلید مقدار`. Corsair Unbound این فایل را خودکار داخل هر صفحه‌ای که با هدر جور باشد اجرا می‌کند، دقیقاً مثل Tampermonkey.',
+          'به Chrome نسخه‌ی ۱۲۰ یا بالاتر نیاز دارد و باید یک بار در `chrome://extensions` ← جزئیات اکستنشن، گزینه‌ی «Allow User Scripts» را روشن کنید. اگر خاموش باشد، بالای لیست اسکریپت‌ها یک هشدار نشان داده می‌شود.'
+        ]
+      },
+      {
+        h: '۲. هدر (اطلاعات اسکریپت)', wide: true,
+        def: [
+          ['@name', 'اسم اسکریپت؛ لازم است و در لیست نشان داده می‌شود.'],
+          ['@match', 'اسکریپت روی کدام صفحه‌ها اجرا شود. برای چند سایت چند خط بنویسید. `https://example.com/*` یعنی فقط همان سایت، `*://*.example.com/*` یعنی سایت و همه‌ی زیردامنه‌ها، `<all_urls>` یعنی همه‌جا. اگر هیچ @match یا @include نباشد اسکریپت هیچ‌جا اجرا نمی‌شود.'],
+          ['@exclude / @exclude-match', 'صفحه‌هایی که باید نادیده گرفته شوند.'],
+          ['@include', 'مثل @match ولی با ستاره (`*`) و علامت سؤال (`?`)، یا یک عبارت منظم بین دو اسلش، مثل `/^https:\\/\\/a\\.com\\/.*$/`.'],
+          ['@run-at', 'زمان اجرا: `document-start` (زودترین)، `document-body`، `document-end`، `document-idle` (پیش‌فرض؛ بعد از لود صفحه).'],
+          ['@grant', 'اجازه‌ی استفاده از توابع GM_ . مقدار `none` یعنی هیچ‌کدام.'],
+          ['@require', 'آدرس یک کتابخانه. یک بار دانلود و ذخیره می‌شود و قبل از کد شما اجرا می‌شود (آدرسی با نسخه‌ی مشخص بدهید).'],
+          ['@resource', 'یک فایل کمکی (CSS، متن، تصویر) با فرمت `@resource اسم آدرس` که با `GM_getResourceText` یا `GM_getResourceURL` خوانده می‌شود.'],
+          ['@noframes', 'فقط در صفحه‌ی اصلی اجرا شود، نه داخل iframeها.'],
+          ['@inject-into', '`page` یا `content`: حالت اجرا را اجباری می‌کند (بخش بعد را ببینید).'],
+          ['@version, @description, @namespace, @author', 'اطلاعات توضیحی. اگر اسکریپتی با همان @name و @namespace (یا از همان لینک) دوباره وارد شود، اسکریپت قبلی به‌روز می‌شود و نسخه‌ی تکراری ساخته نمی‌شود.']
+        ]
+      },
+      {
+        h: '۳. دو حالت اجرا: داخل صفحه یا ایزوله',
+        ul: [
+          '**حالت صفحه** (`@grant none` یا فقط توابع کمکیِ محلی مثل `GM_addStyle`): اسکریپت داخل خود صفحه اجرا می‌شود و می‌تواند متغیرهای جاوااسکریپتِ خودِ سایت را با `window` / `unsafeWindow` بخواند. توابع ذخیره‌سازی و شبکه‌ی GM در دسترس نیستند.',
+          '**حالت ایزوله (sandbox)** وقتی یکی از `GM_getValue`، `GM_setValue`، `GM_xmlhttpRequest`، `GM_notification`، `GM_openInTab` یا `GM_download` را grant کنید: اسکریپت DOM صفحه را می‌بیند ولی به متغیرهای جاوااسکریپتِ سایت دسترسی ندارد.',
+          'قاعده‌ی سرانگشتی: اگر به متغیرهای خودِ سایت نیاز دارید `@grant none` بگذارید؛ اگر باید اطلاعات ذخیره کنید یا به سایت دیگری درخواست بزنید، توابع GM را grant کنید.'
+        ]
+      },
+      {
+        h: '۴. توابع GM قابل استفاده',
+        def: [
+          ['GM_getValue(key, default)\nGM_setValue(key, value)\nGM_deleteValue(key)\nGM_listValues()', 'ذخیره‌ی دائمی اطلاعات برای همین اسکریپت (با رفرش از بین نمی‌رود). نسخه‌های گروهی: `GM_getValues`، `GM_setValues`، `GM_deleteValues`.'],
+          ['GM_xmlhttpRequest({ method, url, headers, data, responseType, timeout, onload, onerror })', 'درخواست به هر سایت دیگری، بدون محدودیت CORS. جواب در `onload` با `status` و `responseText` می‌آید.'],
+          ['GM_addStyle(css)', 'اضافه کردن CSS به صفحه.'],
+          ['GM_addElement(tag, attrs)', 'ساختن یک المنت در صفحه.'],
+          ['GM_setClipboard(text)', 'کپی متن در کلیپ‌بورد.'],
+          ['GM_registerMenuCommand(name, fn)', 'یک گزینه‌ی منو؛ گوشه‌ی پایین-راست صفحه یک دکمه‌ی کوچک \u{1F9E9} ظاهر می‌شود.'],
+          ['GM_notification / GM_openInTab / GM_download', 'اعلان سیستم / باز کردن تب / دانلود فایل.'],
+          ['GM_getResourceText / GM_getResourceURL / GM_log / GM_info', 'خواندن فایل‌های @resource / لاگ در کنسول / اطلاعات خود اسکریپت.'],
+          ['GM.getValue, GM.setValue, ...', 'نسخه‌ی Promise (با `await`) همه‌ی توابع بالا.'],
+          ['', 'فقط توابعی که در `@grant` نوشته‌اید تعریف می‌شوند.']
+        ]
+      },
+      {
+        h: '۵. نکته‌های مهم', wide: true,
+        ul: [
+          'اسکریپت در هر بار بارگذاری صفحه فقط یک بار اجرا می‌شود. در سایت‌های تک‌صفحه‌ای (مثل یوتیوب و X) که محتوا بدون رفرش عوض می‌شود، از `MutationObserver` استفاده کنید.',
+          'اسکریپت در همه‌ی فریم‌های صفحه اجرا می‌شود، مگر اینکه `@noframes` بگذارید.',
+          'هیچ محدودیتی روی کد وجود ندارد (نه فیلتر محتوا، نه سقف حجم). Corsair کد شما را بررسی یا مسدود نمی‌کند؛ پس فقط اسکریپتی را نصب کنید که به آن اعتماد دارید.',
+          'روی سایت‌هایی که Content-Security-Policy سخت‌گیرانه دارند (مثل GitHub) هم کار می‌کند.',
+          'کد شما داخل یک تابع async قرار می‌گیرد؛ پس `await` و `return` در سطح بالا مجازند و نیازی به IIFE نیست.',
+          'خطاها در کنسول صفحه (کلید F12) با پیشوند `[Corsair Userscripts]` نمایش داده می‌شوند.',
+          'به‌روزرسانی خودکار از `@updateURL` هنوز وجود ندارد؛ برای آپدیت، همان لینک را دوباره Import کنید.',
+          'اسکریپت‌ها، مقدارهای ذخیره‌شده‌شان و (در صورت انتخاب) کلیدهای API داخل بکاپ تنظیمات هم قرار می‌گیرند.'
+        ]
+      }
+    ],
+    promptIntro: 'برای اینکه هوش مصنوعی (ChatGPT، Claude و ...) اسکریپتِ درست و آماده‌ی استفاده بنویسد، این موارد را حتماً به او بگویید:',
+    promptChecklist: [
+      'آدرس دقیق سایت یا الگوی آدرس (مثلاً `https://example.com/*`).',
+      'کار مورد نظر را ساده و دقیق توضیح دهید.',
+      'کد HTML همان بخش از صفحه یا سلکتورهای CSS (در مرورگر روی المنت راست‌کلیک ← Inspect ← روی خط راست‌کلیک ← Copy ← Copy outerHTML).',
+      'چه زمانی اجرا شود (با باز شدن صفحه، بعد از لود کامل، یا با کلیک روی یک دکمه).',
+      'آیا اطلاعاتی باید بین دفعات بازدید ذخیره بماند؟',
+      'آیا باید به سایت دیگری درخواست بزند؟ کدام دامنه؟',
+      'آیا سایت تک‌صفحه‌ای است و محتوا بعد از لود عوض می‌شود؟'
+    ],
+    promptLabel: 'پرامپت آماده (کپی کنید و قسمت‌های <...> را پر کنید):',
+    copy: 'کپی پرامپت',
+    copied: 'کپی شد \u2713',
+    prompt: [
+      'یک اسکریپت کاربر (Userscript) کامل برای Corsair Unbound بنویس (سازگار با Tampermonkey، مرورگر Chrome، Manifest V3 با chrome.userScripts). توضیح‌هایت فارسی باشد ولی کد و کامنت‌ها انگلیسی.',
+      '',
+      'هدف: <دقیقاً توضیح بده اسکریپت چه کاری باید بکند>',
+      'سایت(های) هدف: <آدرس کامل یا الگو، مثلاً https://example.com/*>',
+      'جزئیات صفحه: <HTML بخش مورد نظر، یا سلکتورهای CSS / متن المنت‌هایی که باید پیدا شوند>',
+      'زمان اجرا: <با باز شدن صفحه / بعد از لود کامل / در زودترین زمان ممکن>',
+      'نیاز به ذخیره‌ی اطلاعات بین دفعات بازدید: <بله/خیر - چه اطلاعاتی>',
+      'نیاز به درخواست به سایت‌های دیگر: <بله/خیر - کدام دامنه‌ها>',
+      '',
+      'قوانین:',
+      '۱. خروجی دقیقاً یک فایل .user.js کامل داخل یک بلوک کد باشد. با هدر // ==UserScript== شروع شود، با // ==/UserScript== تمام شود و بعد از آن کد بیاید.',
+      '۲. هدر باید شامل @name، @namespace، @version، @description، یک یا چند خط @match دقیق (الگو را حدس نزن) و @grant باشد.',
+      '۳. اگر به هیچ تابع GM_ نیاز نیست @grant none بگذار (اسکریپت داخل خود صفحه اجرا می‌شود و به متغیرهای window دسترسی دارد). در غیر این صورت فقط توابع GM_ ای را که واقعاً استفاده می‌کنی بنویس (مثل GM_getValue، GM_setValue، GM_xmlhttpRequest، GM_addStyle). هرگز تابعی را که grant نشده صدا نزن.',
+      '۴. برای درخواست به دامنه‌های دیگر از GM_xmlhttpRequest استفاده کن (نه fetch/XHR) و برای داده‌ای که باید بعد از رفرش بماند از GM_getValue/GM_setValue (نه localStorage).',
+      '۵. اسکریپت در هر بار لود صفحه فقط یک بار اجرا می‌شود. اگر سایت تک‌صفحه‌ای است یا محتوا دیر لود می‌شود، از MutationObserver (یا یک interval کوتاه) استفاده کن و کد را طوری بنویس که چندبار اجرا شدن مشکلی ایجاد نکند (المنت‌های پردازش‌شده را علامت بزن).',
+      '۶. وقتی از توابع GM_ استفاده می‌کنی اسکریپت در محیط ایزوله اجرا می‌شود؛ پس به متغیرهای جاوااسکریپتِ خودِ سایت تکیه نکن. اگر به آن‌ها نیاز داری به‌جایش @grant none بگذار.',
+      '۷. کد داخل یک تابع async قرار می‌گیرد: await و return در سطح بالا مجاز است و IIFE لازم نیست.',
+      '۸. از کتابخانه‌ی خارجی استفاده نکن مگر واقعاً لازم باشد؛ در آن صورت از @require با آدرسِ نسخه‌ی مشخص استفاده کن.',
+      '۹. کامنت‌های کوتاه بنویس، نبودنِ المنت‌ها را بدون خطا مدیریت کن، و در آخر بگو چه @match و @grant ای انتخاب کردی و چرا.'
+    ].join('\n')
+  }
+};
+
+/** `code` and **bold** inline markup -> safe DOM nodes. */
+function usRich(parent, str) {
+  String(str).split('**').forEach((boldPart, bi) => {
+    const host = bi % 2 ? parent.appendChild(document.createElement('strong')) : parent;
+    boldPart.split('`').forEach((part, ci) => {
+      if (!part) return;
+      if (ci % 2) { const c = document.createElement('code'); c.textContent = part; host.appendChild(c); }
+      else host.appendChild(document.createTextNode(part));
+    });
+  });
+}
+
+function renderUserscriptGuide() {
+  const box = $('usGuide');
+  if (!box) return;
+  const lang = state.guideLang || (isFaUi() ? 'fa' : 'en');
+  const g = US_GUIDE[lang];
+
+  const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+  setText('usGuideTitle', g.title);
+  setText('usGuideSubtitle', g.subtitle);
+  setText('usTabHow', g.tabHow);
+  setText('usTabPrompt', g.tabPrompt);
+  document.querySelectorAll('[data-guide-lang]').forEach(b => b.classList.toggle('active', b.dataset.guideLang === lang));
+  document.querySelectorAll('[data-guide-tab]').forEach(b => b.classList.toggle('active', b.dataset.guideTab === state.guideTab));
+
+  box.dir = lang === 'fa' ? 'rtl' : 'ltr';
+  box.lang = lang;
+  box.textContent = '';
+
+  if (state.guideTab === 'prompt') {
+    const intro = document.createElement('p');
+    usRich(intro, g.promptIntro);
+    box.appendChild(intro);
+
+    const ul = document.createElement('ul');
+    ul.className = 'us-list';
+    g.promptChecklist.forEach(item => { const li = document.createElement('li'); usRich(li, item); ul.appendChild(li); });
+    box.appendChild(ul);
+
+    const bar = document.createElement('div');
+    bar.className = 'us-prompt-bar';
+    bar.style.marginTop = '16px';
+    const label = document.createElement('strong');
+    label.textContent = g.promptLabel;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-primary';
+    btn.textContent = g.copy;
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(g.prompt); }
+      catch {
+        const ta = document.createElement('textarea');
+        ta.value = g.prompt; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch {}
+        ta.remove();
+      }
+      btn.textContent = g.copied;
+      setTimeout(() => { btn.textContent = g.copy; }, 1800);
+    });
+    bar.append(label, btn);
+    box.appendChild(bar);
+
+    const pre = document.createElement('pre');
+    pre.className = 'us-prompt' + (lang === 'fa' ? ' fa' : '');
+    pre.dir = lang === 'fa' ? 'rtl' : 'ltr';
+    pre.textContent = g.prompt;
+    box.appendChild(pre);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'us-guide-grid';
+  for (const card of g.cards) {
+    const el = document.createElement('div');
+    el.className = 'us-card' + (card.wide ? ' wide' : '');
+    const h = document.createElement('h3');
+    h.textContent = card.h;
+    el.appendChild(h);
+    (card.p || []).forEach(txt => { const p = document.createElement('p'); usRich(p, txt); el.appendChild(p); });
+    if (card.ul) {
+      const ul = document.createElement('ul');
+      ul.className = 'us-list';
+      card.ul.forEach(txt => { const li = document.createElement('li'); usRich(li, txt); ul.appendChild(li); });
+      el.appendChild(ul);
+    }
+    if (card.def) {
+      const dl = document.createElement('dl');
+      dl.className = 'us-def';
+      card.def.forEach(([k, v]) => {
+        const dt = document.createElement('dt');
+        dt.textContent = k;
+        dt.style.whiteSpace = 'pre-line';
+        const dd = document.createElement('dd');
+        usRich(dd, v);
+        dl.append(dt, dd);
+      });
+      el.appendChild(dl);
+    }
+    grid.appendChild(el);
+  }
+  box.appendChild(grid);
+}
+
 const USERSCRIPT_TEMPLATE = [
   '// ==UserScript==',
   '// @name         New Script',
@@ -1367,95 +1696,149 @@ function renderSettings() {
   if (!box) return;
   box.innerHTML = '';
 
-  const bools = [
-    ['resolverEnabled',            'setting.resolverEnabled'],
-    ['notifications',              'setting.notifications'],
-    ['siteVerdictBanner',          'setting.siteVerdictBanner'],
-    ['notifyOnSafeSites',          'setting.notifyOnSafeSites'],
-    ['logEvents',                  'setting.logEvents'],
-    ['observationEnabled',         'setting.observationEnabled'],
-    ['verificationEnabled',        'setting.verificationEnabled'],
-    ['enforceSuspiciousRedirects', 'setting.enforceSuspiciousRedirects'],
-    ['threatIntelEnabled',         'setting.threatIntelEnabled'],
-    ['threatIntelAutoScan',        'setting.threatIntelAutoScan'],
-    ['downloadGuard',              'setting.downloadGuard']
+  // Same keys as before, now arranged in labelled groups.
+  const GROUPS = [
+    {
+      icon: '\u{1F6E1}\uFE0F',
+      en: 'Protection', fa: 'محافظت',
+      descEn: 'How Corsair watches redirects, popups and downloads.',
+      descFa: 'نحوه‌ی نظارت Corsair بر ریدایرکت‌ها، پاپ‌آپ‌ها و دانلودها.',
+      keys: [
+        ['enforceSuspiciousRedirects', 'setting.enforceSuspiciousRedirects'],
+        ['verificationEnabled',        'setting.verificationEnabled'],
+        ['observationEnabled',         'setting.observationEnabled'],
+        ['resolverEnabled',            'setting.resolverEnabled'],
+        ['downloadGuard',              'setting.downloadGuard']
+      ],
+      hops: true,
+      autoArm: true
+    },
+    {
+      icon: '\u{1F50E}',
+      en: 'Threat intelligence', fa: 'اطلاعات تهدید',
+      descEn: 'Look up domains against online threat databases.',
+      descFa: 'بررسی دامنه‌ها در پایگاه‌های داده‌ی تهدید آنلاین.',
+      keys: [
+        ['threatIntelEnabled',  'setting.threatIntelEnabled'],
+        ['threatIntelAutoScan', 'setting.threatIntelAutoScan']
+      ]
+    },
+    {
+      icon: '\u{1F514}',
+      en: 'Alerts & banners', fa: 'اعلان‌ها و بنرها',
+      descEn: 'What Corsair shows you while you browse.',
+      descFa: 'چیزهایی که Corsair هنگام مرور به شما نشان می‌دهد.',
+      keys: [
+        ['notifications',     'setting.notifications'],
+        ['notifyOnSafeSites', 'setting.notifyOnSafeSites'],
+        ['siteVerdictBanner', 'setting.siteVerdictBanner']
+      ]
+    },
+    {
+      icon: '\u{1F4DD}',
+      en: 'Logging', fa: 'ثبت رویدادها',
+      descEn: 'Keep a local activity history.',
+      descFa: 'نگه‌داشتن تاریخچه‌ی فعالیت روی همین دستگاه.',
+      keys: [['logEvents', 'setting.logEvents']]
+    }
   ];
 
-  for (const [key, i18nKey] of bools) {
-    const l = document.createElement('label');
-    l.className = 'setting';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.dataset.key = key;
-    input.checked = state.settings[key] !== false;
-    const span = document.createElement('span');
-    span.textContent = t(i18nKey, key);
-    l.append(input, span);
-    box.appendChild(l);
+  const bilingual = (el, en, fa) => { el.dataset.en = en; el.dataset.fa = fa; el.textContent = tx(en, fa); return el; };
+
+  for (const grp of GROUPS) {
+    const section = document.createElement('section');
+    section.className = 'settings-group';
+
+    const head = document.createElement('div');
+    head.className = 'settings-group-head';
+    const icon = document.createElement('span');
+    icon.className = 'settings-group-icon';
+    icon.textContent = grp.icon;
+    const titles = document.createElement('div');
+    const h = bilingual(document.createElement('h3'), grp.en, grp.fa);
+    const d = bilingual(document.createElement('div'), grp.descEn, grp.descFa);
+    d.className = 'muted';
+    titles.append(h, d);
+    head.append(icon, titles);
+    section.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'settings-group-body';
+
+    for (const [key, i18nKey] of grp.keys) {
+      const l = document.createElement('label');
+      l.className = 'setting';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.key = key;
+      input.checked = state.settings[key] !== false;
+      const span = document.createElement('span');
+      span.textContent = t(i18nKey, key);
+      l.append(input, span);
+      body.appendChild(l);
+    }
+
+    if (grp.hops) {
+      const wrap = document.createElement('label');
+      wrap.className = 'setting';
+      const span = document.createElement('span');
+      span.textContent = t('setting.maxRedirectHops', 'Global max redirect hops');
+      const num = document.createElement('input');
+      num.type = 'number';
+      num.min = '1';
+      num.max = '32';
+      num.step = '1';
+      num.value = state.settings.maxRedirectHops || 8;
+      num.dataset.key = 'maxRedirectHops';
+      wrap.append(span, num);
+      body.appendChild(wrap);
+    }
+
+    if (grp.autoArm) {
+      const autoBlock = document.createElement('div');
+      autoBlock.className = 'setting-block';
+
+      const header = document.createElement('div');
+      header.className = 'setting-block-header';
+
+      const headerText = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = '\u26A1 ' + t('onboarding.step5.autoArm.title', 'Auto-Arm Fortress');
+      const caption = document.createElement('div');
+      caption.className = 'muted';
+      caption.textContent = t('onboarding.step5.autoArm.desc', 'Automatically shield sites flagged as risky.');
+      headerText.append(strong, caption);
+
+      const toggleLabel = document.createElement('label');
+      toggleLabel.className = 'custom-switch-label';
+      const toggleInput = document.createElement('input');
+      toggleInput.type = 'checkbox';
+      toggleInput.dataset.key = 'autoArmFortress';
+      toggleInput.checked = state.settings.autoArmFortress !== false;
+      const toggleTrack = document.createElement('span');
+      toggleTrack.className = 'slider-track';
+      toggleLabel.append(toggleInput, toggleTrack);
+
+      header.append(headerText, toggleLabel);
+      autoBlock.appendChild(header);
+
+      const armValue = Number.isFinite(state.settings.autoArmFortressThreshold)
+        ? state.settings.autoArmFortressThreshold
+        : 10;
+      const blockValue = Number.isFinite(state.settings.autoBlockThreshold)
+        ? state.settings.autoBlockThreshold
+        : 70;
+
+      autoBlock.append(
+        makeSliderRow({ label: 'Arm at', key: 'autoArmFortressThreshold', value: armValue, min: 1, max: 100, step: 1 }),
+        makeSliderRow({ label: 'Block at', key: 'autoBlockThreshold', value: blockValue, min: 1, max: 100, step: 1 })
+      );
+      body.appendChild(autoBlock);
+    }
+
+    section.appendChild(body);
+    box.appendChild(section);
   }
-
-  const wrap = document.createElement('label');
-  wrap.className = 'setting';
-  const span = document.createElement('span');
-  span.textContent = t('setting.maxRedirectHops', 'Global max redirect hops');
-  const num = document.createElement('input');
-  num.type = 'number';
-  num.min = '1';
-  num.max = '32';
-  num.step = '1';
-  num.value = state.settings.maxRedirectHops || 8;
-  num.dataset.key = 'maxRedirectHops';
-  wrap.append(span, num);
-  box.appendChild(wrap);
-
-  const autoBlock = document.createElement('div');
-  autoBlock.className = 'setting-block';
-
-  const header = document.createElement('div');
-  header.className = 'setting-block-header';
-
-  const headerText = document.createElement('div');
-  const strong = document.createElement('strong');
-  strong.textContent = '⚡ ' + t('onboarding.step5.autoArm.title', 'Auto-Arm Fortress');
-  const caption = document.createElement('div');
-  caption.className = 'muted';
-  caption.textContent = t('onboarding.step5.autoArm.desc', 'Automatically shield sites flagged as risky.');
-  headerText.append(strong, caption);
-
-  const toggleLabel = document.createElement('label');
-  toggleLabel.className = 'custom-switch-label';
-  const toggleInput = document.createElement('input');
-  toggleInput.type = 'checkbox';
-  toggleInput.dataset.key = 'autoArmFortress';
-  toggleInput.checked = state.settings.autoArmFortress !== false;
-  const toggleTrack = document.createElement('span');
-  toggleTrack.className = 'slider-track';
-  toggleLabel.append(toggleInput, toggleTrack);
-
-  header.append(headerText, toggleLabel);
-  autoBlock.appendChild(header);
-
-  const armValue = Number.isFinite(state.settings.autoArmFortressThreshold)
-    ? state.settings.autoArmFortressThreshold
-    : 10;
-  const blockValue = Number.isFinite(state.settings.autoBlockThreshold)
-    ? state.settings.autoBlockThreshold
-    : 70;
-
-  const armRow = makeSliderRow({
-    label: 'Arm at',
-    key: 'autoArmFortressThreshold',
-    value: armValue,
-    min: 1, max: 100, step: 1
-  });
-  const blockRow = makeSliderRow({
-    label: 'Block at',
-    key: 'autoBlockThreshold',
-    value: blockValue,
-    min: 1, max: 100, step: 1
-  });
-  autoBlock.append(armRow, blockRow);
-  box.appendChild(autoBlock);
 }
 
 function makeSliderRow({ label, key, value, min, max, step }) {
@@ -2429,7 +2812,8 @@ async function refresh() {
    ============================================================ */
 async function doExport() {
   try {
-    const r = await send({ type: 'export-config' });
+    const includeSecrets = $('exportIncludeSecrets')?.checked !== false;
+    const r = await send({ type: 'export-config', includeSecrets });
     if (!r?.ok) throw new Error(r?.error || 'Export failed');
 
     const exp = r.export || {};
@@ -2440,7 +2824,7 @@ async function doExport() {
       ``,
       `This file will contain:`,
       `  • ${s.profileCount || 0} domain profiles`,
-      `  • ${s.customScriptsCount || 0} custom scripts`,
+      `  • ${s.userscriptsCount ?? s.customScriptsCount ?? 0} userscripts (with their saved values)`,
       `  • ${s.trustedCount || 0} trusted domains`,
       `  • ${s.blockedCount || 0} manually blocked domains`,
       `  • ${s.threatCacheCount || 0} threat cache entries`,
@@ -2454,7 +2838,9 @@ async function doExport() {
       `  • ${s.chainCount || 0} redirect chains`,
       `  • ${s.graphNodeCount || 0} graph nodes`,
       ``,
-      `The VirusTotal API key is NEVER included.`,
+      (s.apiKeysIncluded || []).length
+        ? `API KEYS ARE INCLUDED IN PLAIN TEXT (${s.apiKeysIncluded.join(', ')}). Keep this file private!`
+        : `API keys are NOT included in this file.`,
       ``,
       `Download this backup now?`
     ];
@@ -2512,12 +2898,16 @@ async function handleImport(file) {
     if (!r?.ok) throw new Error(r?.error || 'Import failed');
 
     const parts = [`${r.importedProfiles ?? 0} profiles`];
-    if (r.importedCustomScripts) parts.push(`${r.importedCustomScripts} scripts`);
+    if (r.importedUserscripts) parts.push(`${r.importedUserscripts} userscripts`);
+    else if (r.importedCustomScripts) parts.push(`${r.importedCustomScripts} scripts`);
+    if (r.importedApiKeys?.length) parts.push(`API keys (${r.importedApiKeys.join(', ')})`);
     if (r.importedUserTrusted) parts.push(`${r.importedUserTrusted} trusted`);
     if (r.importedUserBlocked) parts.push(`${r.importedUserBlocked} blocked`);
     if (r.importedThreatCache) parts.push(`${r.importedThreatCache} cache entries`);
     if (restoreTelemetry) parts.push('telemetry');
     showToast(`Restored: ${parts.join(', ')}`);
+    if (r.userscriptsError) showToast(`Userscripts could not be fully restored: ${r.userscriptsError}`, 'error');
+    if (r.apiKeyError) showToast(`API key could not be restored: ${r.apiKeyError}`, 'error');
     await refresh();
   } catch (e) {
     showToast(`Import failed: ${e.message}`, 'error');
@@ -3434,6 +3824,31 @@ safeOn('blockedDomainBtn', 'click', addBlockedDomain);
 safeOn('blockedDomainInput', 'keydown', e => { if (e.key === 'Enter') addBlockedDomain(); });
 
 safeOn('scriptNewBtn', 'click', () => openEditor(null));
+document.querySelectorAll('[data-guide-lang]').forEach(b => b.addEventListener('click', () => { state.guideLang = b.dataset.guideLang; renderUserscriptGuide(); }));
+document.querySelectorAll('[data-guide-tab]').forEach(b => b.addEventListener('click', () => { state.guideTab = b.dataset.guideTab; renderUserscriptGuide(); }));
+(() => {
+  // Re-render the EN/FA bits whenever the dashboard language is (re)applied
+  let lastLang = '';
+  if (window.CorsairI18n && !CorsairI18n.__bilingualHook) {
+    const orig = CorsairI18n.apply;
+    CorsairI18n.apply = function () {
+      const r = orig.apply(this, arguments);
+      try {
+        const cur = String(CorsairI18n.getCurrent?.() || '');
+        if (cur !== lastLang) { lastLang = cur; state.guideLang = ''; }
+        applyBilingual();
+        renderUserscriptGuide();
+        const active = document.querySelector('.view.active');
+        const titleEl = $('viewTitle') || document.querySelector('.view-title, #pageTitle');
+        if (active && titleEl && active.id === 'view-scripts') titleEl.textContent = getViewTitle('scripts');
+      } catch {}
+      return r;
+    };
+    CorsairI18n.__bilingualHook = true;
+  }
+  applyBilingual();
+  renderUserscriptGuide();
+})();
 safeOn('scriptSearch', 'input', (e) => { state.scriptQuery = e.target.value || ''; renderCustomScripts(); });
 window.addEventListener('focus', async () => {
   const av = state.userscriptAvailability;
