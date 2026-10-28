@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard reorganised: the sidebar is grouped (Monitor / Protection / Tools / System), Userscripts has its own page (it used to sit inside Security), and the Settings page is split into labelled groups (Protection, Threat intelligence, Alerts & banners, Logging). No setting was removed or renamed.
 - The userscript search box now has proper styling.
 
+### Fixed (storage / security)
+- **`QuotaExceededError: global storage cap 10485760 bytes exceeded` switched the protection off.** The security storage budget summed *every* key in `chrome.storage.local`, so userscript data (code, cached `@require` libraries, `@resource` files, `GM_setValue` values) counted against it. Once it filled up, every security write (activity log, domain profiles, DNR rule registry, threat cache, settings) failed. Userscript keys (`cus:*`) are now excluded from the security budget, and the hard cap itself was raised from 10 MB to 100 MB (the extension has the `unlimitedStorage` permission, so this is only our own safety net). The cap still protects against runaway security data, and tests cover both directions.
+- Storage usage panel now counts the new userscripts (it was still reading the legacy per-domain map) and reports their size separately.
+
 ### Fixed (backup)
 - The tour text claimed the API key is "never included in backups" and "never written to disk"; both statements were out of date and are corrected (README, SECURITY.md and README.fa.md as well).
 

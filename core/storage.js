@@ -31,7 +31,16 @@ const CorsairStorage = (() => {
     customDomainScripts: 1 * 1024 * 1024
   };
 
-  const GLOBAL_HARD_CAP = 10 * 1024 * 1024;
+  // Hard cap for the SECURITY data (events, profiles, DNR registry, caches,
+  // settings...). The extension has the `unlimitedStorage` permission, so
+  // this is our own safety net and not Chrome's 10 MB quota.
+  const GLOBAL_HARD_CAP = 100 * 1024 * 1024;
+
+  // Userscript data (code, cached @require/@resource, GM values, backups of
+  // them) has its own storage and must never eat into the security budget,
+  // otherwise a large script would make every security write fail.
+  const CAP_EXCLUDED_PREFIXES = ['cus:'];
+  const isCapExcluded = (key) => CAP_EXCLUDED_PREFIXES.some(p => String(key).startsWith(p));
   const MAX_EVENTS = 1000;
   const MAX_CHAINS = 200;
   const MAX_NODES = 500;
@@ -156,21 +165,23 @@ const CorsairStorage = (() => {
         byKey[k] = b;
         total += b;
       }
-      return { total, byKey };
+      return { total, byKey, excluded: 0 };
     }
 
     _fullScanCount++;
     _storageReadCount++;
     const all = await chrome.storage.local.get(null);
     let total = 0;
+    let excluded = 0;
     const byKey = {};
     for (const [k, v] of Object.entries(all || {})) {
       const b = estimateBytes(v);
+      if (isCapExcluded(k)) { excluded += b; continue; }
       byKey[k] = b;
       total += b;
     }
     _partitionByteCache = { ...byKey };
-    return { total, byKey };
+    return { total, byKey, excluded };
   }
 
   async function ensureQuotaBudgetBeforeWrite(partitionKey, incomingBytes) {
@@ -1348,6 +1359,7 @@ const CorsairStorage = (() => {
     KEYS,
     SOFT_BUDGETS,
     GLOBAL_HARD_CAP,
+    isCapExcluded,
     setLockObserver,
     ensureReady,
     estimateTotalStorageBytes,

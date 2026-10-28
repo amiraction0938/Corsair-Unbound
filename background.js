@@ -1373,7 +1373,8 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
             const userBlocked = await CorsairStorage.get('userBlockedDomains', []);
             const cache = await CorsairStorage.get('threatCache', {});
             const safeCount = Object.values(cache).filter(r => r?.verdict === 'clean' && r?.status !== 'allowlisted').length;
-            const customScripts = await CorsairStorage.get('customDomainScripts', {});
+            let userscriptCount = 0;
+            try { userscriptCount = (await CorsairUserScripts.list()).length; } catch {}
             send({
               ok: true,
               usage: {
@@ -1384,7 +1385,8 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
                 userBlockedCount: Array.isArray(userBlocked) ? userBlocked.length : 0,
                 safeScannedCount: safeCount,
                 threatCacheCount: Object.keys(cache || {}).length,
-                customScriptsCount: Object.keys(customScripts || {}).length
+                customScriptsCount: userscriptCount,
+                userscriptsBytes: total.excluded || 0
               }
             });
           } catch (err) { send({ ok: false, error: err.message }); }
