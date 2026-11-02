@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { installChromeMock } from './helpers/chrome-mock.js';
 
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'dashboard.html'), 'utf8');
@@ -150,5 +151,130 @@ describe('settings are grouped but nothing was lost', () => {
     ]);
     const patch = api.readSettingsForm();
     expect(Object.keys(patch)).toEqual(expect.arrayContaining(['autoArmFortressThreshold', 'autoBlockThreshold', 'maxRedirectHops']));
+  });
+});
+
+describe('product tour', () => {
+  const stops = [...js.slice(js.indexOf('const TOUR_STOP_DEFS = ['), js.indexOf('\n];', js.indexOf('const TOUR_STOP_DEFS = [')))
+    .matchAll(/view: (null|'(\w+)'),\s*target: '([^']+)',\s*titleKey: '([^']+)',[\s\S]*?descKey: '([^']+)'/g)]
+    .map(m => ({ view: m[2] || null, target: m[3], titleKey: m[4], descKey: m[5] }));
+
+  it('has the new stops (userscripts, guide, settings, backup) in a sensible order', () => {
+    expect(stops.length).toBe(11);
+    const keys = stops.map(s => s.titleKey);
+    expect(keys.indexOf('tour.stepScripts.title')).toBeGreaterThan(keys.indexOf('tour.step6.title'));
+    expect(keys.indexOf('tour.stepGuide.title')).toBe(keys.indexOf('tour.stepScripts.title') + 1);
+    expect(keys.indexOf('tour.stepBackup.title')).toBe(keys.length - 1);
+  });
+
+  it('every stop targets an element that exists on the right page', () => {
+    document.documentElement.innerHTML = html.replace(/<script[\s\S]*?<\/script>/g, '');
+    for (const s of stops) {
+      const el = document.querySelector(s.target);
+      expect(el, s.target).not.toBeNull();
+      if (s.view) expect(el.closest(`#view-${s.view}`), `${s.target} inside view-${s.view}`).not.toBeNull();
+    }
+  });
+
+  it('every stop has a translation in all 8 languages', async () => {
+    installChromeMock();
+    (0, eval)(fs.readFileSync(path.join(root, 'core/i18n.js'), 'utf8'));
+    for (const lang of ['en', 'fa', 'ar', 'es', 'de', 'fr', 'ru', 'zh']) {
+      await CorsairI18n.set(lang);
+      for (const s of stops) {
+        for (const k of [s.titleKey, s.descKey]) {
+          expect(CorsairI18n.t(k, '__MISSING__'), `${lang} ${k}`).not.toBe('__MISSING__');
+        }
+      }
+    }
+  });
+});
+
+describe('Persian coverage', () => {
+  it('the previously missing API / URLhaus keys now exist in Persian', async () => {
+    installChromeMock();
+    (0, eval)(fs.readFileSync(path.join(root, 'core/i18n.js'), 'utf8'));
+    await CorsairI18n.set('fa');
+    const keys = ['api.verifying', 'api.savedVerified', 'api.savedRateLimited', 'api.verifyFailed', 'api.invalidKey',
+      'api.invalidLength', 'api.networkError', 'api.emptyKey', 'api.alreadySaved', 'urlhaus.disabled', 'urlhaus.verifying',
+      'urlhaus.savedVerified', 'urlhaus.savedRateLimited', 'urlhaus.verifyFailed', 'urlhaus.invalidKey', 'urlhaus.invalidLength',
+      'urlhaus.networkError', 'urlhaus.emptyKey', 'urlhaus.alreadySaved', 'update.modal.step3.button'];
+    for (const k of keys) {
+      const v = CorsairI18n.t(k, '__MISSING__');
+      expect(v, k).not.toBe('__MISSING__');
+      expect(v, k).toMatch(/[\u0600-\u06FF]/);
+    }
+  });
+
+  it('no language still claims the API key is "memory only / never in backups"', async () => {
+    installChromeMock();
+    (0, eval)(fs.readFileSync(path.join(root, 'core/i18n.js'), 'utf8'));
+    for (const lang of ['en', 'fa', 'ar', 'es', 'de', 'fr', 'ru', 'zh']) {
+      await CorsairI18n.set(lang);
+      for (const k of ['vt.subtitle', 'vt.keyStorageNote', 'onboarding.step4.subtitle']) {
+        const v = CorsairI18n.t(k, '');
+        expect(v, `${lang} ${k}`).not.toMatch(/never written to disk|never included in backups|Nur im Speicher\.$|Solo en memoria\.$|En mémoire uniquement\.$/);
+      }
+    }
+  });
+
+  it('static English UI pieces carry a Persian counterpart (data-fa attributes)', () => {
+    document.documentElement.innerHTML = html.replace(/<script[\s\S]*?<\/script>/g, '');
+    for (const id of ['scriptNewBtn', 'scriptImportBtn', 'scriptImportFileBtn', 'urlhausKeySave', 'apiKeyMissingWarning']) {
+      const el = document.getElementById(id);
+      expect(el, id).not.toBeNull();
+      expect(el.dataset.fa, id).toMatch(/[\u0600-\u06FF]/);
+    }
+    expect(document.getElementById('scriptSearch').dataset.faPh).toMatch(/[\u0600-\u06FF]/);
+  });
+});
+
+describe('applyBilingual', () => {
+  it('switches text, html, placeholder, title and aria-label to Persian', () => {
+    document.body.innerHTML = `
+      <span id="a" data-en="Hello" data-fa="سلام">Hello</span>
+      <div id="b" data-en-html="<b>One</b>" data-fa-html="<b>یک</b>"><b>One</b></div>
+      <input id="c" placeholder="Search" data-en-ph="Search" data-fa-ph="جستجو">
+      <button id="d" title="Close" aria-label="Close" data-en-title="Close" data-fa-title="بستن" data-en-aria="Close" data-fa-aria="بستن"></button>`;
+    for (const fa of [true, false]) {
+      const fn = new Function('document', 'isFaUi', `${extractFn('applyBilingual')}; applyBilingual();`);
+      fn(document, () => fa);
+      expect(document.getElementById('a').textContent).toBe(fa ? 'سلام' : 'Hello');
+      expect(document.getElementById('b').innerHTML).toBe(fa ? '<b>یک</b>' : '<b>One</b>');
+      expect(document.getElementById('c').getAttribute('placeholder')).toBe(fa ? 'جستجو' : 'Search');
+      expect(document.getElementById('d').getAttribute('title')).toBe(fa ? 'بستن' : 'Close');
+      expect(document.getElementById('d').getAttribute('aria-label')).toBe(fa ? 'بستن' : 'Close');
+    }
+  });
+});
+
+describe('translation tables', () => {
+  const i18n = fs.readFileSync(path.join(root, 'core/i18n.js'), 'utf8').replace(/\r\n/g, '\n').split('\n');
+  const starts = i18n.map((l, i) => [l, i]).filter(([l]) => /^\s{2,6}(en|fa|ar|es|de|fr|ru|zh)\s*:\s*\{/.test(l)).map(([, i]) => i);
+
+  it('no language block defines the same key twice (the last one silently wins)', () => {
+    const dupes = [];
+    starts.forEach((a, n) => {
+      const b = starts[n + 1] ?? i18n.length;
+      const seen = new Set();
+      for (let i = a; i < b; i++) {
+        const m = /^\s*'([^']+)'\s*:/.exec(i18n[i]) || /\{\s+'([^']+)'\s*:/.exec(i18n[i]);
+        if (!m) continue;
+        if (seen.has(m[1])) dupes.push(`${m[1]} @ line ${i + 1}`);
+        seen.add(m[1]);
+      }
+    });
+    expect(dupes).toEqual([]);
+  });
+
+  it('the block page title and the dashboard panel title no longer share one key', async () => {
+    installChromeMock();
+    (0, eval)(fs.readFileSync(path.join(root, 'core/i18n.js'), 'utf8'));
+    await CorsairI18n.set('en');
+    expect(CorsairI18n.t('blocked.title', '')).toBe('Navigation Blocked');
+    expect(CorsairI18n.t('blocked.panelTitle', '')).toContain('Blocked Domains');
+    await CorsairI18n.set('fa');
+    expect(CorsairI18n.t('blocked.title', '')).toBe('ناوبری مسدود شد');
+    expect(html).toContain('data-i18n="blocked.panelTitle"');
   });
 });

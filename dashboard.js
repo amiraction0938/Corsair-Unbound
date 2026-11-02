@@ -54,9 +54,20 @@ const tx = (en, fa) => (isFaUi() ? fa : en);
 
 function applyBilingual(root) {
   const fa = isFaUi();
-  (root || document).querySelectorAll('[data-en]').forEach(el => {
+  const r = root || document;
+  r.querySelectorAll('[data-en]').forEach(el => {
     const txt = fa ? el.dataset.fa : el.dataset.en;
     if (txt) el.textContent = txt;
+  });
+  r.querySelectorAll('[data-en-html]').forEach(el => {
+    const html = fa ? el.dataset.faHtml : el.dataset.enHtml;
+    if (html) el.innerHTML = html;
+  });
+  [['ph', 'Ph', 'placeholder'], ['title', 'Title', 'title'], ['aria', 'Aria', 'aria-label']].forEach(([key, cap, attrName]) => {
+    r.querySelectorAll(`[data-en-${key}]`).forEach(el => {
+      const v = fa ? el.dataset['fa' + cap] : el.dataset['en' + cap];
+      if (v) el.setAttribute(attrName, v);
+    });
   });
 }
 
@@ -347,7 +358,7 @@ function renderProfiles() {
     if (p.autoArmed === true) {
       const badge = document.createElement('span');
       badge.className = 'auto-armed-badge';
-      badge.textContent = '⚡ AUTO';
+      badge.textContent = tx('⚡ AUTO', '⚡ خودکار');
       badge.title = p.autoArmReason || 'Auto-armed';
       title.appendChild(badge);
     }
@@ -355,7 +366,7 @@ function renderProfiles() {
     sub.className = 'muted';
     const mode = String(p.mode || 'custom').toUpperCase();
     const blockedCount = p.blockedDestinationDomains?.length || 0;
-    sub.textContent = `${mode} • blocked destinations: ${blockedCount}`;
+    sub.textContent = tx(`${mode} • blocked destinations: ${blockedCount}`, `${mode} • مقصدهای مسدودشده: ${blockedCount}`);
     left.append(title, sub);
 
     const right = document.createElement('div');
@@ -365,8 +376,8 @@ function renderProfiles() {
     delBtn.textContent = t('scripts.remove', 'Remove');
     delBtn.addEventListener('click', async () => {
       const res = await send({ type: 'remove-profile', domain: d });
-      if (res?.ok) { showToast(`Removed ${d}`); await refresh(); }
-      else showToast(res?.error || 'Failed', 'error');
+      if (res?.ok) { showToast(tx(`Removed ${d}`, `${d} حذف شد`)); await refresh(); }
+      else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
     });
 
     right.appendChild(delBtn);
@@ -780,7 +791,7 @@ async function installUserscriptDemo(key) {
   if (!code) return;
   const res = await send({ type: 'us-save', code });
   if (reportSaveResult(res)) {
-    showToast('Demo installed. Now open example.com in a new tab.');
+    showToast(tx('Demo installed. Now open example.com in a new tab.', 'دمو نصب شد. حالا example.com را در یک تب جدید باز کنید.'));
     await refresh();
   }
 }
@@ -797,24 +808,24 @@ function renderUserscriptStatus() {
   const body = document.createElement('div');
 
   if (av.code === 'old-chrome') {
-    title.textContent = '⚠️ Chrome is too old for userscripts';
-    body.textContent = 'Userscripts need Chrome 120 or newer. Please update Chrome.';
+    title.textContent = tx('⚠️ Chrome is too old for userscripts', '⚠️ نسخه‌ی Chrome برای اسکریپت‌ها قدیمی است');
+    body.textContent = tx('Userscripts need Chrome 120 or newer. Please update Chrome.', 'اسکریپت‌ها به Chrome نسخه‌ی ۱۲۰ یا بالاتر نیاز دارند. لطفاً Chrome را به‌روز کنید.');
     el.append(title, body);
     return;
   }
 
-  title.textContent = '⚠️ One-time setup needed: allow user scripts';
+  title.textContent = tx('⚠️ One-time setup needed: allow user scripts', '⚠️ یک تنظیم یک‌باره لازم است: اجازه‌ی اسکریپت‌ها');
   const ol = document.createElement('ol');
   [
-    'Open chrome://extensions and click "Details" on Corsair Unbound.',
-    'Turn on "Allow User Scripts". (On Chrome 137 or older, turn on "Developer mode" at the top right instead.)',
-    'Come back here and reload this page.'
+    tx('Open chrome://extensions and click "Details" on Corsair Unbound.', 'chrome://extensions را باز کنید و روی «Details» اکستنشن Corsair Unbound بزنید.'),
+    tx('Turn on "Allow User Scripts". (On Chrome 137 or older, turn on "Developer mode" at the top right instead.)', 'گزینه‌ی «Allow User Scripts» را روشن کنید. (در Chrome نسخه‌ی ۱۳۷ و قدیمی‌تر به‌جای آن «Developer mode» را بالا-راست روشن کنید.)'),
+    tx('Come back here and reload this page.', 'به اینجا برگردید و این صفحه را دوباره بارگذاری کنید.')
   ].forEach(txt => { const li = document.createElement('li'); li.textContent = txt; ol.appendChild(li); });
 
   const btn = document.createElement('button');
   btn.className = 'tool-btn';
   btn.type = 'button';
-  btn.textContent = 'Open extension settings';
+  btn.textContent = tx('Open extension settings', 'باز کردن تنظیمات اکستنشن');
   btn.addEventListener('click', () => {
     const id = state.extensionId || (chrome.runtime && chrome.runtime.id) || '';
     chrome.tabs.create({ url: 'chrome://extensions/?id=' + id });
@@ -890,7 +901,7 @@ function renderCustomScripts() {
 
   if (!total) {
     if (countEl) countEl.textContent = '';
-    box.innerHTML = '<div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>';
+    box.innerHTML = `<div class="empty">${tx('No userscripts yet. Click "New script" or import one from a URL or file.', 'هنوز اسکریپتی نیست. روی «اسکریپت جدید» بزنید یا یکی را از لینک یا فایل وارد کنید.')}</div>`;
     return;
   }
 
@@ -902,10 +913,10 @@ function renderCustomScripts() {
     return hay.includes(q);
   });
 
-  if (countEl) countEl.textContent = q ? `${visible.length} / ${total}` : `${total} script${total === 1 ? '' : 's'}`;
+  if (countEl) countEl.textContent = q ? `${visible.length} / ${total}` : tx(`${total} script${total === 1 ? '' : 's'}`, `${total} اسکریپت`);
 
   if (!visible.length) {
-    box.innerHTML = '<div class="empty">No scripts match your search.</div>';
+    box.innerHTML = `<div class="empty">${tx('No scripts match your search.', 'هیچ اسکریپتی با جستجوی شما مطابقت ندارد.')}</div>`;
     return;
   }
 
@@ -928,26 +939,26 @@ function renderCustomScripts() {
     title.textContent = item.name + (item.version ? '  v' + item.version : '');
     const meta = document.createElement('div');
     meta.className = 'script-meta';
-    const world = item.world === 'MAIN' ? 'page' : 'sandbox';
+    const world = item.world === 'MAIN' ? tx('page', 'حالت صفحه') : tx('sandbox', 'حالت ایزوله');
     meta.textContent = [
       item.description || '',
-      `${item.lines} lines`,
+      tx(`${item.lines} lines`, `${item.lines} خط`),
       item.runAt,
       world,
-      item.sourceUrl ? 'from URL' : (item.migratedFrom ? 'migrated' : 'local')
+      item.sourceUrl ? tx('from URL', 'از لینک') : (item.migratedFrom ? tx('migrated', 'منتقل‌شده') : tx('local', 'محلی'))
     ].filter(Boolean).join(' • ');
     left.append(title, meta);
 
     if (item.noMatch) {
       const warn = document.createElement('div');
       warn.className = 'script-warn';
-      warn.textContent = 'No @match or @include in the header: this script will not run anywhere yet.';
+      warn.textContent = tx('No @match or @include in the header: this script will not run anywhere yet.', 'در هدر هیچ @match یا @include نیست: این اسکریپت هنوز هیچ‌جا اجرا نمی‌شود.');
       left.appendChild(warn);
     }
     if (item.lastError) {
       const warn = document.createElement('div');
       warn.className = 'script-warn';
-      warn.textContent = 'Registration error: ' + item.lastError;
+      warn.textContent = tx('Registration error: ', 'خطای ثبت: ') + item.lastError;
       left.appendChild(warn);
     }
 
@@ -964,10 +975,10 @@ function renderCustomScripts() {
       if (res?.ok) {
         item.enabled = toggle.checked;
         row.classList.toggle('disabled', !toggle.checked);
-        showToast(`${item.name}: ${toggle.checked ? 'enabled' : 'disabled'}`);
+        showToast(`${item.name}: ${toggle.checked ? tx('enabled', 'فعال شد') : tx('disabled', 'غیرفعال شد')}`);
       } else {
         toggle.checked = !toggle.checked;
-        showToast(res?.error || 'Failed', 'error');
+        showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
       }
     });
     const toggleTxt = document.createElement('span');
@@ -985,8 +996,8 @@ function renderCustomScripts() {
     delBtn.addEventListener('click', async () => {
       if (!confirm(t('scripts.confirmRemove', 'Remove this script? This cannot be undone.'))) return;
       const res = await send({ type: 'us-remove', id: item.id });
-      if (res?.ok) { showToast(`Removed ${item.name}`); await refresh(); }
-      else showToast(res?.error || 'Failed', 'error');
+      if (res?.ok) { showToast(tx(`Removed ${item.name}`, `${item.name} حذف شد`)); await refresh(); }
+      else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
     });
 
     actions.append(toggleLabel, editBtn, delBtn);
@@ -1019,17 +1030,17 @@ function renderCustomScripts() {
 }
 
 function reportSaveResult(res, fallbackName) {
-  if (!res?.ok) { showToast(res?.error || 'Failed to save', 'error'); return false; }
+  if (!res?.ok) { showToast(res?.error || tx('Failed to save', 'ذخیره ناموفق بود'), 'error'); return false; }
   const name = res.script?.name || fallbackName || 'script';
   if (res.script?.id) state.highlightScriptId = res.script.id;
   if (res.sync && res.sync.ok === false) {
-    showToast(`Saved "${name}", but it is not active yet: allow user scripts for this extension (see the notice above).`, 'error');
+    showToast(tx(`Saved "${name}", but it is not active yet: allow user scripts for this extension (see the notice above).`, `«${name}» ذخیره شد ولی هنوز فعال نیست: گزینه‌ی «Allow User Scripts» را برای این اکستنشن روشن کنید (هشدار بالای صفحه).`), 'error');
   } else if (res.sync?.errors?.length) {
-    showToast(`Saved "${name}" with an error: ${res.sync.errors[0].error}`, 'error');
+    showToast(tx(`Saved "${name}" with an error: ${res.sync.errors[0].error}`, `«${name}» با خطا ذخیره شد: ${res.sync.errors[0].error}`), 'error');
   } else if (res.warnings?.length) {
-    showToast(`Saved "${name}". ${res.warnings[0]}`, 'error');
+    showToast(tx(`Saved "${name}". ${res.warnings[0]}`, `«${name}» ذخیره شد. ${res.warnings[0]}`), 'error');
   } else {
-    showToast(`Saved "${name}"`);
+    showToast(tx(`Saved "${name}"`, `«${name}» ذخیره شد`));
   }
   return true;
 }
@@ -1037,7 +1048,7 @@ function reportSaveResult(res, fallbackName) {
 async function importUserscriptFromUrl() {
   const input = $('scriptImportUrl');
   const url = (input?.value || '').trim();
-  if (!url) { showToast('Paste a script URL first', 'error'); return; }
+  if (!url) { showToast(tx('Paste a script URL first', 'اول آدرس اسکریپت را بچسبانید'), 'error'); return; }
   const res = await send({ type: 'us-import-url', url });
   if (reportSaveResult(res)) { input.value = ''; await refresh(); }
 }
@@ -1049,7 +1060,7 @@ async function importUserscriptFiles(files) {
       const res = await send({ type: 'us-save', code });
       reportSaveResult(res, file.name);
     } catch (e) {
-      showToast(`Could not read ${file.name}`, 'error');
+      showToast(tx(`Could not read ${file.name}`, `خواندن ${file.name} ممکن نشد`), 'error');
     }
   }
   await refresh();
@@ -1063,7 +1074,7 @@ async function openEditor(id) {
   let name = 'New script';
   if (id) {
     const res = await send({ type: 'us-get', id });
-    if (!res?.ok || !res.script) { showToast(res?.error || 'Script not found', 'error'); return; }
+    if (!res?.ok || !res.script) { showToast(res?.error || tx('Script not found', 'اسکریپت پیدا نشد'), 'error'); return; }
     code = res.script.code || '';
     name = res.script.name;
   }
@@ -1234,21 +1245,21 @@ function renderSafeDomains() {
     title.className = 'safe-domain-host';
     const sub = document.createElement('div');
     sub.className = 'safe-domain-meta';
-    sub.textContent = `Clean • ${risk}% risk • ${stats.harmless || 0}/${stats.malicious || 0}/${stats.suspicious || 0} • ${scannedAt}`;
+    sub.textContent = tx(`Clean • ${risk}% risk • ${stats.harmless || 0}/${stats.malicious || 0}/${stats.suspicious || 0} • ${scannedAt}`, `پاک • ریسک ${risk}٪ • ${stats.harmless || 0}/${stats.malicious || 0}/${stats.suspicious || 0} • ${scannedAt}`);
     left.append(title, sub);
 
     const right = document.createElement('div');
     right.className = 'safe-domain-actions';
     const badge = document.createElement('span');
     badge.className = 'safe-domain-badge';
-    badge.textContent = '✓ SAFE';
+    badge.textContent = tx('✓ SAFE', '✓ امن');
     const delBtn = document.createElement('button');
     delBtn.className = 'btn-remove-safe';
     delBtn.textContent = t('scripts.remove', 'Remove');
     delBtn.addEventListener('click', async () => {
       const res = await send({ type: 'remove-safe-scanned-domain', domain: host });
-      if (res?.ok) { state.safeDomainSelected.delete(host); showToast(`Removed ${host}`); await refresh(); }
-      else showToast(res?.error || 'Failed', 'error');
+      if (res?.ok) { state.safeDomainSelected.delete(host); showToast(tx(`Removed ${host}`, `${host} حذف شد`)); await refresh(); }
+      else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
     });
     right.append(badge, delBtn);
     row.append(cb, left, right);
@@ -1291,7 +1302,7 @@ async function addTrustedDomain() {
     showToast(t('trusted.added', 'Trusted {host}').replace('{host}', host));
     await refresh();
   } else {
-    showToast(res?.error || 'Failed', 'error');
+    showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
   }
 }
 
@@ -1323,14 +1334,14 @@ function renderTrustedList() {
     badge.style.background = 'rgba(59,130,246,0.15)';
     badge.style.color = '#60a5fa';
     badge.style.borderColor = 'rgba(59,130,246,0.3)';
-    badge.textContent = '🛡️ TRUSTED';
+    badge.textContent = tx('🛡️ TRUSTED', '🛡️ مورد اعتماد');
     const delBtn = document.createElement('button');
     delBtn.className = 'btn-remove-safe';
     delBtn.textContent = t('scripts.remove', 'Untrust');
     delBtn.addEventListener('click', async () => {
       const res = await send({ type: 'untrust-domain', host });
-      if (res?.ok) { showToast(`Untrusted ${host}`); await refresh(); }
-      else showToast(res?.error || 'Failed', 'error');
+      if (res?.ok) { showToast(tx(`Untrusted ${host}`, `اعتماد به ${host} برداشته شد`)); await refresh(); }
+      else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
     });
     right.append(badge, delBtn);
     row.append(left, right);
@@ -1349,7 +1360,7 @@ async function addBlockedDomain() {
     showToast(t('blocked.added', 'Blocked {host}').replace('{host}', host));
     await refresh();
   } else {
-    showToast(res?.error || 'Failed', 'error');
+    showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
   }
 }
 
@@ -1381,14 +1392,14 @@ function renderBlockedList() {
     badge.style.background = 'rgba(244,63,94,0.15)';
     badge.style.color = '#f87171';
     badge.style.borderColor = 'rgba(244,63,94,0.3)';
-    badge.textContent = '🚫 BLOCKED';
+    badge.textContent = tx('🚫 BLOCKED', '🚫 مسدود');
     const delBtn = document.createElement('button');
     delBtn.className = 'btn-remove-safe';
     delBtn.textContent = t('blocked.unblock', 'Unblock');
     delBtn.addEventListener('click', async () => {
       const res = await send({ type: 'unblock-domain-global', host });
-      if (res?.ok) { showToast(`Unblocked ${host}`); await refresh(); }
-      else showToast(res?.error || 'Failed', 'error');
+      if (res?.ok) { showToast(tx(`Unblocked ${host}`, `${host} از مسدودی خارج شد`)); await refresh(); }
+      else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
     });
     right.append(badge, delBtn);
     row.append(left, right);
@@ -1571,10 +1582,10 @@ async function renderUrlhausStatus() {
     const box = $('urlhausStatusBox');
     if (box) {
       if (key) {
-        box.textContent = '✓ URLhaus is enabled — host queries will be sent to abuse.ch.';
+        box.textContent = tx('✓ URLhaus is enabled — host queries will be sent to abuse.ch.', '✓ URLhaus فعال است — درخواست‌های دامنه به abuse.ch ارسال می‌شود.');
         box.style.color = '#34d399';
       } else {
-        box.textContent = 'URLhaus is disabled. Optional — leave empty for a fully local-only setup.';
+        box.textContent = tx('URLhaus is disabled. Optional — leave empty for a fully local-only setup.', 'URLhaus غیرفعال است. اختیاری — برای حالت کاملاً محلی خالی بگذارید.');
         box.style.color = '';
       }
     }
@@ -1978,14 +1989,14 @@ function renderEvents() {
 
   if (countEl) {
     if (filtered.length === state.events.length) {
-      countEl.textContent = `${filtered.length} events`;
+      countEl.textContent = tx(`${filtered.length} events`, `${filtered.length} رویداد`);
     } else {
-      countEl.textContent = `${filtered.length} / ${state.events.length} events`;
+      countEl.textContent = tx(`${filtered.length} / ${state.events.length} events`, `${filtered.length} / ${state.events.length} رویداد`);
     }
   }
 
   if (!filtered.length) {
-    box.innerHTML = '<div class="empty">No events match the current filters.</div>';
+    box.innerHTML = `<div class="empty">${tx('No events match the current filters.', 'هیچ رویدادی با فیلترهای فعلی مطابقت ندارد.')}</div>`;
     return;
   }
 
@@ -2043,7 +2054,7 @@ function renderRecentActivity() {
   box.innerHTML = '';
   const recent = state.events.slice(0, 5);
   if (!recent.length) {
-    box.innerHTML = '<div class="empty">No recent activity.</div>';
+    box.innerHTML = `<div class="empty">${tx('No recent activity.', 'فعالیت اخیری وجود ندارد.')}</div>`;
     return;
   }
   for (const e of recent) {
@@ -2331,7 +2342,7 @@ function renderEvidence() {
     t2.textContent = e.kind || 'observation';
     const m = document.createElement('div');
     m.className = 'event-meta';
-    m.textContent = `${humanTime(e.timestamp)} • ${e.origin || ''} • tab ${e.tabId ?? '-'}`;
+    m.textContent = `${humanTime(e.timestamp)} • ${e.origin || ''} • ${tx('tab', 'تب')} ${e.tabId ?? '-'}`;
     main.append(t2, m);
     row.append(main);
     box.appendChild(row);
@@ -2366,7 +2377,7 @@ async function renderRisk() {
     t2.textContent = d;
     const m = document.createElement('div');
     m.className = 'event-meta';
-    m.textContent = 'Analyzing…';
+    m.textContent = tx('Analyzing…', 'در حال تحلیل…');
     main.append(t2, m);
     row.append(main);
     box.appendChild(row);
@@ -2384,7 +2395,7 @@ async function renderRisk() {
         const r = await send({ type: 'assess-domain-risk', domain: d });
         if (r?.assessment) {
           const a = r.assessment;
-          m.textContent = `${String(a.verdict || 'unknown').toUpperCase()} • Risk ${a.risk}/100 • ${Math.round((a.confidence || 0) * 100)}%${a.reasons?.length ? ' • ' + a.reasons.join(', ') : ''}`;
+          m.textContent = `${String(a.verdict || 'unknown').toUpperCase()} • ${tx('Risk', 'ریسک')} ${a.risk}/100 • ${Math.round((a.confidence || 0) * 100)}%${a.reasons?.length ? ' • ' + a.reasons.join(', ') : ''}`;
         } else {
           m.textContent = '—';
         }
@@ -2516,12 +2527,12 @@ function renderAnalyzerResult(data) {
   if (flagged.length) {
     const eng = document.createElement('div');
     eng.className = 'analyzer-engines';
-    eng.innerHTML = `<b>Flagged by ${flagged.length} engine(s):</b> ${escapeHtml(flagged.join(', '))}`;
+    eng.innerHTML = `<b>${tx(`Flagged by ${flagged.length} engine(s):`, `علامت‌گذاری توسط ${flagged.length} موتور:`)}</b> ${escapeHtml(flagged.join(', '))}`;
     wrap.appendChild(eng);
   } else if (verdict === 'clean' || verdict === 'allowlisted') {
     const eng = document.createElement('div');
     eng.className = 'analyzer-engines';
-    eng.innerHTML = `<span style="color:#34d399;">✓ 0 / 70+ engines flagged this domain</span>`;
+    eng.innerHTML = `<span style="color:#34d399;">${tx('✓ 0 / 70+ engines flagged this domain', '✓ هیچ‌کدام از ۷۰+ موتور این دامنه را علامت نزدند')}</span>`;
     wrap.appendChild(eng);
   }
 
@@ -2529,7 +2540,7 @@ function renderAnalyzerResult(data) {
     const heur = document.createElement('div');
     heur.className = 'analyzer-engines';
     heur.style.borderLeft = '3px solid #fbbf24';
-    heur.innerHTML = `<strong style="color:#fbbf24;">🧠 Heuristics:</strong> ${escapeHtml(report.heuristicSignals.map(s => s.message || s.kind).join(' • '))}`;
+    heur.innerHTML = `<strong style="color:#fbbf24;">🧠 ${tx('Heuristics:', 'بررسی‌های ابتکاری:')}</strong> ${escapeHtml(report.heuristicSignals.map(s => s.message || s.kind).join(' • '))}`;
     wrap.appendChild(heur);
   }
 
@@ -2540,7 +2551,7 @@ function renderAnalyzerResult(data) {
       const subSec = document.createElement('div');
       subSec.className = 'analyzer-engines';
       subSec.style.borderLeft = '3px solid #7c3aed';
-      subSec.innerHTML = `<strong style="color:#a78bfa;">🌐 Subdomains (${rel.subdomains.length}):</strong> `;
+      subSec.innerHTML = `<strong style="color:#a78bfa;">🌐 ${tx('Subdomains', 'زیردامنه‌ها')} (${rel.subdomains.length}):</strong> `;
       const list = document.createElement('div');
       list.style.whiteSpace = 'pre-wrap';
       list.style.marginTop = '4px';
@@ -2591,9 +2602,9 @@ async function runAnalyzer(force = false) {
   let host = raw.toLowerCase()
     .replace(/^https?:\/\//, '').replace(/\/.*$/, '')
     .replace(/:\d+$/, '').replace(/^www\./, '');
-  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) { box.innerHTML = '<div class="empty">Invalid format</div>'; return; }
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) { box.innerHTML = `<div class="empty">${tx('Invalid format', 'قالب نامعتبر')}</div>`; return; }
 
-  box.innerHTML = '<div class="empty">Analyzing…</div>';
+  box.innerHTML = `<div class="empty">${tx('Analyzing…', 'در حال تحلیل…')}</div>`;
 
   try {
     if (force) {
@@ -2630,11 +2641,11 @@ async function runDeepScan() {
     .replace(/^https?:\/\//, '').replace(/\/.*$/, '')
     .replace(/:\d+$/, '').replace(/^www\./, '');
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) {
-    box.innerHTML = '<div class="empty">Invalid format</div>';
+    box.innerHTML = `<div class="empty">${tx('Invalid format', 'قالب نامعتبر')}</div>`;
     return;
   }
 
-  box.innerHTML = `<div class="empty">🔎 Deep-scanning… this makes 4 VirusTotal requests (rate-limited, ~1 min).</div>`;
+  box.innerHTML = `<div class="empty">🔎 ${tx('Deep-scanning… this makes 4 VirusTotal requests (rate-limited, ~1 min).', 'در حال اسکن عمیق… این کار ۴ درخواست به VirusTotal می‌زند (محدودیت نرخ، حدود ۱ دقیقه).')}</div>`;
 
   try {
     const r = await send({ type: 'deep-scan-domain', domain: host });
@@ -2683,12 +2694,12 @@ function renderUrlScanResult(data) {
   } else if (Array.isArray(r.flaggedEngines) && r.flaggedEngines.length) {
     const eng = document.createElement('div');
     eng.className = 'analyzer-engines';
-    eng.innerHTML = `<b>Flagged by ${r.flaggedEngines.length} engine(s):</b> ${escapeHtml(r.flaggedEngines.join(', '))}`;
+    eng.innerHTML = `<b>${tx(`Flagged by ${r.flaggedEngines.length} engine(s):`, `علامت‌گذاری توسط ${r.flaggedEngines.length} موتور:`)}</b> ${escapeHtml(r.flaggedEngines.join(', '))}`;
     wrap.appendChild(eng);
   } else if (r.status === 'analyzed') {
     const eng = document.createElement('div');
     eng.className = 'analyzer-engines';
-    eng.innerHTML = `<span style="color:#34d399;">✓ No engines flagged this exact URL</span>`;
+    eng.innerHTML = `<span style="color:#34d399;">${tx('✓ No engines flagged this exact URL', '✓ هیچ موتوری این آدرس را علامت نزد')}</span>`;
     wrap.appendChild(eng);
   }
 
@@ -2706,7 +2717,7 @@ async function runUrlScan() {
   try {
     new URL(url);
   } catch {
-    box.innerHTML = '<div class="empty">Invalid URL</div>';
+    box.innerHTML = `<div class="empty">${tx('Invalid URL', 'آدرس نامعتبر')}</div>`;
     return;
   }
 
@@ -2754,7 +2765,7 @@ function restoreSettingsForm(snap) {
 let _skipSettingsRender = false;
 
 async function refresh() {
-  const [pr, ev, gr, ee, st, sd, ut, ub, cs, ak] = await Promise.all([
+  const [pr, ev, _gr, ee, st, sd, ut, ub, cs, ak] = await Promise.all([
     send({ type: 'get-profiles' }),
     send({ type: 'get-events', limit: 300 }),
     send({ type: 'get-graph' }),
@@ -2819,38 +2830,39 @@ async function doExport() {
     const exp = r.export || {};
     const s = exp.summary || {};
 
+    const keysLine = (s.apiKeysIncluded || []).length
+      ? tx(`API KEYS ARE INCLUDED IN PLAIN TEXT (${s.apiKeysIncluded.join(', ')}). Keep this file private!`, `کلیدهای API به‌صورت متن ساده در فایل هستند (${s.apiKeysIncluded.join('، ')}). فایل را خصوصی نگه دارید!`)
+      : tx('API keys are NOT included in this file.', 'کلیدهای API در این فایل نیستند.');
     const lines = [
-      `Corsair Unbound Backup`,
+      tx('Corsair Unbound Backup', 'پشتیبان Corsair Unbound'),
       ``,
-      `This file will contain:`,
-      `  • ${s.profileCount || 0} domain profiles`,
-      `  • ${s.userscriptsCount ?? s.customScriptsCount ?? 0} userscripts (with their saved values)`,
-      `  • ${s.trustedCount || 0} trusted domains`,
-      `  • ${s.blockedCount || 0} manually blocked domains`,
-      `  • ${s.threatCacheCount || 0} threat cache entries`,
-      `  • ${s.regressionCasesCount || 0} regression cases`,
-      `  • ${s.dnrRuleCount || 0} DNR rules (rebuilt on import)`,
-      `  • Settings, preferences, theme, language`,
+      tx('This file will contain:', 'این فایل شامل این‌هاست:'),
+      `  • ${s.profileCount || 0} ` + tx('domain profiles', 'پروفایل دامنه'),
+      `  • ${s.userscriptsCount ?? s.customScriptsCount ?? 0} ` + tx('userscripts (with their saved values)', 'اسکریپت کاربر (با مقدارهای ذخیره‌شده‌شان)'),
+      `  • ${s.trustedCount || 0} ` + tx('trusted domains', 'دامنه‌ی مورد اعتماد'),
+      `  • ${s.blockedCount || 0} ` + tx('manually blocked domains', 'دامنه‌ی مسدودشده‌ی دستی'),
+      `  • ${s.threatCacheCount || 0} ` + tx('threat cache entries', 'مورد در کش تهدید'),
+      `  • ${s.regressionCasesCount || 0} ` + tx('regression cases', 'مورد رگرسیون'),
+      `  • ${s.dnrRuleCount || 0} ` + tx('DNR rules (rebuilt on import)', 'قانون DNR (هنگام بازیابی بازسازی می‌شود)'),
+      `  • ` + tx('Settings, preferences, theme, language', 'تنظیمات، ترجیحات، تم و زبان'),
       ``,
-      `Telemetry (events, evidence, chains, graph):`,
-      `  • ${s.eventCount || 0} events`,
-      `  • ${s.evidenceCount || 0} evidence entries`,
-      `  • ${s.chainCount || 0} redirect chains`,
-      `  • ${s.graphNodeCount || 0} graph nodes`,
+      tx('Telemetry (events, evidence, chains, graph):', 'داده‌های پایش (رویدادها، شواهد، زنجیره‌ها، گراف):'),
+      `  • ${s.eventCount || 0} ` + tx('events', 'رویداد'),
+      `  • ${s.evidenceCount || 0} ` + tx('evidence entries', 'مورد شواهد'),
+      `  • ${s.chainCount || 0} ` + tx('redirect chains', 'زنجیره‌ی ریدایرکت'),
+      `  • ${s.graphNodeCount || 0} ` + tx('graph nodes', 'گره‌ی گراف'),
       ``,
-      (s.apiKeysIncluded || []).length
-        ? `API KEYS ARE INCLUDED IN PLAIN TEXT (${s.apiKeysIncluded.join(', ')}). Keep this file private!`
-        : `API keys are NOT included in this file.`,
+      keysLine,
       ``,
-      `Download this backup now?`
+      tx('Download this backup now?', 'این پشتیبان همین حالا دانلود شود؟')
     ];
     if (!confirm(lines.join('\n'))) return;
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     downloadJSON(`corsair-unbound-${stamp}.corsair.json`, exp);
-    showToast(`Exported: ${s.profileCount || 0} profiles, ${s.customScriptsCount || 0} scripts, ${s.blockedCount || 0} blocked`);
+    showToast(tx(`Exported: ${s.profileCount || 0} profiles, ${s.userscriptsCount ?? s.customScriptsCount ?? 0} scripts, ${s.blockedCount || 0} blocked`, `خروجی گرفته شد: ${s.profileCount || 0} پروفایل، ${s.userscriptsCount ?? s.customScriptsCount ?? 0} اسکریپت، ${s.blockedCount || 0} دامنه‌ی مسدود`));
   } catch (e) {
-    showToast(`Export failed: ${e.message}`, 'error');
+    showToast(tx(`Export failed: ${e.message}`, `خروجی گرفتن ناموفق بود: ${e.message}`), 'error');
   }
 }
 
@@ -2866,30 +2878,33 @@ async function handleImport(file) {
     const data = JSON.parse(text);
 
     if (data?.format !== 'corsair-unbound') {
-      throw new Error('This file is not a Corsair Unbound backup.');
+      throw new Error(tx('This file is not a Corsair Unbound backup.', 'این فایل پشتیبان Corsair Unbound نیست.'));
     }
 
     const s = data.summary || {};
     const v = data.version || '?';
     const lines = [
-      `Restore Corsair Unbound Backup?`,
+      tx('Restore Corsair Unbound Backup?', 'پشتیبان Corsair Unbound بازیابی شود؟'),
       ``,
-      `Backup version: v${v}`,
-      `Exported at: ${data.exportedAt ? new Date(data.exportedAt).toLocaleString() : '—'}`,
+      tx(`Backup version: v${v}`, `نسخه‌ی پشتیبان: v${v}`),
+      tx('Exported at: ', 'زمان خروجی: ') + (data.exportedAt ? new Date(data.exportedAt).toLocaleString() : '—'),
       ``,
-      `This will RESTORE:`,
-      `  • ${s.profileCount ?? '—'} domain profiles`,
-      `  • ${s.customScriptsCount ?? '—'} custom scripts`,
-      `  • ${s.trustedCount ?? '—'} trusted domains`,
-      `  • ${s.blockedCount ?? '—'} blocked domains`,
-      `  • ${s.threatCacheCount ?? '—'} threat cache entries`,
-      `  • Settings, preferences, theme, language`,
+      tx('This will RESTORE:', 'این موارد بازیابی می‌شوند:'),
+      `  • ${s.profileCount ?? '—'} ` + tx('domain profiles', 'پروفایل دامنه'),
+      `  • ${s.userscriptsCount ?? s.customScriptsCount ?? '—'} ` + tx('userscripts', 'اسکریپت کاربر'),
+      (s.apiKeysIncluded || []).length
+        ? `  • ` + tx(`API keys (${s.apiKeysIncluded.join(', ')})`, `کلیدهای API (${s.apiKeysIncluded.join('، ')})`)
+        : `  • ` + tx('(no API keys in this file)', '(این فایل کلید API ندارد)'),
+      `  • ${s.trustedCount ?? '—'} ` + tx('trusted domains', 'دامنه‌ی مورد اعتماد'),
+      `  • ${s.blockedCount ?? '—'} ` + tx('blocked domains', 'دامنه‌ی مسدود'),
+      `  • ${s.threatCacheCount ?? '—'} ` + tx('threat cache entries', 'مورد در کش تهدید'),
+      `  • ` + tx('Settings, preferences, theme, language', 'تنظیمات، ترجیحات، تم و زبان'),
       ``,
-      `Existing data of these types will be OVERWRITTEN.`,
+      tx('Existing data of these types will be OVERWRITTEN.', 'داده‌های فعلی این نوع‌ها بازنویسی می‌شوند.'),
       ``,
-      `Telemetry: ${$('restoreTelemetry')?.checked === true ? 'WILL also be restored' : 'will NOT be restored (unchecked)'}.`,
+      tx('Telemetry: ', 'داده‌های پایش: ') + ($('restoreTelemetry')?.checked === true ? tx('WILL also be restored', 'هم بازیابی می‌شوند') : tx('will NOT be restored (unchecked)', 'بازیابی نمی‌شوند (تیک نخورده)')) + '.',
       ``,
-      `Continue?`
+      tx('Continue?', 'ادامه می‌دهید؟')
     ];
     if (!confirm(lines.join('\n'))) return;
 
@@ -2897,20 +2912,20 @@ async function handleImport(file) {
     const r = await send({ type: 'import-config', data, restoreTelemetry });
     if (!r?.ok) throw new Error(r?.error || 'Import failed');
 
-    const parts = [`${r.importedProfiles ?? 0} profiles`];
-    if (r.importedUserscripts) parts.push(`${r.importedUserscripts} userscripts`);
+    const parts = [tx(`${r.importedProfiles ?? 0} profiles`, `${r.importedProfiles ?? 0} پروفایل`)];
+    if (r.importedUserscripts) parts.push(tx(`${r.importedUserscripts} userscripts`, `${r.importedUserscripts} اسکریپت`));
     else if (r.importedCustomScripts) parts.push(`${r.importedCustomScripts} scripts`);
-    if (r.importedApiKeys?.length) parts.push(`API keys (${r.importedApiKeys.join(', ')})`);
-    if (r.importedUserTrusted) parts.push(`${r.importedUserTrusted} trusted`);
-    if (r.importedUserBlocked) parts.push(`${r.importedUserBlocked} blocked`);
-    if (r.importedThreatCache) parts.push(`${r.importedThreatCache} cache entries`);
-    if (restoreTelemetry) parts.push('telemetry');
-    showToast(`Restored: ${parts.join(', ')}`);
-    if (r.userscriptsError) showToast(`Userscripts could not be fully restored: ${r.userscriptsError}`, 'error');
-    if (r.apiKeyError) showToast(`API key could not be restored: ${r.apiKeyError}`, 'error');
+    if (r.importedApiKeys?.length) parts.push(tx(`API keys (${r.importedApiKeys.join(', ')})`, `کلیدهای API (${r.importedApiKeys.join('، ')})`));
+    if (r.importedUserTrusted) parts.push(tx(`${r.importedUserTrusted} trusted`, `${r.importedUserTrusted} مورد اعتماد`));
+    if (r.importedUserBlocked) parts.push(tx(`${r.importedUserBlocked} blocked`, `${r.importedUserBlocked} مسدود`));
+    if (r.importedThreatCache) parts.push(tx(`${r.importedThreatCache} cache entries`, `${r.importedThreatCache} مورد کش`));
+    if (restoreTelemetry) parts.push(tx('telemetry', 'داده‌های پایش'));
+    showToast(tx(`Restored: ${parts.join(', ')}`, `بازیابی شد: ${parts.join('، ')}`));
+    if (r.userscriptsError) showToast(tx(`Userscripts could not be fully restored: ${r.userscriptsError}`, `اسکریپت‌ها کامل بازیابی نشدند: ${r.userscriptsError}`), 'error');
+    if (r.apiKeyError) showToast(tx(`API key could not be restored: ${r.apiKeyError}`, `کلید API بازیابی نشد: ${r.apiKeyError}`), 'error');
     await refresh();
   } catch (e) {
-    showToast(`Import failed: ${e.message}`, 'error');
+    showToast(tx(`Import failed: ${e.message}`, `وارد کردن ناموفق بود: ${e.message}`), 'error');
   }
 }
 
@@ -3384,7 +3399,7 @@ const ONBOARDING_STEPS = [
     titleKey: 'onboarding.step4.title',
     titleFb: 'Paste your API key',
     subtitleKey: 'onboarding.step4.subtitle',
-    subtitleFb: 'Stored in memory only. Never written to disk.',
+    subtitleFb: 'Stored encrypted on this device. Only included in backups if you choose.',
     body: () => `
       <div class="onboarding-input">
         <input type="password" id="onboardingApiKey" placeholder="${escapeHtml(t('onboarding.step4.placeholder', 'Paste your 64-char VirusTotal API Key'))}" autocomplete="off" spellcheck="false">
@@ -3704,21 +3719,21 @@ safeOn('safeSelectAll', 'change', () => {
 
 safeOn('removeSelected', 'click', async () => {
   if (!state.safeDomainSelected.size) { showToast('No domains selected', 'error'); return; }
-  if (!confirm(`Remove ${state.safeDomainSelected.size} domain(s)?`)) return;
+  if (!confirm(tx(`Remove ${state.safeDomainSelected.size} domain(s)?`, `${state.safeDomainSelected.size} دامنه حذف شود؟`))) return;
   const hosts = [...state.safeDomainSelected];
   const r = await send({ type: 'bulk-remove-safe-scanned', hosts });
   if (r?.ok) {
-    showToast(`Removed ${r.removed || hosts.length}`);
+    showToast(tx(`Removed ${r.removed || hosts.length}`, `${r.removed || hosts.length} مورد حذف شد`));
     state.safeDomainSelected.clear();
     await refresh();
   } else showToast(r?.error || 'Failed', 'error');
 });
 
 safeOn('clearSafeDomains', 'click', async () => {
-  if (!confirm('Remove ALL safe-scanned domains?')) return;
+  if (!confirm(tx('Remove ALL safe-scanned domains?', 'همه‌ی دامنه‌های امنِ اسکن‌شده حذف شوند؟'))) return;
   const r = await send({ type: 'clear-safe-scanned-domains' });
   if (r?.ok) {
-    showToast(`Cleared ${r.removed || 0}`);
+    showToast(tx(`Cleared ${r.removed || 0}`, `${r.removed || 0} مورد پاک شد`));
     state.safeDomainSelected.clear();
     await refresh();
   } else showToast(r?.error || 'Failed', 'error');
@@ -3730,7 +3745,7 @@ safeOn('exportSafeList', 'click', async () => {
     if (!r?.ok) throw new Error(r?.error || 'failed');
     downloadJSON(`corsair-safe-list-${new Date().toISOString().slice(0,10)}.json`, r.export);
     showToast('Exported.');
-  } catch (e) { showToast(`Failed: ${e.message}`, 'error'); }
+  } catch (e) { showToast(tx(`Failed: ${e.message}`, `ناموفق: ${e.message}`), 'error'); }
 });
 
 safeOn('importSafeList', 'click', () => {
@@ -3746,16 +3761,16 @@ safeOn('safeListFile', 'change', async (e) => {
     const data = JSON.parse(text);
     const r = await send({ type: 'import-safe-list', data });
     if (!r?.ok) throw new Error(r?.error || 'failed');
-    showToast(`Imported ${r.imported} / ${r.total}`);
+    showToast(tx(`Imported ${r.imported} / ${r.total}`, `${r.imported} از ${r.total} وارد شد`));
     await refresh();
-  } catch (err) { showToast(`Failed: ${err.message}`, 'error'); }
+  } catch (err) { showToast(tx(`Failed: ${err.message}`, `ناموفق: ${err.message}`), 'error'); }
 });
 
 safeOn('refreshStorage', 'click', renderStorageStats);
 
 safeOn('wipeAllData', 'click', async () => {
-  if (!confirm('⚠️ Delete ALL local data? Continue?')) return;
-  if (!confirm('Absolutely sure? Cannot be undone.')) return;
+  if (!confirm(tx('⚠️ Delete ALL local data? Continue?', '⚠️ همه‌ی داده‌های محلی حذف شود؟ ادامه می‌دهید؟'))) return;
+  if (!confirm(tx('Absolutely sure? Cannot be undone.', 'کاملاً مطمئن هستید؟ این کار برگشت‌پذیر نیست.'))) return;
   const r = await send({ type: 'wipe-all-data' });
   if (r?.ok) { showToast('Wiped.'); setTimeout(() => location.reload(), 800); }
   else showToast(r?.error || 'Failed', 'error');
@@ -3860,7 +3875,7 @@ window.addEventListener('focus', async () => {
       state.userscriptAvailability = res.availability;
       state.customScripts = res.scripts || [];
       renderCustomScripts();
-      showToast('User scripts are now enabled ✓');
+      showToast(tx('User scripts are now enabled ✓', 'اسکریپت‌ها اکنون فعال شدند ✓'));
     }
   } catch {}
 });
@@ -3874,7 +3889,7 @@ safeOn('scriptImportFile', 'change', (e) => { importUserscriptFiles(e.target.fil
 safeOn('syncWhitelistBtn', 'click', async () => {
   showToast('Syncing…');
   const r = await send({ type: 'sync-whitelist' });
-  if (r?.ok && r.result?.ok) showToast(`✓ Synced ${r.result.count} domains`);
+  if (r?.ok && r.result?.ok) showToast(tx(`✓ Synced ${r.result.count} domains`, `✓ ${r.result.count} دامنه همگام شد`));
   else showToast(r?.result?.error || r?.error || 'Failed', 'error');
 });
 
@@ -3884,10 +3899,10 @@ document.addEventListener('click', async e => {
     const r = await send({ type: 'sync-whitelist' });
     const el = $('whitelistStatsInline');
     if (r?.ok && r.result?.ok && el) {
-      el.textContent = `✓ ${r.stats.builtin + r.stats.remote + (r.stats.userTrusted || 0)} domains`;
+      el.textContent = tx(`✓ ${r.stats.builtin + r.stats.remote + (r.stats.userTrusted || 0)} domains`, `✓ ${r.stats.builtin + r.stats.remote + (r.stats.userTrusted || 0)} دامنه`);
       el.style.color = '#34d399';
     } else if (el) {
-      el.textContent = `⚠ Failed`;
+      el.textContent = tx('⚠ Failed', '⚠ ناموفق');
       el.style.color = '#f87171';
     }
   }
@@ -3957,6 +3972,24 @@ const TOUR_STOP_DEFS = [
     placement: 'bottom'
   },
   {
+    view: 'scripts',
+    target: '.custom-scripts-panel',
+    titleKey: 'tour.stepScripts.title',
+    titleFb: 'Userscripts',
+    descKey: 'tour.stepScripts.desc',
+    descFb: 'Install Tampermonkey-style scripts that run on the sites you choose.',
+    placement: 'bottom'
+  },
+  {
+    view: 'scripts',
+    target: '.us-guide-panel',
+    titleKey: 'tour.stepGuide.title',
+    titleFb: 'Script guide & AI prompt',
+    descKey: 'tour.stepGuide.desc',
+    descFb: 'A guide in English and Persian, plus a ready-made prompt for AI.',
+    placement: 'top'
+  },
+  {
     view: 'api',
     target: '#apiStatusBox',
     titleKey: 'tour.step7.title',
@@ -3964,6 +3997,24 @@ const TOUR_STOP_DEFS = [
     descKey: 'tour.step7.desc',
     descFb: 'Add a free API key to unlock 70+ engines.',
     placement: 'bottom'
+  },
+  {
+    view: 'settings',
+    target: '#settingsForm',
+    titleKey: 'tour.stepSettings.title',
+    titleFb: 'Settings, organised',
+    descKey: 'tour.stepSettings.desc',
+    descFb: 'Options are grouped into Protection, Threat intelligence, Alerts and Logging.',
+    placement: 'bottom'
+  },
+  {
+    view: 'settings',
+    target: '#backupPanel',
+    titleKey: 'tour.stepBackup.title',
+    titleFb: 'Backup & Restore',
+    descKey: 'tour.stepBackup.desc',
+    descFb: 'Back up settings, userscripts and (optionally) API keys.',
+    placement: 'top'
   }
 ];
 

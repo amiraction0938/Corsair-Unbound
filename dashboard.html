@@ -21,7 +21,7 @@
         <span id="updateBannerDetail">A newer version is ready to install.</span>
       </div>
       <a id="updateBannerLink" class="btn-primary" href="#" rel="noopener">View update</a>
-      <button id="updateBannerDismiss" class="icon-btn" aria-label="Dismiss">✕</button>
+      <button id="updateBannerDismiss" class="icon-btn" aria-label="Dismiss" data-en-aria="Dismiss" data-fa-aria="بستن">✕</button>
     </div>
   </div>
 
@@ -92,18 +92,18 @@
           </button>
           <div class="lang-menu" id="langMenu"></div>
         </div>
-        <button id="theme" class="tool-btn icon-btn" title="Toggle Theme" aria-label="Toggle theme">☀</button>
+        <button id="theme" class="tool-btn icon-btn" title="Toggle Theme" data-en-title="Toggle Theme" data-fa-title="تغییر تم" aria-label="Toggle theme" data-en-aria="Toggle theme" data-fa-aria="تغییر تم">☀</button>
       </div>
     </aside>
 
     <!-- ================= MAIN ================= -->
     <main class="main">
       <header class="main-header">
-        <button id="sidebarToggle" class="icon-btn menu-btn" aria-label="Toggle sidebar">☰</button>
+        <button id="sidebarToggle" class="icon-btn menu-btn" aria-label="Toggle sidebar" data-en-aria="Toggle sidebar" data-fa-aria="باز و بسته کردن نوار کناری">☰</button>
         <h1 class="view-title" id="viewTitle">Overview</h1>
         <div class="header-actions">
           <input id="configFile" type="file" accept=".json,.corsair.json,application/json" hidden>
-          <button id="startTourBtn" class="tool-btn" title="Take a guided tour">
+          <button id="startTourBtn" class="tool-btn" title="Take a guided tour" data-en-title="Take a guided tour" data-fa-title="تور راهنما">
             <span>🎯</span> <span data-i18n="actions.tour">Take Tour</span>
           </button>
         </div>
@@ -169,7 +169,7 @@
               <h2 data-i18n="view.analytics">Analytics &amp; Insights</h2>
               <div class="muted" data-i18n="analytics.subtitle">A visual breakdown of protection activity, built from your local event log.</div>
             </div>
-            <div class="analytics-range-group" id="analyticsRangeGroup" role="group" aria-label="Time range">
+            <div class="analytics-range-group" id="analyticsRangeGroup" role="group" aria-label="Time range" data-en-aria="Time range" data-fa-aria="بازه‌ی زمانی">
               <button class="range-btn" data-range="7" data-i18n="analytics.range.7">7 Days</button>
               <button class="range-btn active" data-range="14" data-i18n="analytics.range.14">14 Days</button>
               <button class="range-btn" data-range="30" data-i18n="analytics.range.30">30 Days</button>
@@ -238,17 +238,17 @@
           </div>
           <div class="activity-filter-bar">
             <input id="activitySearch" class="search-input"
-                   placeholder="Search events..."
+                   placeholder="Search events..." data-en-ph="Search events..." data-fa-ph="جستجوی رویدادها…"
                    autocomplete="off" spellcheck="false">
             <select id="activitySeverityFilter" class="search-input">
-              <option value="all">All severities</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-              <option value="info">Info</option>
+              <option value="all" data-en="All severities" data-fa="همه‌ی شدت‌ها">All severities</option>
+              <option value="high" data-en="High" data-fa="بالا">High</option>
+              <option value="medium" data-en="Medium" data-fa="متوسط">Medium</option>
+              <option value="low" data-en="Low" data-fa="پایین">Low</option>
+              <option value="info" data-en="Info" data-fa="اطلاعاتی">Info</option>
             </select>
             <select id="activityTypeFilter" class="search-input">
-              <option value="all">All types</option>
+              <option value="all" data-en="All types" data-fa="همه‌ی انواع">All types</option>
             </select>
             <span id="activityCount" class="muted"></span>
           </div>
@@ -341,7 +341,7 @@
 
           <div class="panel">
             <div class="panel-head">
-              <h2 data-i18n="blocked.title">🚫 Blocked Domains</h2>
+              <h2 data-i18n="blocked.panelTitle">🚫 Blocked Domains</h2>
             </div>
             <div class="analyzer-input-row">
               <input id="blockedDomainInput" data-i18n-placeholder="blocked.addPlaceholder" placeholder="example.com" autocomplete="off" spellcheck="false">
@@ -385,28 +385,28 @@
         <div class="panel custom-scripts-panel">
           <div class="panel-head">
             <div>
-              <h2>🧩 Userscripts</h2>
-              <div class="muted">Install and write Tampermonkey-style userscripts. Supports @match, @include, @exclude, @run-at, @require, @resource and @grant headers. No code restrictions.</div>
+              <h2 data-en="🧩 Userscripts" data-fa="🧩 اسکریپت‌های کاربر">🧩 Userscripts</h2>
+              <div class="muted" data-en="Install and write Tampermonkey-style userscripts. Supports @match, @include, @exclude, @run-at, @require, @resource and @grant headers. No code restrictions." data-fa="اسکریپت‌هایی به سبک Tampermonkey را نصب یا بنویسید. از هدرهای @match، @include، @exclude، @run-at، @require، @resource و @grant پشتیبانی می‌شود. هیچ محدودیتی روی کد وجود ندارد.">Install and write Tampermonkey-style userscripts. Supports @match, @include, @exclude, @run-at, @require, @resource and @grant headers. No code restrictions.</div>
             </div>
           </div>
           <div id="usStatus" class="us-status" hidden></div>
           <div class="script-input-row">
-            <button id="scriptNewBtn" class="btn-primary" type="button">+ New script</button>
+            <button id="scriptNewBtn" class="btn-primary" type="button" data-en="+ New script" data-fa="اسکریپت جدید">+ New script</button>
             <input id="scriptImportUrl" placeholder="https://example.com/script.user.js" autocomplete="off" spellcheck="false">
-            <button id="scriptImportBtn" class="tool-btn" type="button">Import URL</button>
-            <button id="scriptImportFileBtn" class="tool-btn" type="button">Import file</button>
+            <button id="scriptImportBtn" class="tool-btn" type="button" data-en="Import URL" data-fa="وارد کردن از لینک">Import URL</button>
+            <button id="scriptImportFileBtn" class="tool-btn" type="button" data-en="Import file" data-fa="وارد کردن از فایل">Import file</button>
             <input type="file" id="scriptImportFile" accept=".js,.user.js,text/javascript" multiple hidden>
           </div>
           <div class="script-toolbar">
-            <input id="scriptSearch" class="script-search" type="search" placeholder="Search scripts or domains…" autocomplete="off" spellcheck="false">
+            <input id="scriptSearch" class="script-search" type="search" placeholder="Search scripts or domains…" data-en-ph="Search scripts or domains…" data-fa-ph="جستجوی اسکریپت یا دامنه…" autocomplete="off" spellcheck="false">
             <span id="scriptCount" class="muted"></span>
           </div>
           <div class="script-examples">
-            <span class="muted">Try a demo (works on example.com):</span>
-            <button class="tool-btn" type="button" data-us-demo="hello">1. Hello banner</button>
-            <button class="tool-btn" type="button" data-us-demo="counter">2. Visit counter</button>
-            <button class="tool-btn" type="button" data-us-demo="xhr">3. Cross-site request</button>
-            <button class="tool-btn" type="button" id="scriptOpenExample">Open example.com</button>
+            <span class="muted" data-en="Try a demo (works on example.com):" data-fa="یک دمو را امتحان کنید (روی example.com کار می‌کند):">Try a demo (works on example.com):</span>
+            <button class="tool-btn" type="button" data-us-demo="hello" data-en="1. Hello banner" data-fa="۱. بنر سلام">1. Hello banner</button>
+            <button class="tool-btn" type="button" data-us-demo="counter" data-en="2. Visit counter" data-fa="۲. شمارنده‌ی بازدید">2. Visit counter</button>
+            <button class="tool-btn" type="button" data-us-demo="xhr" data-en="3. Cross-site request" data-fa="۳. درخواست به سایت دیگر">3. Cross-site request</button>
+            <button class="tool-btn" type="button" id="scriptOpenExample" data-en="Open example.com" data-fa="باز کردن example.com">Open example.com</button>
           </div>
           <div id="scriptList" class="script-list">
             <div class="empty">No userscripts yet. Click "New script" or import one from a URL or file.</div>
@@ -418,7 +418,7 @@
               <h2 id="usGuideTitle">📘 How userscripts work</h2>
               <div class="muted" id="usGuideSubtitle">Everything you (or an AI) need to know to write a working script.</div>
             </div>
-            <div class="us-guide-lang" role="group" aria-label="Guide language">
+            <div class="us-guide-lang" role="group" aria-label="Guide language" data-en-aria="Guide language" data-fa-aria="زبان راهنما">
               <button type="button" class="us-chip-btn" data-guide-lang="en">English</button>
               <button type="button" class="us-chip-btn" data-guide-lang="fa">فارسی</button>
             </div>
@@ -450,7 +450,7 @@
 
           <div class="api-input-row">
             <input type="password" id="vtApiKeyField" data-i18n-placeholder="vt.placeholder" placeholder="Paste your 64-char VirusTotal API Key" autocomplete="off" spellcheck="false">
-            <button id="apiKeyToggle" class="tool-btn" aria-label="Show or hide key">👁</button>
+            <button id="apiKeyToggle" class="tool-btn" aria-label="Show or hide key" data-en-aria="Show or hide key" data-fa-aria="نمایش یا پنهان کردن کلید">👁</button>
             <button id="apiKeySave" class="btn-primary" data-i18n="settings.save">Save &amp; Verify</button>
           </div>
 
@@ -464,7 +464,7 @@
             <label class="custom-switch-label" style="margin-top:16px; display:flex; align-items:center; gap:10px;">
               <input type="checkbox" id="persistApiKeyToggle">
               <span class="slider-track"></span>
-              <span class="switch-caption">
+              <span class="switch-caption" data-en-html="Keep API key after browser restart<span class=&quot;muted&quot; style=&quot;display:block; margin-top:2px;&quot;>When off, the key lives in memory only and must be re-entered after every restart.</span>" data-fa-html="کلید API بعد از راه‌اندازی مجدد مرورگر هم بماند<span class=&quot;muted&quot; style=&quot;display:block; margin-top:2px;&quot;>اگر خاموش باشد، کلید فقط در حافظه می‌ماند و بعد از هر راه‌اندازی مجدد باید دوباره وارد شود.</span>">
                 Keep API key after browser restart
                 <span class="muted" style="display:block; margin-top:2px;">
                   When off, the key lives in memory only and must be re-entered after every restart.
@@ -472,7 +472,7 @@
               </span>
             </label>
 
-            <div id="apiKeyMissingWarning" class="about-update-status error" style="margin-top:14px;" hidden>
+            <div id="apiKeyMissingWarning" class="about-update-status error" style="margin-top:14px;" hidden data-en="⚠ Your VirusTotal API key has disappeared. Threat intelligence is not active. Please re-enter the key above." data-fa="⚠ کلید API شما در VirusTotal ناپدید شده است. اطلاعات تهدید فعال نیست. لطفاً کلید را دوباره در بالا وارد کنید.">
               ⚠ Your VirusTotal API key has disappeared. Threat intelligence is not active. Please re-enter the key above.
             </div>
           </div>
@@ -481,8 +481,8 @@
         <div class="panel">
           <div class="panel-head">
             <div>
-              <h2>🛡 URLhaus Auth-Key (Optional)</h2>
-              <div class="muted">
+              <h2 data-en="🛡 URLhaus Auth-Key (Optional)" data-fa="🛡 کلید Auth-Key سرویس URLhaus (اختیاری)">🛡 URLhaus Auth-Key (Optional)</h2>
+              <div class="muted" data-en-html="abuse.ch requires an Auth-Key since late 2024. Get one free at <a href=&quot;https://auth.abuse.ch/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;>auth.abuse.ch</a>. Leave empty to disable URLhaus entirely — no network call will be made." data-fa-html="سرویس abuse.ch از اواخر ۲۰۲۴ یک Auth-Key می‌خواهد. یکی را رایگان از <a href=&quot;https://auth.abuse.ch/&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;>auth.abuse.ch</a> بگیرید. اگر خالی بماند URLhaus کاملاً غیرفعال است و هیچ درخواست شبکه‌ای ارسال نمی‌شود.">
                 abuse.ch requires an Auth-Key since late 2024. Get one free at
                 <a href="https://auth.abuse.ch/" target="_blank" rel="noopener">auth.abuse.ch</a>.
                 Leave empty to disable URLhaus entirely — no network call will be made.
@@ -490,9 +490,9 @@
             </div>
           </div>
           <div class="api-input-row">
-            <input type="password" id="urlhausKeyField" placeholder="Paste your URLhaus Auth-Key (optional)" autocomplete="off" spellcheck="false">
-            <button id="urlhausKeyToggle" class="tool-btn" aria-label="Show or hide key">👁</button>
-            <button id="urlhausKeySave" class="btn-primary">Save</button>
+            <input type="password" id="urlhausKeyField" placeholder="Paste your URLhaus Auth-Key (optional)" data-en-ph="Paste your URLhaus Auth-Key (optional)" data-fa-ph="Auth-Key سرویس URLhaus را بچسبانید (اختیاری)" autocomplete="off" spellcheck="false">
+            <button id="urlhausKeyToggle" class="tool-btn" aria-label="Show or hide key" data-en-aria="Show or hide key" data-fa-aria="نمایش یا پنهان کردن کلید">👁</button>
+            <button id="urlhausKeySave" class="btn-primary" data-en="Save" data-fa="ذخیره">Save</button>
           </div>
           <div id="urlhausStatusBox" class="muted" style="margin-top:8px;"></div>
         </div>
@@ -508,7 +508,7 @@
           <div id="settingsForm" class="settings-grid"></div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="backupPanel">
           <div class="panel-head">
             <div>
               <h2 data-i18n="backup.title">Backup &amp; Restore</h2>
@@ -584,8 +584,8 @@
             <div class="about-shield">🏴‍☠️</div>
             <div class="about-text">
               <h3>Corsair Unbound <span class="version-badge" id="aboutVersionBadge">v1.7.0</span></h3>
-              <p>Local-first browser shield — deterministic isolation, intelligence &amp; recovery.</p>
-              <p class="muted">All data stored locally. No telemetry. No cloud.</p>
+              <p data-i18n="about.tagline">Local-first browser shield — deterministic isolation, intelligence &amp; recovery.</p>
+              <p class="muted" data-i18n="about.privacyNote">All data stored locally. No telemetry. No cloud.</p>
 
               <div class="about-links">
                 <a id="aboutGithubLink" href="https://github.com/amiraction0938/Corsair-Unbound" target="_blank" rel="noopener" class="about-link">
@@ -609,7 +609,7 @@
   <!-- ================= UPDATE MODAL (Path A) ================= -->
   <div id="updateModal" class="update-modal" hidden>
     <div class="update-modal-card">
-      <button class="update-modal-close" id="updateModalClose" aria-label="Close">✕</button>
+      <button class="update-modal-close" id="updateModalClose" aria-label="Close" data-en-aria="Close" data-fa-aria="بستن">✕</button>
 
       <div class="update-modal-hero">
         <div class="update-modal-icon">🎉</div>
@@ -679,7 +679,7 @@
     <div id="tourTooltip" class="tour-tooltip">
       <div class="tour-tooltip-header">
         <div class="tour-step-counter" id="tourStepCounter">1 / 7</div>
-        <button class="tour-close" id="tourClose" aria-label="Close tour" title="Close (Esc)">✕</button>
+        <button class="tour-close" id="tourClose" aria-label="Close tour" data-en-aria="Close tour" data-fa-aria="بستن تور" title="Close (Esc)" data-en-title="Close (Esc)" data-fa-title="بستن (Esc)">✕</button>
       </div>
       <div class="tour-tooltip-body">
         <h3 class="tour-tooltip-title" id="tourTitle">Welcome aboard</h3>

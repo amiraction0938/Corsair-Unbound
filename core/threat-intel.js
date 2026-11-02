@@ -625,15 +625,17 @@ const CorsairThreatIntel = (() => {
       });
     }
 
-    return new Promise(async (resolve, reject) => {
-      if (!force) {
-        const cached = await getCachedReport(host);
-        if (cached && !cached.stale) return resolve(cached);
-      }
-      const apiKey = await getApiKey();
-      if (!apiKey) return reject(new Error('no-api-key'));
-      _queue.push({ host, apiKey, resolve, reject });
-      processQueue().catch(() => {});
+    return new Promise((resolve, reject) => {
+      (async () => {
+        if (!force) {
+          const cached = await getCachedReport(host);
+          if (cached && !cached.stale) return resolve(cached);
+        }
+        const apiKey = await getApiKey();
+        if (!apiKey) return reject(new Error('no-api-key'));
+        _queue.push({ host, apiKey, resolve, reject });
+        processQueue().catch(() => {});
+      })().catch(reject);   // a failing storage read used to leave this promise pending forever
     });
   }
 

@@ -40,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard reorganised: the sidebar is grouped (Monitor / Protection / Tools / System), Userscripts has its own page (it used to sit inside Security), and the Settings page is split into labelled groups (Protection, Threat intelligence, Alerts & banners, Logging). No setting was removed or renamed.
 - The userscript search box now has proper styling.
 
+### Updated (tour, Persian)
+- **Take Tour** now has 11 steps: new stops for the Userscripts page, the script guide / AI prompt, the grouped Settings, and Backup & Restore (which mentions API keys). The old text that placed "Custom Scripts" under Security Controls was corrected, and the welcome step describes the grouped sidebar. All new steps are translated into all 8 languages.
+- **Persian coverage:** 20 API-key / URLhaus status messages and the update-wizard button were missing in Persian and fell back to English; they are translated now. The Userscripts page, the activity filters, the API panel, tooltips, placeholders, aria-labels, every export/import dialog, and about 60 toasts and result labels are now Persian when the dashboard language is Persian (a new `data-fa` / `data-fa-html` / `data-fa-ph` mechanism plus `tx()` for scripted text).
+- Corrected statements in all 8 languages that said the API key is "memory only" (it is stored encrypted unless persistence is turned off) and that backups never contain it.
+
+### Fixed (found by static analysis and a Persian-UI audit)
+- **The Fortress "Navigation blocked" page showed the wrong title.** `blocked.title` was defined twice per language ("Navigation Blocked" and "Blocked Domains"); the later one won. The dashboard panel now uses `blocked.panelTitle`. A test fails if any language block defines a key twice.
+- `queryDomain()` could hang forever (and never show a result) if reading the cache or the API key threw, because of an `async` Promise executor. It now rejects properly.
+- Removed a duplicate `about.privacyNote` entry in 7 languages; shared constant order tidied in `core/userscripts.js`.
+
 ### Fixed (storage / security)
 - **`QuotaExceededError: global storage cap 10485760 bytes exceeded` switched the protection off.** The security storage budget summed *every* key in `chrome.storage.local`, so userscript data (code, cached `@require` libraries, `@resource` files, `GM_setValue` values) counted against it. Once it filled up, every security write (activity log, domain profiles, DNR rule registry, threat cache, settings) failed. Userscript keys (`cus:*`) are now excluded from the security budget, and the hard cap itself was raised from 10 MB to 100 MB (the extension has the `unlimitedStorage` permission, so this is only our own safety net). The cap still protects against runaway security data, and tests cover both directions.
 - Storage usage panel now counts the new userscripts (it was still reading the legacy per-domain map) and reports their size separately.

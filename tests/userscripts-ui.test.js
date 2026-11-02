@@ -24,9 +24,9 @@ function loadUi(scripts, query = '') {
   const src = [
     'usTargetDomains', 'usDomainHue', 'usBuildDomainChips', 'renderUserscriptStatus', 'renderCustomScripts'
   ].map(extract).join('\n');
-  const factory = new Function('state', 'document', '$', 't', 'send', 'showToast', 'openEditor', 'refresh', 'confirm', `${src}; return { usTargetDomains, renderCustomScripts };`);
+  const factory = new Function('state', 'document', '$', 't', 'tx', 'send', 'showToast', 'openEditor', 'refresh', 'confirm', `${src}; return { usTargetDomains, renderCustomScripts };`);
   return factory(
-    state, document, (id) => document.getElementById(id), (k, d) => d,
+    state, document, (id) => document.getElementById(id), (k, d) => d, (en) => en,
     async () => ({ ok: true }), () => {}, () => {}, async () => {}, () => true
   );
 }

@@ -19,6 +19,7 @@ const CorsairUserScripts = (() => {
 
   const INDEX_KEY = 'cus:index';
   const REC_PREFIX = 'cus:rec:';
+  const VALS_PREFIX = 'cus:vals:';
   const MIGRATED_KEY = 'cus:legacyMigrated';
   const REG_PREFIX = 'cu-';
   const FETCH_TIMEOUT_MS = 20000;
@@ -1162,7 +1163,6 @@ const CorsairUserScripts = (() => {
      Messages arrive from user-script worlds via
      chrome.runtime.onUserScriptMessage (wired up in background.js).
      ============================================================ */
-  const VALS_PREFIX = 'cus:vals:';
   const _valChains = new Map();
   const _xhrControllers = new Map();
   const _openedTabs = new Set();
