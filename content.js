@@ -163,7 +163,7 @@
       style: 'position:fixed;top:14px;right:14px;z-index:2147483647;pointer-events:auto;'
     });
 
-    const shadow = hostEl.attachShadow({ mode: 'open' });
+    const shadow = hostEl.attachShadow({ mode: 'closed' });
 
     const styleEl = document.createElement('style');
     setStyleText(styleEl, `
@@ -309,7 +309,7 @@
       style: 'position:fixed;top:14px;right:14px;z-index:2147483647;pointer-events:auto;'
     });
 
-    const shadow = hostEl.attachShadow({ mode: 'open' });
+    const shadow = hostEl.attachShadow({ mode: 'closed' });
 
     // Style element (textContent, not innerHTML)
     const styleEl = document.createElement('style');
@@ -415,7 +415,15 @@
 
     if (showTrustBtn) {
       const trustBtn = el('button', { className: 'trust-btn', text: t('banner.trustBtn', '✓ Trust') });
-      trustBtn.addEventListener('click', async () => {
+      trustBtn.addEventListener('click', async (ev) => {
+        // A page script can fake clicks on anything in its own DOM. Only a real user click counts,
+        // and because the page can also restyle this banner (clickjacking), the browser's own
+        // confirm dialog is shown, which a page cannot draw over or fake.
+        if (!ev || ev.isTrusted !== true) return;
+        const ok = window.confirm(
+          t('banner.confirmTrustTitle', 'Trust {host}?').replace('{host}', hostName) + '\n\n' +
+          t('banner.confirmTrustBody', 'Corsair will stop scanning and protecting this domain and remove it from your blocklist.\n\nYou can undo this from the Corsair dashboard → Trusted Domains.'));
+        if (!ok) return;
         await sendBg({ type: 'trust-domain', host: hostName });
         try {
           trustBtn.textContent = t('banner.trustedBtn', '✓ Trusted');
@@ -428,7 +436,8 @@
 
     if (showBlockBtn) {
       const blockBtn = el('button', { className: 'block-btn', text: t('banner.blockBtn', '🚫 Block') });
-      blockBtn.addEventListener('click', async () => {
+      blockBtn.addEventListener('click', async (ev) => {
+        if (!ev || ev.isTrusted !== true) return;   // ignore clicks synthesised by the page
         const confirmTitle = t('banner.confirmBlockTitle', 'Block {host} everywhere?')
           .replace('{host}', hostName);
         const confirmBody = t('banner.confirmBlockBody',

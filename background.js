@@ -18,6 +18,7 @@ import './core/tool-router.js';
 import './core/replay.js';
 import './core/updater.js';
 import './core/userscripts.js';
+import './core/autoarm.js';
 
 let _startupReconcilePromise = null;
 
@@ -132,114 +133,77 @@ function clearBadge(tabId) {
 
 /* ============================================================
    AUTO-ARM FORTRESS / AUTO-BLOCK
+   ------------------------------------------------------------
+   The decision logic lives in core/autoarm.js (pure + tested).
+   Here we only provide the real dependencies, keep the last
+   decision per host for the popup ("why did / didn't it arm?"),
+   and re-evaluate whenever something relevant changes.
    ============================================================ */
-async function maybeAutoArmFortress(host, report) {
+const AUTOARM_DIAG_KEY = 'corsairAutoArmDiag';
+const _autoArmDiag = new Map();
+
+async function rememberAutoArm(host, diag) {
+  _autoArmDiag.delete(host);
+  _autoArmDiag.set(host, diag);
+  while (_autoArmDiag.size > 200) _autoArmDiag.delete(_autoArmDiag.keys().next().value);
+  try { await chrome.storage.session.set({ [AUTOARM_DIAG_KEY]: Object.fromEntries(_autoArmDiag) }); } catch {}
+}
+
+async function getAutoArmDiag(host) {
+  if (_autoArmDiag.has(host)) return _autoArmDiag.get(host);
   try {
-    if (!host) return;
-    if (!report || report.status === 'error' || report.status === 'allowlisted') return;
+    const r = await chrome.storage.session.get(AUTOARM_DIAG_KEY);
+    const d = r && r[AUTOARM_DIAG_KEY] && r[AUTOARM_DIAG_KEY][host];
+    return d || null;
+  } catch { return null; }
+}
 
-    const settings = await CorsairStorage.getSettings();
-    if (settings.autoArmFortress === false) return;
+function autoArmDeps() {
+  return {
+    getSettings: () => CorsairStorage.getSettings(),
+    isAllowlisted: (h) => CorsairThreatIntel.isAllowlisted(h),
+    getProfile: (h) => CorsairStorage.getProfile(h),
+    getUserBlocked: () => CorsairStorage.get('userBlockedDomains', []),
+    addBlocked: async (h) => {
+      const r = await blockDomainGlobally(h);
+      if (!r || r.ok === false) throw new Error((r && r.error) || 'block-failed');
+    },
+    patchProfile: (h, mutator) => CorsairDNR.patchProfileAtomic(h, current => mutator(current || CorsairSecurity.fortressProfile({}))),
+    logEvent: (e) => CorsairStorage.appendEvent(e),
+    addEvidence: (e) => CorsairEvidence.add(e),
+    remember: rememberAutoArm
+  };
+}
 
+async function maybeAutoArmFortress(host, report, opts = {}) {
+  try {
+    if (!host || typeof CorsairAutoArm === 'undefined') return null;
     try { await CorsairThreatIntel.loadRemoteAllowlist(); } catch {}
-    if (CorsairThreatIntel.isAllowlisted(host)) return;
-
-    const rawArm = Number(settings.autoArmFortressThreshold);
-    const armMinRisk = Number.isFinite(rawArm)
-      ? Math.max(1, Math.min(100, rawArm))
-      : 10;
-
-    const rawBlock = Number(settings.autoBlockThreshold);
-    const blockMinRisk = Number.isFinite(rawBlock)
-      ? Math.max(1, Math.min(100, rawBlock))
-      : 70;
-
-    const risk = Number(report.riskPercentage) || 0;
-    if (risk < armMinRisk) return;
-
-    const shouldBlock = risk >= blockMinRisk;
-
-    const [existing, blockedList] = await Promise.all([
-      CorsairStorage.getProfile(host),
-      CorsairStorage.get('userBlockedDomains', [])
-    ]);
-    const isAlreadyBlocked = Array.isArray(blockedList) && blockedList.includes(host);
-
-    /* ============ BLOCK PATH ============ */
-    if (shouldBlock) {
-      if (!isAlreadyBlocked) {
-        try {
-          await CorsairStorage.withPartitionLock('userBlockedDomains', async () => {
-            const list = await CorsairStorage.get('userBlockedDomains', []);
-            const set = new Set(Array.isArray(list) ? list : []);
-            set.add(host);
-            const arr = [...set].slice(-500);
-            await CorsairStorage.set('userBlockedDomains', arr);
-            await CorsairDNR.syncUserBlocklist(arr);
-          });
-
-          await CorsairStorage.appendEvent({
-            type: 'auto_block',
-            domain: host,
-            reason: `auto-blocked at risk ${risk}% (threshold ${blockMinRisk}%)`,
-            severity: 'high'
-          });
-          try {
-            await CorsairEvidence.add({
-              kind: 'auto_block',
-              origin: host,
-              tabId: null,
-              data: { risk, threshold: blockMinRisk, verdict: report.verdict || 'unknown' }
-            });
-          } catch {}
-        } catch {}
-      }
-
-      if (!existing || existing.autoArmed !== false) {
-        await CorsairDNR.patchProfileAtomic(host, current => ({
-          ...(current || CorsairSecurity.fortressProfile({})),
-          protected: true,
-          mode: 'fortress',
-          autoContainRedirects: true,
-          clickbaitGuard: true,
-          autoArmed: true,
-          autoArmedAt: Date.now(),
-          autoArmReason: `auto-blocked at risk ${risk}% (threshold ${blockMinRisk}%)`
-        }));
-      }
-      return;
-    }
-
-    /* ============ ARM-ONLY PATH ============ */
-    if (existing && existing.autoArmed !== true) return;
-    if (existing && existing.autoArmed === true && existing.protected === true) return;
-
-    const res = await CorsairDNR.patchProfileAtomic(host, current => ({
-      ...(current || CorsairSecurity.fortressProfile({})),
-      protected: true,
-      mode: 'fortress',
-      autoContainRedirects: true,
-      clickbaitGuard: true,
-      autoArmed: true,
-      autoArmedAt: Date.now(),
-      autoArmReason: `risk ${risk}% ≥ ${armMinRisk}%`
-    }));
-
-    if (res && res.ok) {
+    return await CorsairAutoArm.evaluate(host, report, autoArmDeps(), opts);
+  } catch (err) {
+    // Never swallow this silently: a protection decision could not be applied.
+    try {
       await CorsairStorage.appendEvent({
-        type: 'auto_fortress_armed',
-        domain: host,
-        reason: `auto-armed at risk ${risk}% (threshold ${armMinRisk}%)`,
-        severity: risk >= 60 ? 'high' : 'medium'
+        type: 'auto_arm_failed', domain: host || '', severity: 'medium',
+        reason: `auto-arm error: ${(err && err.message) || err}`
       });
-      try {
-        await CorsairEvidence.add({
-          kind: 'auto_fortress_armed',
-          origin: host,
-          tabId: null,
-          data: { risk, threshold: armMinRisk, verdict: report.verdict || 'unknown' }
-        });
-      } catch {}
+    } catch {}
+    return null;
+  }
+}
+
+/** Re-run the decision for every open web tab (used when the user changes the thresholds). */
+async function reevaluateAutoArmForOpenTabs(source = 'settings-change') {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+    const seen = new Set();
+    for (const tab of tabs.slice(0, 60)) {
+      const host = CorsairSecurity.extractHostname(tab.url || '');
+      if (!host || seen.has(host)) continue;
+      seen.add(host);
+      let report = null;
+      try { report = await CorsairThreatIntel.getCachedReport(host); } catch {}
+      if (report) await maybeAutoArmFortress(host, report, { source });
     }
   } catch {}
 }
@@ -251,20 +215,23 @@ async function pushVerdictToTab(tabId, report) {
   }
 }
 
-async function maybeAutoScan(tabId, url) {
+const _autoScanErrorAt = new Map();
+const AUTOSCAN_RETRY_MS = 30000;
+
+async function maybeAutoScan(tabId, url, opts = {}) {
+  let showBanner = true;
   try {
     const host = CorsairSecurity.extractHostname(url);
     if (!host) return;
-    if (_autoScannedTabs.get(tabId) === host) return;
-    _autoScannedTabs.set(tabId, host);
 
     const settings = await CorsairStorage.getSettings();
     if (!settings.threatIntelEnabled || !settings.threatIntelAutoScan) return;
-    if (!settings.siteVerdictBanner) return;
+    // The banner is a DISPLAY preference. It must never decide whether protection runs.
+    showBanner = settings.siteVerdictBanner !== false;
 
     if (CorsairThreatIntel.isAllowlisted(host)) {
       updateBadge(tabId, 'allowlisted').catch(() => {});
-      if (settings.notifyOnSafeSites === true) {
+      if (showBanner && settings.notifyOnSafeSites === true) {
         await pushVerdictToTab(tabId, {
           host, status: 'allowlisted', verdict: 'clean',
           riskPercentage: 0, flaggedEngines: [],
@@ -275,22 +242,41 @@ async function maybeAutoScan(tabId, url) {
     }
 
     const cached = await CorsairThreatIntel.getCachedReport(host);
+
+    // A fresh cached verdict is local and cheap, so the arming decision is
+    // ALWAYS re-evaluated from it (reloads and threshold changes take effect).
     if (cached && !cached.stale) {
-      await pushVerdictToTab(tabId, cached);
-      maybeAutoArmFortress(host, cached).catch(() => {});
+      if (showBanner) await pushVerdictToTab(tabId, cached);
+      else updateBadge(tabId, cached.verdict || cached.status).catch(() => {});
+      await maybeAutoArmFortress(host, cached, { source: opts.source || 'cache' });
       return;
     }
 
-    await sendToTab(tabId, { type: 'corsair-verdict-loading', host });
+    // The network scan itself runs once per tab+host (and not more than every 30 s after an error).
+    const lastErr = _autoScanErrorAt.get(host) || 0;
+    if (_autoScannedTabs.get(tabId) === host || Date.now() - lastErr < AUTOSCAN_RETRY_MS) {
+      if (cached) await maybeAutoArmFortress(host, cached, { source: 'stale-cache' });
+      return;
+    }
+    _autoScannedTabs.set(tabId, host);
+
+    if (showBanner) await sendToTab(tabId, { type: 'corsair-verdict-loading', host });
     const report = await CorsairThreatIntel.autoScan(host);
     if (report && report.status !== 'error') {
-      await pushVerdictToTab(tabId, report);
-      maybeAutoArmFortress(host, report).catch(() => {});
+      _autoScanErrorAt.delete(host);
+      if (showBanner) await pushVerdictToTab(tabId, report);
+      else updateBadge(tabId, report.verdict || report.status).catch(() => {});
+      await maybeAutoArmFortress(host, report, { source: 'scan' });
     } else {
-      await sendToTab(tabId, { type: 'corsair-verdict-cancel' });
+      // Scan failed (rate limit, offline, no key): allow a retry later, and fall back to
+      // an older cached verdict for the arming decision instead of doing nothing.
+      _autoScanErrorAt.set(host, Date.now());
+      _autoScannedTabs.delete(tabId);
+      if (showBanner) await sendToTab(tabId, { type: 'corsair-verdict-cancel' });
+      if (cached) await maybeAutoArmFortress(host, cached, { source: 'stale-cache' });
     }
   } catch {
-    try { await sendToTab(tabId, { type: 'corsair-verdict-cancel' }); } catch {}
+    try { if (showBanner) await sendToTab(tabId, { type: 'corsair-verdict-cancel' }); } catch {}
   }
 }
 
@@ -450,6 +436,20 @@ async function reconcileSessionState() {
 /* ============================================================
    SENDER CLASSIFIER
    ============================================================ */
+function senderHost(sender) { return CorsairSecurity.senderHost(sender); }
+function hostMatchesSender(host, sender) { return CorsairSecurity.hostMatchesSender(host, sender); }
+
+/* Rate limit for fortress-allow rules requested from pages (per tab). */
+const _linkAllowBudget = new Map();
+function linkAllowBudgetOk(tabId) {
+  const now = Date.now();
+  const key = Number.isInteger(tabId) ? tabId : -1;
+  let e = _linkAllowBudget.get(key);
+  if (!e || now - e.start > 60000) { e = { start: now, n: 0 }; _linkAllowBudget.set(key, e); }
+  e.n += 1;
+  return e.n <= 30;
+}
+
 function classifySender(sender) {
   if (!sender || typeof sender !== 'object' || Array.isArray(sender)) return 'UNTRUSTED';
   const extId = (typeof chrome !== 'undefined' && chrome.runtime?.id) ? chrome.runtime.id : '';
@@ -589,6 +589,7 @@ chrome.runtime.onStartup.addListener(() => {
   reconcileSessionState().catch(() => {});
   setupContextMenus();
   initUpdater().catch(() => {});
+  reevaluateAutoArmForOpenTabs('startup').catch(() => {});
 });
 chrome.runtime.onInstalled.addListener(() => {
   performStartupDnrReconciliation().catch(() => {});
@@ -613,7 +614,7 @@ try {
         const profile = await CorsairStorage.getProfile(host);
         const isArmed = profile?.protected === true && profile?.mode === 'fortress';
         const patch = isArmed
-          ? { protected: false, mode: 'standard' }
+          ? { protected: false, mode: 'standard', autoArmed: false }   // explicit opt-out, like the popup
           : { protected: true, mode: 'fortress', autoContainRedirects: true, clickbaitGuard: true };
         await CorsairDNR.patchProfileAtomic(host, current => ({
           ...(current || CorsairSecurity.fortressProfile({})),
@@ -935,6 +936,10 @@ chrome.webNavigation.onCommitted.addListener(async details => {
   if (!Number.isInteger(tabId)) return;
 
   try {
+    // Threat scan + auto-arm must not depend on redirect-chain bookkeeping
+    // (the chain can be missing after a service-worker restart).
+    maybeAutoScan(tabId, CorsairSecurity.normalizeUrl(details.url)).catch(() => {});
+
     let chain = await CorsairRedirects.reconcileCommittedHop({
       tabId, frameId: details.frameId, url: details.url,
       qualifiers: details.transitionQualifiers || [],
@@ -946,8 +951,6 @@ chrome.webNavigation.onCommitted.addListener(async details => {
     const currentUrl = CorsairSecurity.normalizeUrl(details.url);
     const destinationHost = CorsairSecurity.extractHostname(currentUrl);
     const sourceHost = CorsairSecurity.normalizeHostname(chain.sourceHost);
-
-    maybeAutoScan(tabId, currentUrl).catch(() => {});
 
     const settings = await CorsairStorage.getSettings();
     const profile = await CorsairStorage.getProfile(sourceHost);
@@ -1203,9 +1206,19 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
         }
 
         /* ============ TRUST ============ */
-        case 'trust-domain': { send(await trustDomain(m.host || '') || { ok: true }); break; }
+        case 'trust-domain': {
+          // From a web page the host must be the page's own host (a page may not trust or
+          // un-block any other domain, and the click must be genuine: see content.js).
+          if (capability === 'PAGE_OBSERVATION' && !hostMatchesSender(m.host, s)) { send({ ok: false, error: 'host-mismatch' }); break; }
+          send(await trustDomain(m.host || '') || { ok: true });
+          break;
+        }
         case 'untrust-domain': { send(await untrustDomain(m.host || '') || { ok: true }); break; }
-        case 'block-domain-global': { send(await blockDomainGlobally(m.host || '') || { ok: true }); break; }
+        case 'block-domain-global': {
+          if (capability === 'PAGE_OBSERVATION' && !hostMatchesSender(m.host, s)) { send({ ok: false, error: 'host-mismatch' }); break; }
+          send(await blockDomainGlobally(m.host || '') || { ok: true });
+          break;
+        }
         case 'unblock-domain-global': { send(await unblockDomainGlobally(m.host || '') || { ok: true }); break; }
         case 'get-user-blocked': {
           const list = await CorsairStorage.get('userBlockedDomains', []);
@@ -1241,6 +1254,14 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           if (src === dst || CorsairSecurity.sameOrSubdomain(dst, src)) {
             send({ ok: true, skipped: 'same-origin' });
             break;
+          }
+          // The allow rule may only be requested for the sender's OWN host, only while that
+          // host is actually armed, and only a limited number of times per minute.
+          if (capability === 'PAGE_OBSERVATION') {
+            if (!hostMatchesSender(src, s)) { send({ ok: false, error: 'host-mismatch' }); break; }
+            const prof = await CorsairStorage.getProfile(src);
+            if (!prof || prof.protected !== true) { send({ ok: true, skipped: 'not-armed' }); break; }
+            if (!linkAllowBudgetOk(s && s.tab && s.tab.id)) { send({ ok: false, error: 'rate-limited' }); break; }
           }
           try {
             const res = await CorsairDNR.installFortressAllow(src, dst, 15000);
@@ -1453,7 +1474,32 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
 
         /* ============ SETTINGS ============ */
         case 'get-settings': { send({ ok: true, settings: await CorsairStorage.getSettings() }); break; }
-        case 'patch-settings': { send({ ok: true, settings: await CorsairStorage.patchSettings(m.patch) }); break; }
+        case 'patch-settings': {
+          const settings = await CorsairStorage.patchSettings(m.patch);
+          const touched = Object.keys((m.patch && typeof m.patch === 'object') ? m.patch : {});
+          if (touched.some(k => k === 'autoArmFortress' || k === 'autoArmFortressThreshold' || k === 'autoBlockThreshold' || k === 'threatIntelEnabled' || k === 'threatIntelAutoScan')) {
+            reevaluateAutoArmForOpenTabs('settings-change').catch(() => {});
+          }
+          send({ ok: true, settings });
+          break;
+        }
+        case 'get-autoarm-status': {
+          const host = CorsairSecurity.normalizeHostname(m.domain || '');
+          if (!host || !CorsairSecurity.isValidHostname(host)) { send({ ok: false, error: 'invalid-domain' }); break; }
+          const settings = await CorsairStorage.getSettings();
+          let cached = null;
+          try { cached = await CorsairThreatIntel.getCachedReport(host); } catch {}
+          send({
+            ok: true,
+            enabled: settings.autoArmFortress !== false,
+            scanEnabled: Boolean(settings.threatIntelEnabled && settings.threatIntelAutoScan),
+            thresholds: CorsairAutoArm.resolveThresholds(settings),
+            allowlisted: Boolean(CorsairThreatIntel.isAllowlisted(host)),
+            risk: cached ? Number(cached.riskPercentage) || 0 : null,
+            diag: await getAutoArmDiag(host)
+          });
+          break;
+        }
         case 'get-api-key-secure': {
           try { send({ ok: true, apiKey: await CorsairStorage.getApiKeySecure() }); }
           catch (err) { send({ ok: false, error: err.message }); }

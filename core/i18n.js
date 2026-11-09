@@ -68,6 +68,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': 'No threat intelligence signals',
       'banner.confirmBlockTitle': 'Block {host} everywhere?',
       'banner.confirmBlockBody': 'All navigation to this domain will be stopped — from any page, any link, any redirect.\n\nYou can undo this from the Corsair dashboard → Blocked Domains.',
+      'activity.type.auto_fortress_armed': 'Fortress auto-armed',
+      'activity.type.auto_block': 'Auto-blocked',
+      'activity.type.auto_arm_failed': 'Auto-arm failed',
+      'banner.confirmTrustTitle': 'Trust {host}?',
+      'banner.confirmTrustBody': 'Corsair will stop scanning and protecting this domain and remove it from your blocklist.\n\nYou can undo this from the Corsair dashboard → Trusted Domains.',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': 'Navigation Blocked',
@@ -537,6 +542,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': 'سیگنال تهدیدی یافت نشد',
       'banner.confirmBlockTitle': '{host} در همه‌جا مسدود شود؟',
       'banner.confirmBlockBody': 'تمام ناوبری به این دامنه متوقف می‌شود — از هر صفحه، لینک و ریدایرکتی.\n\nمی‌توانید از داشبورد کورسِر → دامنه‌های بلاک‌شده این کار را برگردانید.',
+      'activity.type.auto_fortress_armed': 'فعال‌سازی خودکار Fortress',
+      'activity.type.auto_block': 'مسدودسازی خودکار',
+      'activity.type.auto_arm_failed': 'فعال‌سازی خودکار ناموفق',
+      'banner.confirmTrustTitle': 'به {host} اعتماد شود؟',
+      'banner.confirmTrustBody': 'Corsair دیگر این دامنه را اسکن و محافظت نمی‌کند و آن را از لیست مسدودی هم خارج می‌کند.\n\nمی‌توانید از داشبورد Corsair ← دامنه‌های مورد اعتماد آن را برگردانید.',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': 'ناوبری مسدود شد',
@@ -1026,6 +1036,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': 'لا توجد إشارات استخبارات تهديد',
       'banner.confirmBlockTitle': 'حظر {host} في كل مكان؟',
       'banner.confirmBlockBody': 'سيتم إيقاف جميع عمليات الانتقال إلى هذا النطاق — من أي صفحة أو رابط أو إعادة توجيه.\n\nيمكنك التراجع من لوحة Corsair → النطاقات المحظورة.',
+      'activity.type.auto_fortress_armed': 'تفعيل Fortress تلقائيًا',
+      'activity.type.auto_block': 'حظر تلقائي',
+      'activity.type.auto_arm_failed': 'فشل التفعيل التلقائي',
+      'banner.confirmTrustTitle': 'الوثوق بـ {host}؟',
+      'banner.confirmTrustBody': 'سيتوقف Corsair عن فحص هذا النطاق وحمايته وسيزيله من قائمة الحظر.\n\nيمكنك التراجع من لوحة Corsair ← النطاقات الموثوقة.',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': 'تم حظر التنقل',
@@ -1473,6 +1488,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': 'Sin señales de inteligencia de amenazas',
       'banner.confirmBlockTitle': '¿Bloquear {host} en todas partes?',
       'banner.confirmBlockBody': 'Se detendrá toda navegación a este dominio — desde cualquier página, enlace o redirección.\n\nPuede deshacerlo desde el panel de Corsair → Dominios Bloqueados.',
+      'activity.type.auto_fortress_armed': 'Fortress armado automáticamente',
+      'activity.type.auto_block': 'Bloqueo automático',
+      'activity.type.auto_arm_failed': 'Falló el armado automático',
+      'banner.confirmTrustTitle': '¿Confiar en {host}?',
+      'banner.confirmTrustBody': 'Corsair dejará de analizar y proteger este dominio y lo quitará de tu lista de bloqueo.\n\nPuedes deshacerlo en el panel de Corsair → Dominios de confianza.',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': 'Navegación Bloqueada',
@@ -1920,6 +1940,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': 'Keine Threat-Intelligence-Signale',
       'banner.confirmBlockTitle': '{host} überall blockieren?',
       'banner.confirmBlockBody': 'Jede Navigation zu dieser Domain wird gestoppt — von jeder Seite, jedem Link, jeder Weiterleitung.\n\nSie können dies im Corsair-Dashboard → Blockierte Domains rückgängig machen.',
+      'activity.type.auto_fortress_armed': 'Fortress automatisch aktiviert',
+      'activity.type.auto_block': 'Automatisch blockiert',
+      'activity.type.auto_arm_failed': 'Automatisches Aktivieren fehlgeschlagen',
+      'banner.confirmTrustTitle': '{host} vertrauen?',
+      'banner.confirmTrustBody': 'Corsair scannt und schützt diese Domain nicht mehr und entfernt sie aus deiner Sperrliste.\n\nDu kannst das im Corsair-Dashboard → Vertrauenswürdige Domains rückgängig machen.',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': 'Navigation blockiert',
@@ -2367,6 +2392,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': 'Aucun signal de renseignement',
       'banner.confirmBlockTitle': 'Bloquer {host} partout ?',
       'banner.confirmBlockBody': 'Toute navigation vers ce domaine sera arrêtée — depuis n\'importe quelle page, lien ou redirection.\n\nVous pouvez l\'annuler depuis le tableau de bord Corsair → Domaines Bloqués.',
+      'activity.type.auto_fortress_armed': 'Fortress armée automatiquement',
+      'activity.type.auto_block': 'Blocage automatique',
+      'activity.type.auto_arm_failed': 'Échec de l\'armement automatique',
+      'banner.confirmTrustTitle': 'Faire confiance à {host} ?',
+      'banner.confirmTrustBody': 'Corsair cessera d\'analyser et de protéger ce domaine et le retirera de votre liste de blocage.\n\nVous pouvez annuler dans le tableau de bord Corsair → Domaines de confiance.',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': 'Navigation bloquée',
@@ -2814,6 +2844,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': 'Нет сигналов разведки',
       'banner.confirmBlockTitle': 'Заблокировать {host} везде?',
       'banner.confirmBlockBody': 'Вся навигация к этому домену будет остановлена — с любой страницы, ссылки или редиректа.\n\nОтменить можно в панели Corsair → Заблокированные домены.',
+      'activity.type.auto_fortress_armed': 'Fortress включён автоматически',
+      'activity.type.auto_block': 'Автоблокировка',
+      'activity.type.auto_arm_failed': 'Сбой автоматического включения',
+      'banner.confirmTrustTitle': 'Доверять {host}?',
+      'banner.confirmTrustBody': 'Corsair перестанет проверять и защищать этот домен и уберёт его из вашего списка блокировки.\n\nОтменить можно в панели Corsair → Доверенные домены.',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': 'Навигация заблокирована',
@@ -3261,6 +3296,11 @@ const CorsairI18n = (() => {
       'banner.reasonNoSignals': '无威胁情报信号',
       'banner.confirmBlockTitle': '在所有地方拦截 {host}？',
       'banner.confirmBlockBody': '将停止对此域名的所有导航 — 来自任何页面、链接或重定向。\n\n您可以从 Corsair 仪表板 → 已拦截域名 中撤销。',
+      'activity.type.auto_fortress_armed': 'Fortress 已自动启用',
+      'activity.type.auto_block': '已自动拦截',
+      'activity.type.auto_arm_failed': '自动启用失败',
+      'banner.confirmTrustTitle': '信任 {host}？',
+      'banner.confirmTrustBody': 'Corsair 将不再扫描和保护此域名，并会将其从你的拦截列表中移除。\n\n你可以在 Corsair 控制台 → 受信任域名 中撤销。',
 
       /* ============ BLOCKED PAGE ============ */
       'blocked.title': '导航已拦截',

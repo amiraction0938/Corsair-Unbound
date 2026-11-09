@@ -274,10 +274,21 @@ const CorsairStorage = (() => {
     return res[key] !== undefined ? res[key] : defaultValue;
   }
 
+  /* Content scripts cache "is Fortress armed on this host?" in session storage. Whenever the
+     profiles change (from ANY writer: popup, auto-arm, import, rollback...) the cache is dropped,
+     so a stale "not armed" can never outlive an arming. */
+  function invalidateFortressStateCache() {
+    try {
+      const p = chrome.storage && chrome.storage.session && chrome.storage.session.remove('corsairFortressStateCache');
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch {}
+  }
+
   async function set(key, val) {
     if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
     _storageReadCount++;
     await chrome.storage.local.set({ [key]: val });
+    if (key === KEYS.profiles) invalidateFortressStateCache();
     if (_partitionByteCache !== null) {
       _partitionByteCache[key] = estimateBytes(val);
     }
@@ -908,13 +919,46 @@ const CorsairStorage = (() => {
     return { ...(_settingsCache || defaultSettings()) };
   }
 
+  /* Keep settings well-typed. A wrong type used to slip through (e.g. null -> 0 -> "1% risk"
+     thresholds). Known boolean keys must be booleans, known numeric keys are clamped. */
+  const NUMERIC_SETTING_RANGES = {
+    autoArmFortressThreshold: [1, 100],
+    autoBlockThreshold: [1, 100],
+    maxRedirectHops: [1, 32],
+    dampeningWindowMs: [0, 60000]
+  };
+
+  function validateSettingsPatch(patch) {
+    const defaults = defaultSettings();
+    const out = {};
+    const rejected = [];
+    for (const [k, v] of Object.entries(patch || {})) {
+      if (!Object.prototype.hasOwnProperty.call(defaults, k)) { out[k] = v; continue; }
+      const kind = typeof defaults[k];
+      if (kind === 'boolean') {
+        if (typeof v === 'boolean') out[k] = v; else rejected.push(k);
+      } else if (kind === 'number') {
+        const n = (typeof v === 'number') ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+        if (!Number.isFinite(n)) { rejected.push(k); continue; }
+        const r = NUMERIC_SETTING_RANGES[k];
+        out[k] = r ? Math.min(r[1], Math.max(r[0], n)) : n;
+      } else if (kind === 'string') {
+        if (typeof v === 'string') out[k] = v.slice(0, 4096); else rejected.push(k);
+      } else {
+        out[k] = v;
+      }
+    }
+    return { patch: out, rejected };
+  }
+
   async function patchSettings(patch) {
     await ensureReady();
     return withTransactionGateShared(async () => {
       await ensureQuotaBudgetBeforeWrite(KEYS.settings, estimateBytes(patch));
       return withPartitionLock('globalSettings', async () => {
-        const safePatch = CorsairSecurity.sanitizeObject(patch) || {};
-        if (LEGACY_SETTINGS_API_KEY in safePatch) delete safePatch[LEGACY_SETTINGS_API_KEY];
+        const sanitizedPatch = CorsairSecurity.sanitizeObject(patch) || {};
+        if (LEGACY_SETTINGS_API_KEY in sanitizedPatch) delete sanitizedPatch[LEGACY_SETTINGS_API_KEY];
+        const { patch: safePatch } = validateSettingsPatch(sanitizedPatch);
         const previous = { ..._settingsCache };
         const nextVer = (Number(_settingsCache._version) || 0) + 1;
         _settingsCache = { ..._settingsCache, ...safePatch, _version: nextVer, updatedAt: Date.now() };
@@ -1142,6 +1186,8 @@ const CorsairStorage = (() => {
     }
 
         await chrome.storage.local.set(batch);
+    invalidateFortressStateCache();
+        invalidateFortressStateCache();
     _profilesCache = { ...candidate.profiles };
     _settingsCache = { ...candidate.settings };
     invalidateByteCache();
@@ -1391,6 +1437,7 @@ const CorsairStorage = (() => {
     removeProfileUnlocked,
     getSettings,
     patchSettings,
+    validateSettingsPatch,
     getApiKeySecure,
     setApiKeySecure,
     getApiKeyStatus,

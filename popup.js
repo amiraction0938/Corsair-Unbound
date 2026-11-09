@@ -3,6 +3,8 @@
 
   const $ = id => document.getElementById(id);
   const t = (k, fb) => (window.CorsairI18n ? CorsairI18n.t(k, fb) : (fb || k));
+  const isFaUi = () => String((window.CorsairI18n && CorsairI18n.getCurrent && CorsairI18n.getCurrent()) || '').toLowerCase().startsWith('fa');
+  const tx = (en, fa) => (isFaUi() ? fa : en);
 
   const state = {
   domain: '',
@@ -353,7 +355,7 @@
       : 10;
     const blockThreshold = Number.isFinite(state.settings.autoBlockThreshold)
       ? state.settings.autoBlockThreshold
-      : 70;
+      : 75;
 
     if (toggle) {
       toggle.textContent = enabled ? 'ON' : 'OFF';
@@ -363,6 +365,61 @@
     if (blockSlider) blockSlider.value = String(blockThreshold);
     if (armVal) armVal.textContent = `${armThreshold}%`;
     if (blockVal) blockVal.textContent = `${blockThreshold}%`;
+  }
+
+  /* Explain, in plain words, what Auto-Arm decided for THIS site and why. */
+  function describeAutoArm(st) {
+    if (!st || !st.ok) return null;
+    const armMin = st.thresholds ? st.thresholds.armMin : 10;
+    const blockMin = st.thresholds ? st.thresholds.blockMin : 75;
+    const d = st.diag;
+    const risk = (d && Number.isFinite(d.risk)) ? d.risk : (Number.isFinite(st.risk) ? st.risk : null);
+
+    if (!st.enabled) return { cls: 'warn', text: tx('Auto-Arm is OFF, so no site is armed automatically.', 'Auto-Arm خاموش است، پس هیچ سایتی خودکار فعال نمی‌شود.') };
+    if (!st.scanEnabled && !d) return { cls: 'warn', text: tx('Threat scanning is off, so there is no risk score to compare with the threshold.', 'اسکن تهدید خاموش است، پس امتیاز ریسکی برای مقایسه با آستانه وجود ندارد.') };
+    if (st.allowlisted) return { cls: '', text: tx('Trusted / allowlisted site: it is never armed automatically.', 'سایت مورد اعتماد (allowlist): هرگز خودکار فعال نمی‌شود.') };
+    if (!d) {
+      if (risk === null) return { cls: '', text: tx('No scan result yet for this site. Auto-Arm decides as soon as the scan finishes (a VirusTotal key helps).', 'هنوز نتیجه‌ی اسکنی برای این سایت نیست. Auto-Arm به‌محض پایان اسکن تصمیم می‌گیرد (کلید VirusTotal کمک می‌کند).') };
+      return { cls: '', text: tx(`Last risk ${risk}%. Auto-Arm has not evaluated this site yet; reload the page.`, `آخرین ریسک ${risk}٪. Auto-Arm هنوز این سایت را ارزیابی نکرده؛ صفحه را دوباره بارگذاری کنید.`) };
+    }
+    switch (d.reason) {
+      case 'arm':
+        return d.applied
+          ? { cls: 'ok', text: tx(`Armed automatically: risk ${risk}% ≥ ${armMin}%.`, `خودکار فعال شد: ریسک ${risk}٪ ≥ ${armMin}٪.`) }
+          : { cls: 'bad', text: tx(`Should arm (risk ${risk}% ≥ ${armMin}%) but applying failed: ${d.error || 'unknown error'}. See Activity.`, `باید فعال می‌شد (ریسک ${risk}٪ ≥ ${armMin}٪) ولی اعمال نشد: ${d.error || 'خطای نامشخص'}. بخش Activity را ببینید.`) };
+      case 'block':
+        return d.applied
+          ? { cls: 'ok', text: tx(`Blocked automatically: risk ${risk}% ≥ ${blockMin}%.`, `خودکار مسدود شد: ریسک ${risk}٪ ≥ ${blockMin}٪.`) }
+          : { cls: 'bad', text: tx(`Should block (risk ${risk}% ≥ ${blockMin}%) but applying failed: ${d.error || 'unknown error'}.`, `باید مسدود می‌شد (ریسک ${risk}٪ ≥ ${blockMin}٪) ولی اعمال نشد: ${d.error || 'خطای نامشخص'}.`) };
+      case 'below-threshold':
+        return { cls: '', text: tx(`Not armed: risk ${risk}% is below your Arm-at threshold (${armMin}%).`, `فعال نشد: ریسک ${risk}٪ کمتر از آستانه‌ی «Arm at» شما (${armMin}٪) است.`) };
+      case 'already-protected':
+        return { cls: 'ok', text: tx(`Already protected (risk ${risk}%).`, `از قبل محافظت‌شده است (ریسک ${risk}٪).`) };
+      case 'user-opt-out':
+        return { cls: 'warn', text: tx(`Not armed: you turned Fortress off for this site (risk ${risk}% ≥ ${armMin}%). Arm it manually to protect it again.`, `فعال نشد: شما Fortress را برای این سایت خاموش کرده‌اید (ریسک ${risk}٪ ≥ ${armMin}٪). برای محافظت دوباره، دستی فعالش کنید.`) };
+      case 'allowlisted':
+        return { cls: '', text: tx('Trusted / allowlisted site: it is never armed automatically.', 'سایت مورد اعتماد (allowlist): هرگز خودکار فعال نمی‌شود.') };
+      case 'report-error':
+        return { cls: 'warn', text: tx('The last scan failed, so no decision was made. It will retry.', 'آخرین اسکن ناموفق بود و تصمیمی گرفته نشد. دوباره تلاش می‌شود.') };
+      case 'disabled':
+        return { cls: 'warn', text: tx('Auto-Arm is OFF.', 'Auto-Arm خاموش است.') };
+      default:
+        return null;
+    }
+  }
+
+  async function renderAutoArmStatus() {
+    const el = $('autoArmStatus');
+    if (!el) return;
+    try {
+      if (!state.domain) { el.hidden = true; return; }
+      const res = await send({ type: 'get-autoarm-status', domain: state.domain });
+      const info = describeAutoArm(res);
+      if (!info) { el.hidden = true; return; }
+      el.hidden = false;
+      el.className = 'auto-arm-status' + (info.cls ? ' ' + info.cls : '');
+      el.textContent = info.text;
+    } catch { el.hidden = true; }
   }
 
   async function persistThreshold(key, value) {
@@ -423,6 +480,7 @@
 
       renderProfile();
       renderAutoArmControls();
+      renderAutoArmStatus();
       await loadThreatIntel();
     } catch (err) {
       showToast(err.message, 'error');
@@ -570,6 +628,7 @@
     const ok = await persistThreshold('autoArmFortress', next);
     if (ok) {
       renderAutoArmControls();
+      renderAutoArmStatus();
       showToast(`Auto-Arm ${next ? 'ON' : 'OFF'}`);
     }
   });
@@ -581,6 +640,7 @@
   $('armThreshold')?.addEventListener('change', async () => {
     const v = Math.max(1, Math.min(100, Number($('armThreshold').value) || 10));
     const ok = await persistThreshold('autoArmFortressThreshold', v);
+    if (ok) setTimeout(renderAutoArmStatus, 900);
     if (ok) showToast(`${t('popup.armAt', 'Arm at')} → ${v}%`);
   });
 
@@ -589,8 +649,9 @@
     if ($('blockThresholdValue')) $('blockThresholdValue').textContent = `${v}%`;
   });
   $('blockThreshold')?.addEventListener('change', async () => {
-    const v = Math.max(1, Math.min(100, Number($('blockThreshold').value) || 70));
+    const v = Math.max(1, Math.min(100, Number($('blockThreshold').value) || 75));
     const ok = await persistThreshold('autoBlockThreshold', v);
+    if (ok) setTimeout(renderAutoArmStatus, 900);
     if (ok) showToast(`${t('popup.blockAt', 'Block at')} → ${v}%`);
   });
 

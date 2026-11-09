@@ -205,7 +205,23 @@ const CorsairSecurity = (() => {
     return { ok: true };
   }
 
+  /* Host of the page that really sent a runtime message (never a host field inside it). */
+  function senderHost(sender) {
+    const u = (sender && (sender.url || (sender.tab && sender.tab.url))) || '';
+    return extractHostname(u) || '';
+  }
+
+  /* True when `host` is exactly the sender's own host (a bare `www.` difference is tolerated). */
+  function hostMatchesSender(host, sender) {
+    const a = normalizeHostname(host || '');
+    const b = senderHost(sender);
+    if (!a || !b) return false;
+    return a === b || a === 'www.' + b || b === 'www.' + a;
+  }
+
   return {
+    senderHost,
+    hostMatchesSender,
     normalizeUrl,
     extractHostname,
     normalizeHostname,

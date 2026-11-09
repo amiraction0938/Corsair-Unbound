@@ -2573,12 +2573,12 @@ function renderAnalyzerResult(data) {
       for (const f of files) {
         const line = document.createElement('div');
         line.style.padding = '2px 0';
-        const malBadge = f.malicious > 0
-          ? `<span style="color:#f87171; font-weight:700;">⚠ ${f.malicious}</span>`
+        const malBadge = Number(f.malicious) > 0
+          ? `<span style="color:#f87171; font-weight:700;">⚠ ${Number(f.malicious) || 0}</span>`
           : `<span style="color:#34d399;">✓ 0</span>`;
         line.innerHTML = `<code>${escapeHtml(f.name || (f.sha256 || '').slice(0, 16))}</code> ` +
           `<span style="color:#94a3b8;">(${escapeHtml(f.type || 'file')}, ${formatBytes(f.size || 0)})</span> ` +
-          `— mal: ${malBadge} / sus: ${f.suspicious}`;
+          `— mal: ${malBadge} / sus: ${Number(f.suspicious) || 0}`;
         list.appendChild(line);
       }
       sec.appendChild(list);

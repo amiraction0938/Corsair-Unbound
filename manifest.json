@@ -70,6 +70,9 @@
       "match_about_blank": false
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'none'"
+  },
   "web_accessible_resources": [
     {
       "resources": ["blocked.html", "blocked.js", "core/i18n.js"],

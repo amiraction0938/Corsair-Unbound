@@ -367,7 +367,10 @@
       if (u.protocol === 'http:' || u.protocol === 'https:') destHost = u.hostname.toLowerCase();
     } catch {}
 
-    if (destHost && !isSameHost(destHost)) {
+    // Only a REAL user click may open a fortress-allow rule. A page script can dispatch
+    // synthetic click events on any link, which would otherwise let a hostile page punch
+    // a hole in its own containment for a destination it chooses.
+    if (destHost && !isSameHost(destHost) && e.isTrusted === true) {
       sendBg({
         type: 'content-link-allow',
         source: _selfHost,
