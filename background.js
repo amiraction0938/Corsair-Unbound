@@ -436,7 +436,6 @@ async function reconcileSessionState() {
 /* ============================================================
    SENDER CLASSIFIER
    ============================================================ */
-function senderHost(sender) { return CorsairSecurity.senderHost(sender); }
 function hostMatchesSender(host, sender) { return CorsairSecurity.hostMatchesSender(host, sender); }
 
 /* Rate limit for fortress-allow rules requested from pages (per tab). */

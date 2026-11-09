@@ -40,6 +40,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard reorganised: the sidebar is grouped (Monitor / Protection / Tools / System), Userscripts has its own page (it used to sit inside Security), and the Settings page is split into labelled groups (Protection, Threat intelligence, Alerts & banners, Logging). No setting was removed or renamed.
 - The userscript search box now has proper styling.
 
+### Security (full review of the original code and of this release)
+- **Fortress containment bypass closed.** `content-link-allow` (the 15-second rule that lets a user-clicked cross-site link through an armed Fortress) was also sent for *synthetic* clicks. A hostile page could dispatch a fake click on a link to any destination and open a hole in its own containment. It now needs a real user click (`isTrusted`), the requesting host must equal the sender's own host, the host must actually be armed, and requests are rate-limited per tab.
+- **A page could trust and un-block itself.** The in-page verdict banner lived in an *open* shadow root and its Trust/Block buttons had no genuine-click check, so a page script could press "Trust" for its own domain (which also removes it from the blocklist). Fixed with closed shadow roots, `isTrusted` checks, a browser-level `confirm()` before trusting (defeats clickjacking by restyling), and the background now verifies that the host in the message is the sender's own host.
+- **Thresholds could silently become 1%.** `Number(null)`, `Number('')` and `Number(false)` are 0, which was clamped to 1, so a null/empty auto-block threshold would block every site with 1% risk. Settings are now type-validated and clamped centrally (`validateSettingsPatch`), and the auto-arm module accepts only real numbers.
+- The GM bridge refuses ids of scripts that do not exist, are disabled or were removed, and only reaches `http(s)` addresses (no `chrome-extension:`, `file:`, `javascript:`, `data:`).
+- Strict extension-page CSP (`base-uri 'none'`), and numbers from remote data are coerced before they reach `innerHTML`. A scan of every `innerHTML` use in the dashboard, popup and block page found no other unescaped data.
+- Reviewed and found sound: the message router (content scripts are limited to six message types), the cross-world nonce protocol, and the updater (SHA-256 verification, download URL restricted to this repository, tag match).
+
+### Fixed (Auto-Arm Fortress did not arm: 4% risk with a 3% threshold)
+- Arming no longer depends on the display-only "site verdict banner" setting.
+- The decision is re-evaluated on every navigation from the cached verdict, and for all open tabs when the toggle or a threshold changes (no reload needed). Before, a tab was evaluated once per host, so lowering the threshold and reloading did nothing.
+- A stale cached verdict is used as a fallback when a fresh scan fails (rate limit, offline), and the scan starts before redirect-chain bookkeeping (the chain can be missing after a service-worker restart).
+- An old profile without an opt-out flag no longer blocks auto-arm; the keyboard-shortcut disarm now records the opt-out like the popup does.
+- **Nothing fails silently any more:** applying is retried once and a persistent failure is logged as `auto_arm_failed`.
+- The popup now explains, in English and Persian, what Auto-Arm decided for the current site and why ("Armed: risk 4% ≥ 3%", "Not armed: risk 2% is below 3%", "you turned Fortress off for this site", "scan failed", ...).
+- The decision logic moved to `core/autoarm.js` (pure `decide()` + `evaluate()` with injected dependencies) with 19 tests, including the reported case. The content scripts' Fortress-state cache is dropped on every profile write path.
+
 ### Updated (tour, Persian)
 - **Take Tour** now has 11 steps: new stops for the Userscripts page, the script guide / AI prompt, the grouped Settings, and Backup & Restore (which mentions API keys). The old text that placed "Custom Scripts" under Security Controls was corrected, and the welcome step describes the grouped sidebar. All new steps are translated into all 8 languages.
 - **Persian coverage:** 20 API-key / URLhaus status messages and the update-wizard button were missing in Persian and fell back to English; they are translated now. The Userscripts page, the activity filters, the API panel, tooltips, placeholders, aria-labels, every export/import dialog, and about 60 toasts and result labels are now Persian when the dashboard language is Persian (a new `data-fa` / `data-fa-html` / `data-fa-ph` mechanism plus `tx()` for scripted text).

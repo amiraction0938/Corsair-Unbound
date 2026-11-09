@@ -1189,7 +1189,12 @@ const CorsairUserScripts = (() => {
     return bytes;
   }
 
+  function isHttpUrl(u) {
+    try { const p = new URL(String(u)).protocol; return p === 'http:' || p === 'https:'; } catch { return false; }
+  }
+
   async function gmXhr(req) {
+    if (!isHttpUrl(req && req.url)) return { ok: false, kind: 'error', error: 'unsupported-url' };
     const ctrl = new AbortController();
     _xhrControllers.set(req.reqId, ctrl);
     let timedOut = false;
@@ -1246,6 +1251,12 @@ const CorsairUserScripts = (() => {
     const id = msg.id;
     const data = msg.data || {};
 
+    // Only scripts that really exist and are enabled may use the bridge. A removed or
+    // never-installed id is refused, so nothing can create orphan data or keep
+    // calling the extension after its script was deleted.
+    const known = await readRecord(id);
+    if (!known || known.enabled === false) return { ok: false, error: 'unknown-script' };
+
     switch (msg.op) {
       case 'vals:get':
         return { ok: true, values: await readVals(id) };
@@ -1288,6 +1299,9 @@ const CorsairUserScripts = (() => {
       }
 
       case 'open-tab': {
+        let proto = '';
+        try { proto = new URL(String(data.url || '')).protocol; } catch {}
+        if (!['http:', 'https:', 'file:', 'ftp:', 'about:'].includes(proto)) return { ok: false, error: 'unsupported-url' };
         const opts = { url: String(data.url || ''), active: data.active !== false };
         if (sender && sender.tab && sender.tab.id != null) opts.openerTabId = sender.tab.id;
         const tab = await chrome.tabs.create(opts);
@@ -1304,6 +1318,7 @@ const CorsairUserScripts = (() => {
       }
 
       case 'download': {
+        if (!isHttpUrl(data.url)) return { ok: false, error: 'unsupported-url' };
         try {
           const opts = { url: String(data.url || ''), saveAs: Boolean(data.saveAs) };
           const name = safeDownloadName(data.name);

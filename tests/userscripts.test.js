@@ -301,10 +301,12 @@ describe('CorsairUserScripts — storage and registration', () => {
 
 describe('CorsairUserScripts — GM_* API end to end', () => {
   let downloads;
+  let sharedId = null;
 
   beforeEach(() => {
     installChromeMock();
     installUserScriptsMock();
+    sharedId = null;
     downloads = [];
     globalThis.chrome.downloads = { download: async (o) => { downloads.push(o); return 7; } };
     globalThis.chrome.notifications = { create: async () => {}, clear: () => {} };
@@ -325,7 +327,9 @@ describe('CorsairUserScripts — GM_* API end to end', () => {
   async function runScript(body, header = '', record = {}) {
     const code = `// ==UserScript==\n// @name GMTest\n// @match *://*/*\n${header}\n// ==/UserScript==\n${body}`;
     const { meta } = CorsairUserScripts.parseMetadata(code);
-    const rec = { id: 'cu-test1', code, meta, ...record };
+    const saved = await CorsairUserScripts.save({ id: sharedId || undefined, code });   // the bridge only serves scripts that exist
+    sharedId = saved.script.id;
+    const rec = { id: saved.script.id, code, meta, ...record };
     const plan = CorsairUserScripts.buildPlan(meta);
     const src = CorsairUserScripts.buildSource(rec, plan);
     const logs = [];
@@ -414,9 +418,33 @@ describe('CorsairUserScripts — GM_* API end to end', () => {
   });
 
   it('rejects malformed or foreign bridge messages', async () => {
-    expect((await CorsairUserScripts.handleGmMessage({ op: 'vals:get', id: 'cu-x' }, {})).ok).toBe(false);
+    const { script } = await CorsairUserScripts.save({ code: '// ==UserScript==\n// @name B\n// @match *://*/*\n// ==/UserScript==' });
+    expect((await CorsairUserScripts.handleGmMessage({ op: 'vals:get', id: script.id }, {})).ok).toBe(false);
     expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:get', id: 'other' }, {})).ok).toBe(false);
-    expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'nope', id: 'cu-x' }, {})).ok).toBe(false);
+    expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'nope', id: script.id }, {})).ok).toBe(false);
+  });
+
+  it('refuses ids of scripts that do not exist, are disabled, or were removed', async () => {
+    const msg = (id) => ({ __cu: 1, op: 'vals:set', id, data: { k: 'a', v: 1 } });
+    expect((await CorsairUserScripts.handleGmMessage(msg('cu-neverinstalled'), {})).error).toBe('unknown-script');
+    const { script } = await CorsairUserScripts.save({ code: '// ==UserScript==\n// @name D\n// @match *://*/*\n// ==/UserScript==' });
+    expect((await CorsairUserScripts.handleGmMessage(msg(script.id), {})).ok).toBe(true);
+    await CorsairUserScripts.setEnabled(script.id, false);
+    expect((await CorsairUserScripts.handleGmMessage(msg(script.id), {})).error).toBe('unknown-script');
+    await CorsairUserScripts.setEnabled(script.id, true);
+    await CorsairUserScripts.remove(script.id);
+    expect((await CorsairUserScripts.handleGmMessage(msg(script.id), {})).error).toBe('unknown-script');
+  });
+
+  it('GM requests only reach http(s) addresses (no chrome-extension:, file:, javascript:)', async () => {
+    const { script } = await CorsairUserScripts.save({ code: '// ==UserScript==\n// @name U\n// @match *://*/*\n// ==/UserScript==' });
+    const send = (op, data) => CorsairUserScripts.handleGmMessage({ __cu: 1, op, id: script.id, data }, {});
+    for (const url of ['chrome-extension://abc/manifest.json', 'file:///etc/passwd', 'javascript:alert(1)', 'data:text/html,x', 'ftp://x/y']) {
+      expect((await send('xhr', { reqId: 'r', url, method: 'GET' })).error, url).toBe('unsupported-url');
+      expect((await send('download', { url })).error, url).toBe('unsupported-url');
+    }
+    for (const url of ['javascript:alert(1)', 'data:text/html,x', 'chrome://settings']) expect((await send('open-tab', { url })).error, url).toBe('unsupported-url');
+    expect((await send('open-tab', { url: 'https://example.com/' })).ok).toBe(true);
   });
 
   it('removing a script deletes its stored values', async () => {
@@ -424,7 +452,8 @@ describe('CorsairUserScripts — GM_* API end to end', () => {
     await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:set', id: script.id, data: { k: 'a', v: 1 } }, {});
     expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:get', id: script.id }, {})).values).toEqual({ a: 1 });
     await CorsairUserScripts.remove(script.id);
-    expect((await CorsairUserScripts.handleGmMessage({ __cu: 1, op: 'vals:get', id: script.id }, {})).values).toEqual({});
+    const left = await chrome.storage.local.get(['cus:vals:' + script.id, 'cus:rec:' + script.id]);
+    expect(left).toEqual({});
   });
 });
 
