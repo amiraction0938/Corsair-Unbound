@@ -63,7 +63,7 @@ const CorsairAutoArm = (() => {
    * @returns {{action:'none'|'arm'|'block', reason:string, risk:number,
    *            armMin:number, blockMin:number, armProfile:boolean, addToBlocklist:boolean}}
    */
-  function decide({ settings, report, profile, isAllowlisted, isBlocked }) {
+  function decide({ settings, report, profile, isAllowlisted, isBlocked, now }) {
     const { armMin, blockMin } = resolveThresholds(settings);
     const risk = reportRisk(report);
     const base = { action: 'none', risk, armMin, blockMin, armProfile: false, addToBlocklist: false };
@@ -77,7 +77,12 @@ const CorsairAutoArm = (() => {
     const optedOut = Boolean(profile) && profile.autoArmed === false;
     const protectedNow = Boolean(profile) && profile.protected === true;
 
-    if (risk >= blockMin) {
+    // The user explicitly chose "back to the site (Fortress on)" on the block page: do not
+    // auto-block again for a while (otherwise the same scan would block it on the next page).
+    const t0 = Number.isFinite(now) ? now : Date.now();
+    const snoozed = Boolean(profile) && Number(profile.autoBlockSnoozeUntil) > t0;
+
+    if (risk >= blockMin && !snoozed) {
       return {
         ...base,
         action: 'block',
@@ -129,7 +134,7 @@ const CorsairAutoArm = (() => {
     ]);
     const isBlocked = Array.isArray(blockedList) && blockedList.includes(host);
 
-    const d = decide({ settings, report, profile, isAllowlisted, isBlocked });
+    const d = decide({ settings, report, profile, isAllowlisted, isBlocked, now });
     const diag = { host, at: now, source, ...d, applied: false, error: '' };
 
     if (d.action === 'none') {
@@ -198,7 +203,25 @@ const CorsairAutoArm = (() => {
     return diag;
   }
 
-  return { REASON, DEFAULT_ARM, DEFAULT_BLOCK, MAX_BLOCKLIST, clampPct, resolveThresholds, decide, evaluate };
+  /**
+   * The verdict banner is shown once per tab + host (a "visit"), not on every in-page route
+   * change (Instagram "next post", YouTube video links, ...), and not again on reloads.
+   */
+  function createBannerGate() {
+    const shown = new Map();
+    return {
+      shouldShow(tabId, host) {
+        if (!Number.isInteger(tabId) || !host) return false;
+        if (shown.get(tabId) === host) return false;
+        shown.set(tabId, host);
+        return true;
+      },
+      reset(tabId) { shown.delete(tabId); },
+      peek(tabId) { return shown.get(tabId) || null; }
+    };
+  }
+
+  return { REASON, DEFAULT_ARM, DEFAULT_BLOCK, MAX_BLOCKLIST, clampPct, resolveThresholds, decide, evaluate, createBannerGate };
 })();
 
 globalThis.CorsairAutoArm = CorsairAutoArm;

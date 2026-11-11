@@ -114,15 +114,45 @@ const CorsairThreatIntel = (() => {
     return false;
   }
 
+  /* The trusted-domain set lives in memory, and an MV3 service worker is stopped after a few
+     idle seconds and restarted empty. It was only reloaded on install/startup and when the user
+     pressed Trust, so after a restart a domain the user had trusted looked untrusted again:
+     it was re-scanned, and auto-block could put it straight back on the blocklist. The set is now
+     (re)loaded on every cold start, before any decision uses it, and whenever the stored list
+     changes (dashboard, popup, import, another context). */
+  let _userTrustedLoaded = false;
+  let _userTrustedLoading = null;
+
   async function refreshUserTrusted() {
     try {
       const list = await CorsairStorage.get('userTrustedDomains', []);
       _userTrustedCache = new Set(Array.isArray(list) ? list : []);
+      _userTrustedLoaded = true;
     } catch {
-      _userTrustedCache = new Set();
+      // keep the previous set instead of wiping it: an empty set means "nothing is trusted"
+      _userTrustedLoaded = _userTrustedLoaded || false;
     }
     return _userTrustedCache;
   }
+
+  async function ensureUserTrustedLoaded() {
+    if (_userTrustedLoaded) return _userTrustedCache;
+    if (!_userTrustedLoading) {
+      _userTrustedLoading = refreshUserTrusted().finally(() => { _userTrustedLoading = null; });
+    }
+    await _userTrustedLoading;
+    return _userTrustedCache;
+  }
+
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes && changes.userTrustedDomains) refreshUserTrusted().catch(() => {});
+      });
+    }
+    // Start loading right away on every service-worker start.
+    if (typeof CorsairStorage !== 'undefined') refreshUserTrusted().catch(() => {});
+  } catch {}
 
   async function loadRemoteAllowlist() {
     if (_remoteLoaded) return _remoteAllowlist;
@@ -896,6 +926,7 @@ const CorsairThreatIntel = (() => {
     refreshRemoteAllowlist,
     loadRemoteAllowlist,
     refreshUserTrusted,
+    ensureUserTrustedLoaded,
     verifyApiKey,
     getAllowlistSize: () => ({
       builtin: BUILTIN_ALLOWLIST.size,
