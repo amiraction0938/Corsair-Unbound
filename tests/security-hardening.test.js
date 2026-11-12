@@ -115,3 +115,41 @@ describe('manifest hardening', () => {
     expect(csp).not.toMatch(/unsafe-eval|unsafe-inline|\*/);
   });
 });
+
+describe('block-page wiring in the background', () => {
+  const bg = read('background.js');
+
+  it('both block-page messages require the genuine top-level block page', () => {
+    for (const type of ['get-block-info', 'block-page-action']) {
+      const block = bg.slice(bg.indexOf(`case '${type}'`), bg.indexOf(`case '${type}'`) + 500);
+      expect(block, type).toMatch(/isBlockPageSender\(s, host\)/);
+    }
+    // they are NOT reachable from a content script
+    const i = bg.indexOf("if (capability === 'PAGE_OBSERVATION') {\n        if (m.type !== 'page-observation'");
+    const chain = bg.slice(i, bg.indexOf("send({ ok: false, error: 'unauthorized-sender' })", i));
+    expect(chain).not.toContain('block-page-action');
+    expect(chain).not.toContain('get-block-info');
+  });
+
+  it('trust and unblock are awaited and their failures are reported (no silent success)', () => {
+    const trust = bg.slice(bg.indexOf('async function trustDomain'), bg.indexOf('async function untrustDomain'));
+    expect(trust).toMatch(/await CorsairThreatIntel\.refreshUserTrusted\(\)/);
+    expect(trust).toMatch(/await unblockDomainGlobally\(h\)/);
+    expect(trust).toMatch(/unblock-failed/);
+    const unblock = bg.slice(bg.indexOf('async function unblockDomainGlobally'), bg.indexOf('SESSION RECONCILE'));
+    expect(unblock).toMatch(/await CorsairDNR\.syncUserBlocklist/);
+    expect(unblock).toMatch(/dnr-sync-failed/);
+  });
+
+  it('the banner is gated per visit and the trusted list is loaded before the scan decision', () => {
+    const scan = bg.slice(bg.indexOf('async function maybeAutoScan'), bg.indexOf('USERSCRIPTS (Tampermonkey-style'));
+    expect(scan).toMatch(/bannerGate\.shouldShow\(tabId, host\)/);
+    expect(scan).toMatch(/ensureUserTrustedLoaded/);
+    expect(scan).not.toMatch(/if \(showBanner\) await pushVerdictToTab/);   // only bannerNow may show it
+  });
+
+  it('the browsingData permission is declared (needed to wipe a blocked site\'s data)', () => {
+    const m = JSON.parse(read('manifest.json'));
+    expect(m.permissions).toContain('browsingData');
+  });
+});

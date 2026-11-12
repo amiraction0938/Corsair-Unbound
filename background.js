@@ -19,6 +19,7 @@ import './core/replay.js';
 import './core/updater.js';
 import './core/userscripts.js';
 import './core/autoarm.js';
+import './core/block-actions.js';
 
 let _startupReconcilePromise = null;
 
@@ -161,7 +162,7 @@ async function getAutoArmDiag(host) {
 function autoArmDeps() {
   return {
     getSettings: () => CorsairStorage.getSettings(),
-    isAllowlisted: (h) => CorsairThreatIntel.isAllowlisted(h),
+    isAllowlisted: async (h) => { try { await CorsairThreatIntel.ensureUserTrustedLoaded(); } catch {} return CorsairThreatIntel.isAllowlisted(h); },
     getProfile: (h) => CorsairStorage.getProfile(h),
     getUserBlocked: () => CorsairStorage.get('userBlockedDomains', []),
     addBlocked: async (h) => {
@@ -192,6 +193,56 @@ async function maybeAutoArmFortress(host, report, opts = {}) {
   }
 }
 
+/* ============================================================
+   BLOCK PAGE (blocked.html): why was it blocked, and what can the user do
+   ============================================================ */
+function forgetAutoArmDiag(host) {
+  _autoArmDiag.delete(host);
+  return chrome.storage.session.set({ [AUTOARM_DIAG_KEY]: Object.fromEntries(_autoArmDiag) }).catch(() => {});
+}
+
+async function findAutoBlockEvent(host) {
+  const events = await CorsairStorage.getEvents(500);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (e && e.type === 'auto_block' && e.domain === host) return e;
+  }
+  return null;
+}
+
+function blockActionDeps() {
+  return {
+    now: () => Date.now(),
+    isTrusted: async (h) => { try { await CorsairThreatIntel.ensureUserTrustedLoaded(); } catch {} return CorsairThreatIntel.isAllowlisted(h); },
+    getBlocked: () => CorsairStorage.get('userBlockedDomains', []),
+    getSettings: () => CorsairStorage.getSettings(),
+    getReport: (h) => CorsairThreatIntel.getCachedReport(h),
+    getProfile: (h) => CorsairStorage.getProfile(h),
+    findAutoBlockEvent,
+    patchProfile: (h, mutator) => CorsairDNR.patchProfileAtomic(h, current => mutator(current || CorsairSecurity.fortressProfile({}))),
+    unblockDomain: unblockDomainGlobally,
+    blockDomain: blockDomainGlobally,
+    trustDomain,
+    dropThreatCache: (h) => CorsairThreatIntel.removeCachedReport(h),
+    forgetAutoArm: forgetAutoArmDiag,
+    clearSiteData: async (origins) => {
+      if (!chrome.browsingData || typeof chrome.browsingData.remove !== 'function') return { ok: false, error: 'browsingData-unavailable' };
+      if (!origins || !origins.length) return { ok: false, error: 'no-origins' };
+      await chrome.browsingData.remove({ origins }, CorsairBlockActions.SITE_DATA_TYPES);
+      return { ok: true };
+    },
+    logEvent: (e) => CorsairStorage.appendEvent(e)
+  };
+}
+
+/** The sender must be the top-level frame of OUR block page, and the host must be the one it shows. */
+function isBlockPageSender(sender, host) {
+  return CorsairBlockActions.isBlockPageSender(sender, host, {
+    baseUrl: chrome.runtime.getURL('blocked.html'),
+    normalizeHostname: (h) => CorsairSecurity.normalizeHostname(h || '')
+  });
+}
+
 /** Re-run the decision for every open web tab (used when the user changes the thresholds). */
 async function reevaluateAutoArmForOpenTabs(source = 'settings-change') {
   try {
@@ -216,6 +267,7 @@ async function pushVerdictToTab(tabId, report) {
 }
 
 const _autoScanErrorAt = new Map();
+const bannerGate = CorsairAutoArm.createBannerGate();
 const AUTOSCAN_RETRY_MS = 30000;
 
 async function maybeAutoScan(tabId, url, opts = {}) {
@@ -228,10 +280,16 @@ async function maybeAutoScan(tabId, url, opts = {}) {
     if (!settings.threatIntelEnabled || !settings.threatIntelAutoScan) return;
     // The banner is a DISPLAY preference. It must never decide whether protection runs.
     showBanner = settings.siteVerdictBanner !== false;
+    // Show it once per visit (tab + host). In-page route changes (Instagram "next post",
+    // YouTube links...) and reloads must not pop it up again; the arming decision still runs.
+    const bannerNow = showBanner && bannerGate.shouldShow(tabId, host);
+
+    // A trusted domain must look trusted even right after a service-worker restart.
+    try { await CorsairThreatIntel.ensureUserTrustedLoaded(); } catch {}
 
     if (CorsairThreatIntel.isAllowlisted(host)) {
       updateBadge(tabId, 'allowlisted').catch(() => {});
-      if (showBanner && settings.notifyOnSafeSites === true) {
+      if (bannerNow && settings.notifyOnSafeSites === true) {
         await pushVerdictToTab(tabId, {
           host, status: 'allowlisted', verdict: 'clean',
           riskPercentage: 0, flaggedEngines: [],
@@ -246,7 +304,7 @@ async function maybeAutoScan(tabId, url, opts = {}) {
     // A fresh cached verdict is local and cheap, so the arming decision is
     // ALWAYS re-evaluated from it (reloads and threshold changes take effect).
     if (cached && !cached.stale) {
-      if (showBanner) await pushVerdictToTab(tabId, cached);
+      if (bannerNow) await pushVerdictToTab(tabId, cached);
       else updateBadge(tabId, cached.verdict || cached.status).catch(() => {});
       await maybeAutoArmFortress(host, cached, { source: opts.source || 'cache' });
       return;
@@ -260,11 +318,11 @@ async function maybeAutoScan(tabId, url, opts = {}) {
     }
     _autoScannedTabs.set(tabId, host);
 
-    if (showBanner) await sendToTab(tabId, { type: 'corsair-verdict-loading', host });
+    if (bannerNow) await sendToTab(tabId, { type: 'corsair-verdict-loading', host });
     const report = await CorsairThreatIntel.autoScan(host);
     if (report && report.status !== 'error') {
       _autoScanErrorAt.delete(host);
-      if (showBanner) await pushVerdictToTab(tabId, report);
+      if (bannerNow) await pushVerdictToTab(tabId, report);
       else updateBadge(tabId, report.verdict || report.status).catch(() => {});
       await maybeAutoArmFortress(host, report, { source: 'scan' });
     } else {
@@ -272,7 +330,7 @@ async function maybeAutoScan(tabId, url, opts = {}) {
       // an older cached verdict for the arming decision instead of doing nothing.
       _autoScanErrorAt.set(host, Date.now());
       _autoScannedTabs.delete(tabId);
-      if (showBanner) await sendToTab(tabId, { type: 'corsair-verdict-cancel' });
+      if (bannerNow) await sendToTab(tabId, { type: 'corsair-verdict-cancel' });
       if (cached) await maybeAutoArmFortress(host, cached, { source: 'stale-cache' });
     }
   } catch {
@@ -356,23 +414,27 @@ async function bulkRemoveSafeScanned(hosts) {
 async function trustDomain(host) {
   const h = CorsairSecurity.normalizeHostname(host || '');
   if (!h || !CorsairSecurity.isValidHostname(h)) return { ok: false, error: 'invalid-host' };
-  return CorsairStorage.withPartitionLock('globalSettings', async () => {
+
+  // 1) remember the decision
+  const arr = await CorsairStorage.withPartitionLock('globalSettings', async () => {
     const list = await CorsairStorage.get('userTrustedDomains', []);
     const set = new Set(Array.isArray(list) ? list : []);
     set.add(h);
-    const arr = [...set].slice(-500);
-    await CorsairStorage.set('userTrustedDomains', arr);
-    try { CorsairThreatIntel.refreshUserTrusted(); } catch {}
-    try {
-      const blocked = await CorsairStorage.get('userBlockedDomains', []);
-      if (Array.isArray(blocked) && blocked.includes(h)) {
-        const nextBlocked = blocked.filter(d => d !== h);
-        await CorsairStorage.set('userBlockedDomains', nextBlocked);
-        CorsairDNR.syncUserBlocklist(nextBlocked);
-      }
-    } catch {}
-    return { ok: true, domains: arr };
+    const next = [...set].slice(-500);
+    await CorsairStorage.set('userTrustedDomains', next);
+    return next;
   });
+
+  // 2) the in-memory allowlist must be current before anything else looks at this host
+  try { await CorsairThreatIntel.refreshUserTrusted(); } catch {}
+
+  // 3) a trusted host must not stay on the blocklist. This is awaited (and checked) so the block
+  //    page is really gone when we answer; before, the rule removal raced the user's next click.
+  const un = await unblockDomainGlobally(h);
+  if (!un || un.ok === false) {
+    return { ok: false, error: `unblock-failed: ${(un && un.error) || 'unknown'}`, domains: arr };
+  }
+  return { ok: true, domains: arr };
 }
 async function untrustDomain(host) {
   const h = CorsairSecurity.normalizeHostname(host || '');
@@ -392,22 +454,32 @@ async function untrustDomain(host) {
 async function blockDomainGlobally(host) {
   const h = CorsairSecurity.normalizeHostname(host || '');
   if (!h || !CorsairSecurity.isValidHostname(h)) return { ok: false, error: 'invalid-host' };
-  return CorsairStorage.withPartitionLock('userBlockedDomains', async () => {
+
+  const res = await CorsairStorage.withPartitionLock('userBlockedDomains', async () => {
     const list = await CorsairStorage.get('userBlockedDomains', []);
     const set = new Set(Array.isArray(list) ? list : []);
     set.add(h);
     const arr = [...set].slice(-500);
     await CorsairStorage.set('userBlockedDomains', arr);
-    try {
+    const sync = await CorsairDNR.syncUserBlocklist(arr);
+    return { arr, sync };
+  });
+
+  // a blocked domain cannot also be trusted (done under the lock that owns the trusted list)
+  try {
+    await CorsairStorage.withPartitionLock('globalSettings', async () => {
       const trusted = await CorsairStorage.get('userTrustedDomains', []);
       if (Array.isArray(trusted) && trusted.includes(h)) {
         await CorsairStorage.set('userTrustedDomains', trusted.filter(d => d !== h));
-        CorsairThreatIntel.refreshUserTrusted();
       }
-    } catch {}
-    const sync = await CorsairDNR.syncUserBlocklist(arr);
-    return { ok: true, domains: arr, sync };
-  });
+    });
+    await CorsairThreatIntel.refreshUserTrusted();
+  } catch {}
+
+  if (res.sync && res.sync.ok === false) {
+    return { ok: false, error: `dnr-sync-failed: ${res.sync.error || 'unknown'}`, domains: res.arr, sync: res.sync };
+  }
+  return { ok: true, domains: res.arr, sync: res.sync };
 }
 async function unblockDomainGlobally(host) {
   const h = CorsairSecurity.normalizeHostname(host || '');
@@ -417,6 +489,7 @@ async function unblockDomainGlobally(host) {
     const arr = (Array.isArray(list) ? list : []).filter(d => d !== h);
     await CorsairStorage.set('userBlockedDomains', arr);
     const sync = await CorsairDNR.syncUserBlocklist(arr);
+    if (sync && sync.ok === false) return { ok: false, error: `dnr-sync-failed: ${sync.error || 'unknown'}`, domains: arr, sync };
     return { ok: true, domains: arr, sync };
   });
 }
@@ -719,6 +792,7 @@ try {
       if (settings.downloadGuard !== true) return;
       const host = CorsairSecurity.extractHostname(item.url || '') || CorsairSecurity.extractHostname(item.finalUrl || '');
       if (!host) return;
+      try { await CorsairThreatIntel.ensureUserTrustedLoaded(); } catch {}
       if (CorsairThreatIntel.isAllowlisted(host)) return;
       const report = await CorsairThreatIntel.getCachedReport(host);
       if (report?.verdict !== 'malicious') return;
@@ -1020,6 +1094,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
     clearBadge(tabId);
     _autoScannedTabs.delete(tabId);
+    bannerGate.reset(tabId);
   }
 });
 
@@ -1034,6 +1109,7 @@ chrome.tabs.onRemoved.addListener(async tabId => {
     const token = await CorsairRedirects.getGenerationToken(tabId);
     await CorsairRedirects.clearChainIfTabClosed(tabId, token);
     _autoScannedTabs.delete(tabId);
+    bannerGate.reset(tabId);
     for (const [host, arr] of _popupBurst) {
       const now = Date.now();
       const keep = arr.filter(t => now - t < POPUP_BURST_WINDOW_MS);
@@ -1482,10 +1558,45 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           send({ ok: true, settings });
           break;
         }
+        case 'get-block-info': {
+          const host = CorsairSecurity.normalizeHostname(m.host || '');
+          if (!host || !isBlockPageSender(s, host)) { send({ ok: false, error: 'not-allowed' }); break; }
+          send({ ok: true, info: await CorsairBlockActions.explain(host, blockActionDeps()) });
+          break;
+        }
+        case 'block-page-action': {
+          const host = CorsairSecurity.normalizeHostname(m.host || '');
+          if (!host || !CorsairSecurity.isValidHostname(host) || !isBlockPageSender(s, host)) { send({ ok: false, error: 'not-allowed' }); break; }
+          const deps = blockActionDeps();
+          const tabId = s.tab.id;
+          let res;
+          if (m.action === 'proceed-fortress') res = await CorsairBlockActions.proceedWithFortress(host, deps);
+          else if (m.action === 'false-positive') res = await CorsairBlockActions.markFalsePositive(host, deps);
+          else if (m.action === 'block-wipe') res = await CorsairBlockActions.blockAndIsolate(host, deps);
+          else { send({ ok: false, error: 'unknown-action' }); break; }
+
+          if (res.ok) {
+            try {
+              if (res.redirectUrl) {
+                await chrome.tabs.update(tabId, { url: res.redirectUrl });
+              } else if (res.newTab && res.steps.every(s => s.ok)) {
+                // everything worked: move the user to a fresh tab and close the blocked one
+                await chrome.tabs.create({ active: true });
+                res.navigated = true;
+                await chrome.tabs.remove(tabId);
+              }
+            } catch (err) {
+              res.steps.push({ name: 'navigate', ok: false, error: (err && err.message) || 'tab-error' });
+            }
+          }
+          send(res);
+          break;
+        }
         case 'get-autoarm-status': {
           const host = CorsairSecurity.normalizeHostname(m.domain || '');
           if (!host || !CorsairSecurity.isValidHostname(host)) { send({ ok: false, error: 'invalid-domain' }); break; }
           const settings = await CorsairStorage.getSettings();
+          try { await CorsairThreatIntel.ensureUserTrustedLoaded(); } catch {}
           let cached = null;
           try { cached = await CorsairThreatIntel.getCachedReport(host); } catch {}
           send({

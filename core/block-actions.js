@@ -211,7 +211,24 @@ const CorsairBlockActions = (() => {
     return result(run, { newTab: true, wiped: origins });
   }
 
-  return { SNOOZE_MS, SITE_DATA_TYPES, originsFor, explain, proceedWithFortress, markFalsePositive, blockAndIsolate };
+  /**
+   * Only the TOP-LEVEL frame of our own block page, showing exactly this host, may trigger the
+   * actions. blocked.html is web-accessible, so another site can frame it; a framed copy (or any
+   * other extension page / frame) is refused.
+   */
+  function isBlockPageSender(sender, host, { baseUrl, normalizeHostname }) {
+    try {
+      if (!sender || sender.frameId !== 0 || !sender.tab || !Number.isInteger(sender.tab.id)) return false;
+      if (typeof sender.url !== 'string' || !baseUrl || !sender.url.startsWith(baseUrl)) return false;
+      const rest = sender.url.slice(baseUrl.length);
+      if (rest && !/^[?#]/.test(rest)) return false;                 // blocked.html.evil/ etc.
+      const shown = new URL(sender.url).searchParams.get('host') || '';
+      const a = normalizeHostname(shown);
+      return Boolean(a) && a === normalizeHostname(host || '');
+    } catch { return false; }
+  }
+
+  return { SNOOZE_MS, SITE_DATA_TYPES, originsFor, explain, proceedWithFortress, markFalsePositive, blockAndIsolate, isBlockPageSender };
 })();
 
 globalThis.CorsairBlockActions = CorsairBlockActions;

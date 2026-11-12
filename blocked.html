@@ -45,6 +45,29 @@
   }
   button.secondary:hover { background: #334155; }
   .hint { font-size: 12px; color: #64748b; margin-top: 20px; }
+
+  .card { max-width: 580px; }
+  .why { text-align: start; margin: 18px 0 6px; padding: 14px 16px; background: #0b1322; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
+  .why h2 { font-size: 14px; margin-bottom: 8px; color: #e2e8f0; }
+  .why ul { margin: 0 0 8px; padding-inline-start: 20px; color: #cbd5e1; font-size: 13px; line-height: 1.7; }
+  .why .reason { margin: 10px 0; }
+  .fp-note { font-size: 12.5px; margin: 8px 0 0; color: #94a3b8; }
+  .choices { display: flex; flex-direction: column; gap: 10px; margin: 18px 0 6px; }
+  .choice { text-align: start; width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid transparent; }
+  .choice strong { display: block; font-size: 14px; margin-bottom: 3px; }
+  .choice small { display: block; font-size: 12px; font-weight: 400; line-height: 1.55; opacity: 0.85; }
+  .choice.good   { background: #0f3d2e; border-color: rgba(16,185,129,.45); }
+  .choice.good:hover   { background: #11503b; }
+  .choice.safe   { background: #12304f; border-color: rgba(56,189,248,.45); }
+  .choice.safe:hover   { background: #163e66; }
+  .choice.danger { background: #4a1620; border-color: rgba(248,113,113,.5); }
+  .choice.danger:hover { background: #5d1b28; }
+  .choice:disabled, button:disabled { opacity: .55; cursor: not-allowed; }
+  .status { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.6; text-align: start; background: #0b1322; color: #cbd5e1; border: 1px solid rgba(255,255,255,0.08); }
+  .status.ok  { border-color: rgba(16,185,129,.5); color: #34d399; }
+  .status.bad { border-color: rgba(248,113,113,.55); color: #fca5a5; }
+  .status.warn { border-color: rgba(245,158,11,.5); color: #fbbf24; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -55,17 +78,42 @@
       Corsair Unbound intercepted a third-party navigation from a
       <strong>Fortress-protected</strong> page.
     </p>
-    <div class="reason" id="reasonText">
-      Source page is under lockdown. Script-driven redirects to external
-      domains are contained before they leave the browser.
+
+    <section class="why" id="whySection">
+      <h2 id="whyTitle">Why was this blocked?</h2>
+      <ul id="whyList"></ul>
+      <div class="reason" id="reasonText">
+        Source page is under lockdown. Script-driven redirects to external
+        domains are contained before they leave the browser.
+      </div>
+      <p class="fp-note" id="fpNote">
+        Risk scores are estimates and can be wrong. If you know this site is safe, choose "False positive".
+      </p>
+    </section>
+
+    <div class="choices" id="choices">
+      <button type="button" id="proceedBtn" class="choice good">
+        <strong id="proceedLabel">Back to the site, with Fortress ON</strong>
+        <small id="proceedHint">Unblocks it but keeps strict protection: redirects and popups stay contained. Automatic blocking pauses for 24 hours.</small>
+      </button>
+      <button type="button" id="fpBtn" class="choice safe">
+        <strong id="fpLabel">False positive: it is safe, trust it</strong>
+        <small id="fpHint">Adds it to your trusted list, removes the block and the automatic protection, and forgets the bad verdict.</small>
+      </button>
+      <button type="button" id="wipeBtn" class="choice danger">
+        <strong id="wipeLabel">Block it, wipe its data, open a new tab</strong>
+        <small id="wipeHint2">Keeps it blocked, turns on Fortress, deletes its cookies and stored site data, then moves you to a new tab.</small>
+      </button>
     </div>
+    <div class="status" id="statusBox" role="status" hidden></div>
+
     <p id="hintText">
       If you trust the destination, open the extension popup on the source site
       and add the domain to your allowlist.
     </p>
     <div class="actions">
       <button id="escapeBtn" class="secondary">← Leave this page</button>
-      <button id="dashboardBtn">Open Corsair Dashboard</button>
+      <button id="dashboardBtn" class="secondary">Open Corsair Dashboard</button>
     </div>
     <div class="hint" id="footerText">
       Protected by Corsair Unbound — local-first browser shield

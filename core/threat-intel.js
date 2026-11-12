@@ -285,6 +285,22 @@ const CorsairThreatIntel = (() => {
     });
   }
 
+  /** Forget the stored verdict of ONE host (used when the user says "false positive" or isolates a site). */
+  async function removeCachedReport(rawHost) {
+    const host = CorsairSecurity.normalizeHostname(rawHost || '');
+    if (!host) return { ok: false, error: 'invalid-host' };
+    return CorsairStorage.withTransactionGateShared(async () => {
+      return CorsairStorage.withPartitionLock('threatCache', async () => {
+        const cache = await CorsairStorage.get('threatCache', {});
+        if (cache && Object.prototype.hasOwnProperty.call(cache, host)) {
+          delete cache[host];
+          await CorsairStorage.set('threatCache', cache);
+        }
+        return { ok: true };
+      });
+    });
+  }
+
   async function clearCache() {
     await CorsairStorage.set('threatCache', {});
   }
@@ -927,6 +943,7 @@ const CorsairThreatIntel = (() => {
     loadRemoteAllowlist,
     refreshUserTrusted,
     ensureUserTrustedLoaded,
+    removeCachedReport,
     verifyApiKey,
     getAllowlistSize: () => ({
       builtin: BUILTIN_ALLOWLIST.size,

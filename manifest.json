@@ -15,7 +15,8 @@
     "scripting",
     "contextMenus",
     "userScripts",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "browsingData"
   ],
   "host_permissions": [
     "http://*/*",
