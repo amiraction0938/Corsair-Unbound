@@ -49,7 +49,7 @@ Current host permissions:
     http://*/*
     https://*/*
 
-The manifest also requests storage, declarativeNetRequest, webNavigation, tabs, downloads, windows, notifications, alarms, scripting, and contextMenus.
+The manifest also requests storage, declarativeNetRequest, webNavigation, tabs, downloads, windows, notifications, alarms, scripting, and contextMenus. Since 1.10.0 it also requests `userScripts` (userscript manager), `unlimitedStorage` (userscript data must never compete with the security budget) and `browsingData` (the block page can delete the cookies and site data of ONE blocked domain, scoped by origin; nothing else is ever cleared).
 
 These permissions match the current architecture, but the broad host scope is the primary blast-radius concern if the extension is compromised.
 

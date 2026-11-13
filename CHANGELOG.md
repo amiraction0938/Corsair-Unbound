@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] — 2026
+
+Headline: a Tampermonkey-style **userscript manager**, a **block page that explains itself**, a much more reliable **Auto-Arm Fortress**, two **Fortress bypasses closed**, full **Persian** coverage, and complete **backups** (userscripts + optional API keys).
+Requires Chrome 120 or newer. New permissions: `userScripts`, `unlimitedStorage`, `browsingData` (see SECURITY.md).
+
+### Added (block page)
+- **The "site blocked" page now says WHY** (it is on your blocklist / Corsair blocked it automatically at risk X% ≥ your threshold Y% / what the last scan found / or that a Fortress-protected page tried to send you elsewhere) in all 8 languages.
+- **Three actions:** *Back to the site, with Fortress ON* (unblocks, arms Fortress, pauses auto-block for 24 h); *False positive: trust it* (trusts, unblocks, disarms an automatic Fortress profile, forgets the bad verdict and logs a `false_positive` event); *Block it, wipe its data, open a new tab* (keeps it blocked, Fortress on, deletes that domain's cookies and site data, closes the tab and opens a fresh one). Every step is reported; failures are shown instead of hidden.
+
+### Fixed (reported just before release)
+- **The verdict banner popped up on every in-page navigation** (Instagram "next post", YouTube links...). It is now shown once per visit (tab + site); reloads and route changes no longer re-show it. The auto-arm decision still runs every time.
+- **A domain put in Trusted was blocked again.** The trusted list was kept only in the service worker's memory and was empty after every restart, so the site was re-scanned and auto-block could block it again. It is now loaded on every cold start, refreshed on storage changes and awaited before any decision. `trustDomain` also raced the removal of the block rule and used the wrong lock; it is now awaited and verified, and reports a failure instead of pretending it worked.
+
 ### Added
 - **Userscript manager (Tampermonkey-style)** — the old one-script-per-domain feature is replaced by a full userscript engine built on the official `chrome.userScripts` API (`core/userscripts.js`). Scripts now run even on sites with strict CSP.
 - Standard metadata block support: `@name`, `@namespace`, `@version`, `@description`, `@author`, `@match`, `@include` (globs and `/regex/`), `@exclude`, `@exclude-match`, `@run-at` (`document-start/body/end/idle`), `@noframes`, `@require`, `@resource`, `@grant`, `@inject-into`, `@connect`, `@updateURL`, `@downloadURL`.

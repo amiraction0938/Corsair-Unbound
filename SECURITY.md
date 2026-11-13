@@ -44,6 +44,19 @@ The current design distinguishes:
 
 Privileged API-key read/write operations are behind the privileged capability path. Page-observation messages are restricted to the smaller observation message set.
 
+## Permissions added in 1.10.0
+
+| Permission | Why it is needed | Limits |
+| --- | --- | --- |
+| `userScripts` | Run the user's own userscripts (Tampermonkey-style) on the sites they choose | Chrome also requires the user to switch on "Allow User Scripts" once; scripts only run where their `@match` rules say |
+| `unlimitedStorage` | Userscript code, cached libraries and saved values must not count against the 10 MB quota and starve the security data | The security data keeps its own 100 MB safety cap |
+| `browsingData` | The block page's "Block it, wipe its data" button deletes cookies and site data of **one** blocked domain | Always scoped to that domain's origins (`origins` filter); only after a real click and a confirmation; never from a web page |
+
+## Block page and Fortress actions
+
+- The block page is web-accessible, so its actions refuse to run when it is framed by another site, need a genuine user click (`isTrusted`), and the background accepts them only from the top frame of our own block page for the host it displays.
+- Page-triggered messages (`trust-domain`, `block-domain-global`, `content-link-allow`) must come from the sender's own host, need a genuine click, and (for link-allow) an armed profile and a per-tab rate limit.
+
 ## Host permissions
 
 The current manifest requests:
