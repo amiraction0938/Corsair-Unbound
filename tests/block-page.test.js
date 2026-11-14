@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-// @vitest-environment-options {"url":"chrome-extension://abcdefghijklmnopabcdefghijklmnop/blocked.html?reason=user-blocklist&host=evil.test"}
+// NOTE: an http(s) URL on purpose. A chrome-extension:// origin is opaque in jsdom and makes the
+// environment throw "localStorage is not available for opaque origins" on Node 20 (what CI runs).
+// @vitest-environment-options {"url":"http://localhost/blocked.html?reason=user-blocklist&host=evil.test"}
 import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
