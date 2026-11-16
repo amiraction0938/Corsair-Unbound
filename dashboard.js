@@ -1826,6 +1826,8 @@ function renderSettings() {
       toggleInput.type = 'checkbox';
       toggleInput.dataset.key = 'autoArmFortress';
       toggleInput.checked = state.settings.autoArmFortress !== false;
+      // BUG FIX: save immediately, so the toolbar popup sees it without pressing "Save settings".
+      toggleInput.addEventListener('change', () => autoSaveSetting('autoArmFortress', toggleInput.checked, 'Auto-Arm ' + (toggleInput.checked ? 'ON' : 'OFF')));
       const toggleTrack = document.createElement('span');
       toggleTrack.className = 'slider-track';
       toggleLabel.append(toggleInput, toggleTrack);
@@ -1838,7 +1840,7 @@ function renderSettings() {
         : 10;
       const blockValue = Number.isFinite(state.settings.autoBlockThreshold)
         ? state.settings.autoBlockThreshold
-        : 70;
+        : 75;
 
       autoBlock.append(
         makeSliderRow({ label: 'Arm at', key: 'autoArmFortressThreshold', value: armValue, min: 1, max: 100, step: 1 }),
@@ -1878,8 +1880,50 @@ function makeSliderRow({ label, key, value, min, max, step }) {
     valueEl.textContent = `${slider.value}%`;
   });
 
+  // BUG FIX: the slider used to be saved only by the "Save settings" button, so the popup
+  // (which reads saved settings) never saw the change. Save as soon as the user lets go.
+  slider.addEventListener('change', () => {
+    const fallback = key === 'autoBlockThreshold' ? 75 : 10;
+    const v = Math.max(1, Math.min(100, Number(slider.value) || fallback));
+    autoSaveSetting(key, v, `${label} \u2192 ${v}%`);
+  });
+
   row.append(labelEl, slider, valueEl);
   return row;
+}
+
+async function autoSaveSetting(key, value, toastText) {
+  try {
+    const r = await send({ type: 'patch-settings', patch: { [key]: value } });
+    if (r && r.ok === false) throw new Error(r.error || 'Failed');
+    if (r && r.settings) state.settings = r.settings;
+    if (toastText) showToast(toastText);
+  } catch (err) {
+    showToast((err && err.message) || 'Failed to save', 'error');
+  }
+}
+
+/* When the toolbar popup changes Arm at / Block at / the toggle, mirror it here so that a later
+   "Save settings" click cannot write the old values back over the new ones. */
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.globalSettings) return;
+    const next = changes.globalSettings.newValue;
+    if (!next || typeof next !== 'object') return;
+    state.settings = { ...state.settings, ...next };
+    for (const key of ['autoArmFortressThreshold', 'autoBlockThreshold']) {
+      const n = Number(next[key]);
+      if (!Number.isFinite(n)) continue;
+      const slider = document.querySelector(`#settingsForm [data-slider-key="${key}"]`);
+      if (slider && slider.value !== String(n)) {
+        slider.value = String(n);
+        const valueEl = document.querySelector(`[data-slider-value="${key}"]`);
+        if (valueEl) valueEl.textContent = `${n}%`;
+      }
+    }
+    const tgl = document.querySelector('#settingsForm [data-key="autoArmFortress"]');
+    if (tgl && typeof next.autoArmFortress === 'boolean') tgl.checked = next.autoArmFortress;
+  });
 }
 
 function readSettingsForm() {
@@ -3789,6 +3833,31 @@ safeOn('activitySeverityFilter', 'change', () => {
 safeOn('activityTypeFilter', 'change', () => {
   state.activityFilters.type = $('activityTypeFilter')?.value || 'all';
   renderEvents();
+});
+
+safeOn('clearEvents', 'click', async () => {
+  // BUG FIX: this button existed in dashboard.html (and 'clear-events' existed in background.js)
+  // but nothing connected the click to it, so pressing it did nothing.
+  const count = state.events.length;
+  if (count === 0) { showToast(tx('The activity log is already empty.', 'لاگ فعالیت از قبل خالی است.')); return; }
+  const ok = window.confirm(tx(
+    `Delete all ${count} events from the Activity Log? This cannot be undone.`,
+    `همه‌ی ${count} رویداد از لاگ فعالیت پاک شود؟ این کار قابل بازگشت نیست.`
+  ));
+  if (!ok) return;
+  const btn = $('clearEvents');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await send({ type: 'clear-events' });
+    if (r && r.ok === false) throw new Error(r.error || 'Failed');
+    state.events = [];
+    await refresh();
+    showToast(tx('Activity log cleared.', 'لاگ فعالیت پاک شد.'));
+  } catch (err) {
+    showToast((err && err.message) || 'Failed to clear events', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 });
 
 safeOn('clearTelemetry', 'click', async () => {

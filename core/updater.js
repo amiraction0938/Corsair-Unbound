@@ -20,10 +20,20 @@ const CorsairUpdater = (() => {
   const EXPECTED_ASSET_NAME = 'corsair-unbound-extension.zip';
   const STABLE_TAG_RE = /^v\d+\.\d+\.\d+$/;
 
-  const ALLOWED_DOWNLOAD_PREFIXES = [
-    `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/`,
-    'https://objects.githubusercontent.com/'
-  ];
+  /* SECURITY: validate the PARSED url, never the raw string. The old check used startsWith(),
+     which (a) accepted "https://github.com/<user>/<repo>/../../evil/..." (the path is normalised
+     after the check) and (b) trusted ANY file on objects.githubusercontent.com, i.e. a release
+     asset of any repository in the world. Now the url must be exactly this repo's release asset. */
+  function isTrustedDownloadUrl(urlStr, tag) {
+    let u;
+    try { u = new URL(String(urlStr)); } catch { return false; }
+    if (u.protocol !== 'https:') return false;
+    if (u.username || u.password || u.port) return false;
+    if (u.hostname !== 'github.com') return false;
+    if (u.search || u.hash) return false;
+    const expected = `/${GITHUB_USER}/${GITHUB_REPO}/releases/download/${tag}/${EXPECTED_ASSET_NAME}`;
+    return u.pathname.toLowerCase() === expected.toLowerCase();
+  }
 
   function parseVersion(str) {
     // توجه: علامت $ در انتهای Regex باعث میشه پسوندهای بتا رد بشن
@@ -76,18 +86,8 @@ const CorsairUpdater = (() => {
 
     const downloadUrl = String(json.download_url || '').trim();
     if (!downloadUrl) throw new Error('latest-json-no-url');
-    if (!ALLOWED_DOWNLOAD_PREFIXES.some(p => downloadUrl.startsWith(p))) {
+    if (!isTrustedDownloadUrl(downloadUrl, tag)) {
       throw new Error('latest-json-untrusted-url');
-    }
-    try {
-      const u = new URL(downloadUrl);
-      const lastSegment = u.pathname.split('/').filter(Boolean).pop() || '';
-      if (lastSegment !== EXPECTED_ASSET_NAME) {
-        throw new Error('latest-json-wrong-asset');
-      }
-    } catch (e) {
-      if (e.message === 'latest-json-wrong-asset') throw e;
-      throw new Error('latest-json-bad-url');
     }
 
     const sha256 = String(json.sha256 || '').toLowerCase();
@@ -267,6 +267,7 @@ const CorsairUpdater = (() => {
     getCurrentVersion,
     compareVersions,
     parseVersion,
+    isTrustedDownloadUrl,
     downloadUpdateZip,
     revealDownloadedFile,
     openDownloadsFolder,

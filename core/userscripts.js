@@ -757,8 +757,17 @@ const CorsairUserScripts = (() => {
     } catch { return ''; }
   }
 
+  /* SECURITY: a plain-http @require / import can be rewritten by anyone on the network path, and the
+     downloaded code then runs in every page the script matches. Only https: and data: are accepted;
+     http: is allowed solely for a developer's own loopback server. */
   function isFetchableUrl(u) {
-    return /^(https?:|data:)/i.test(u);
+    const s = String(u || '').trim();
+    if (/^data:/i.test(s)) return true;
+    let p;
+    try { p = new URL(s); } catch { return false; }
+    if (p.protocol === 'https:') return true;
+    if (p.protocol === 'http:') return /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(p.hostname);
+    return false;
   }
 
   async function fetchWithTimeout(url, asBuffer) {
@@ -1151,7 +1160,7 @@ const CorsairUserScripts = (() => {
 
   async function importFromUrl(url) {
     const u = String(url || '').trim();
-    if (!/^https?:\/\//i.test(u)) return { ok: false, error: 'Only http(s) URLs can be imported' };
+    if (!/^https?:\/\//i.test(u) || !isFetchableUrl(u)) return { ok: false, error: 'Only https:// URLs can be imported (http:// is allowed only for localhost)' };
     let code;
     try { code = await fetchText(u); }
     catch (e) { return { ok: false, error: `Download failed: ${e && e.message}` }; }
@@ -1193,8 +1202,68 @@ const CorsairUserScripts = (() => {
     try { const p = new URL(String(u)).protocol; return p === 'http:' || p === 'https:'; } catch { return false; }
   }
 
-  async function gmXhr(req) {
+  /* ---------- GM_xmlhttpRequest access control ----------
+     Before this fix every userscript could request ANY url with the user's cookies attached
+     (credentials: 'include') and read the answer, including pages of other sites the user is
+     logged in to and devices on the local network. The script's @connect list was parsed but
+     never enforced. Now:
+       - a request is "allowed" when the host is listed in @connect, or is the page's own site;
+       - anything else is sent WITHOUT cookies (anonymous);
+       - private / loopback / link-local addresses are refused unless named explicitly in @connect
+         ("*" never covers them). */
+  function isPrivateHost(host) {
+    const h = String(host || '').toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    if (!h) return true;
+    if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.lan') || h.endsWith('.home.arpa')) return true;
+    const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+    if (v4) {
+      const [a, b] = [Number(v4[1]), Number(v4[2])];
+      return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+             (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+    }
+    if (h.includes(':')) {                       // IPv6
+      if (h === '::' || h === '::1') return true;
+      if (/^f[cd][0-9a-f]{2}:/.test(h)) return true;           // fc00::/7 unique-local
+      if (/^fe[89ab][0-9a-f]:/.test(h)) return true;           // fe80::/10 link-local
+      if (/^::ffff:/.test(h)) return true;                      // IPv4-mapped: refuse, not worth parsing
+      return false;
+    }
+    if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true; // decimal / hex integer IPs
+    return false;
+  }
+
+  function hostInList(host, entry) {
+    const e = String(entry || '').trim().toLowerCase();
+    if (!e) return false;
+    return host === e || host.endsWith('.' + e);
+  }
+
+  function connectDecision(urlStr, connectList, pageUrl) {
+    let host;
+    try { host = new URL(urlStr).hostname.toLowerCase().replace(/\.$/, ''); } catch { return { allow: false, anonymous: true, deny: 'bad-url' }; }
+    let pageHost = '';
+    try { pageHost = new URL(String(pageUrl || '')).hostname.toLowerCase(); } catch {}
+    const list = (Array.isArray(connectList) ? connectList : []).map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
+
+    const explicit = list.some(e => e !== '*' && e !== 'self' && hostInList(host, e));
+    const wildcard = list.includes('*');
+    // the page's own site (and its subdomains / parent) is always "self"
+    const selfOk = Boolean(pageHost) && (host === pageHost || host.endsWith('.' + pageHost) || pageHost.endsWith('.' + host));
+
+    if (isPrivateHost(host)) {
+      // private targets only when the script names that exact host (or it is literally the page itself)
+      if (explicit || (pageHost && host === pageHost)) return { allow: true, anonymous: false, deny: '' };
+      return { allow: false, anonymous: true, deny: 'blocked-private-address' };
+    }
+    if (explicit || wildcard || selfOk) return { allow: true, anonymous: false, deny: '' };
+    return { allow: true, anonymous: true, deny: '' };   // allowed, but never with the user's cookies
+  }
+
+  async function gmXhr(req, ctx) {
     if (!isHttpUrl(req && req.url)) return { ok: false, kind: 'error', error: 'unsupported-url' };
+    const decision = connectDecision(req.url, ctx && ctx.connect, ctx && ctx.pageUrl);
+    if (decision.deny) return { ok: false, kind: 'error', error: decision.deny };
+    if (decision.anonymous) req = { ...req, anonymous: true };
     const ctrl = new AbortController();
     _xhrControllers.set(req.reqId, ctrl);
     let timedOut = false;
@@ -1214,6 +1283,10 @@ const CorsairUserScripts = (() => {
         else if (typeof req.body === 'string') init.body = req.body;
       }
       const r = await fetch(req.url, init);
+      if (r.url && r.url !== req.url) {
+        const again = connectDecision(r.url, ctx && ctx.connect, ctx && ctx.pageUrl);
+        if (again.deny) return { ok: false, kind: 'error', error: again.deny };
+      }
       const responseHeaders = Array.from(r.headers.entries()).map(([k, v]) => `${k}: ${v}`).join('\r\n') + '\r\n';
       const mime = (r.headers.get('content-type') || '').split(';')[0].trim();
       const res = { status: r.status, statusText: r.statusText, responseHeaders, finalUrl: r.url || req.url, mime };
@@ -1277,8 +1350,11 @@ const CorsairUserScripts = (() => {
           return { ok: true };
         });
 
-      case 'xhr':
-        return gmXhr(data);
+      case 'xhr': {
+        let pageUrl = '';
+        try { pageUrl = (sender && (sender.tab && sender.tab.url)) || (sender && sender.url) || ''; } catch {}
+        return gmXhr(data, { connect: known.meta && known.meta.connect, pageUrl });
+      }
 
       case 'xhr-abort': {
         const c = _xhrControllers.get(data.reqId);
@@ -1301,7 +1377,8 @@ const CorsairUserScripts = (() => {
       case 'open-tab': {
         let proto = '';
         try { proto = new URL(String(data.url || '')).protocol; } catch {}
-        if (!['http:', 'https:', 'file:', 'ftp:', 'about:'].includes(proto)) return { ok: false, error: 'unsupported-url' };
+        // SECURITY: file:, ftp: and arbitrary about: pages are not something a script should open.
+        if (!['http:', 'https:'].includes(proto) && String(data.url || '').trim().toLowerCase() !== 'about:blank') return { ok: false, error: 'unsupported-url' };
         const opts = { url: String(data.url || ''), active: data.active !== false };
         if (sender && sender.tab && sender.tab.id != null) opts.openerTabId = sender.tab.id;
         const tab = await chrome.tabs.create(opts);
@@ -1319,6 +1396,11 @@ const CorsairUserScripts = (() => {
 
       case 'download': {
         if (!isHttpUrl(data.url)) return { ok: false, error: 'unsupported-url' };
+        // SECURITY: a userscript must not be able to drop an executable / script onto the disk.
+        const DANGEROUS = /\.(exe|msi|bat|cmd|com|scr|pif|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|hta|lnk|reg|dll|jar|appx|msix|apk|dmg|pkg|sh|iso)$/i;
+        let urlPath = '';
+        try { urlPath = new URL(String(data.url)).pathname; } catch {}
+        if (DANGEROUS.test(urlPath) || DANGEROUS.test(String(data.name || '').trim())) return { ok: false, error: 'blocked-file-type' };
         try {
           const opts = { url: String(data.url || ''), saveAs: Boolean(data.saveAs) };
           const name = safeDownloadName(data.name);
@@ -1543,6 +1625,8 @@ const CorsairUserScripts = (() => {
     remove,
     setEnabled,
     importFromUrl,
+    connectDecision,
+    isPrivateHost,
     migrateLegacy,
     importLegacy,
     exportForBackup,

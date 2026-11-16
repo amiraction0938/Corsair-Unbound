@@ -342,6 +342,16 @@
   /* ============================================================
      AUTO-ARM CONTROLS
      ============================================================ */
+  // Same rules as CorsairAutoArm.clampPct: only real numbers / non-empty numeric strings count
+  // (Number(null) and Number('') are 0 and must never become a 1% threshold).
+  function safePct(value, fallback) {
+    let n = NaN;
+    if (typeof value === 'number') n = value;
+    else if (typeof value === 'string' && value.trim() !== '') n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(100, Math.max(1, n));
+  }
+
   function renderAutoArmControls() {
     const toggle = $('autoArmToggle');
     const armSlider = $('armThreshold');
@@ -350,12 +360,8 @@
     const blockVal = $('blockThresholdValue');
 
     const enabled = state.settings.autoArmFortress !== false;
-    const armThreshold = Number.isFinite(state.settings.autoArmFortressThreshold)
-      ? state.settings.autoArmFortressThreshold
-      : 10;
-    const blockThreshold = Number.isFinite(state.settings.autoBlockThreshold)
-      ? state.settings.autoBlockThreshold
-      : 75;
+    const armThreshold = safePct(state.settings.autoArmFortressThreshold, 10);
+    const blockThreshold = safePct(state.settings.autoBlockThreshold, 75);
 
     if (toggle) {
       toggle.textContent = enabled ? 'ON' : 'OFF';
@@ -689,6 +695,18 @@
 
     applyI18n(document);
     await refresh();
+
+    // BUG FIX: keep the popup in sync when settings are changed in the dashboard while it is open.
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local' || !changes.globalSettings) return;
+        const next = changes.globalSettings.newValue;
+        if (!next || typeof next !== 'object') return;
+        state.settings = { ...state.settings, ...next };
+        renderAutoArmControls();
+        renderAutoArmStatus();
+      });
+    } catch {}
 
     // Re-apply i18n when the user switches language from the dashboard.
     try {

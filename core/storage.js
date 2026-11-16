@@ -1006,6 +1006,7 @@ const CorsairStorage = (() => {
   }
 
   async function clearEvents() {
+    await ensureReady();   // same guard as appendEvent: never clear before storage is initialised
     return withTransactionGateShared(async () => {
       return withPartitionLock('activityLog', async () => {
         _eventSeq = 0;

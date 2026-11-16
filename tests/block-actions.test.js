@@ -183,3 +183,21 @@ describe('verdict banner gate (once per visit, not per in-page route change)', (
     expect(gate.shouldShow(2, '')).toBe(false);
   });
 });
+
+describe('pickAutoBlockEvent (REGRESSION: the block page showed the OLDEST automatic block)', () => {
+  const ev = (timestamp, domain = 'evil.test', type = 'auto_block') => ({ type, domain, timestamp, reason: `r${timestamp}` });
+
+  it('returns the newest event regardless of the order of the list', () => {
+    const list = [ev(300), ev(100), ev(200)];
+    expect(CorsairBlockActions.pickAutoBlockEvent(list, 'evil.test').timestamp).toBe(300);
+    expect(CorsairBlockActions.pickAutoBlockEvent([...list].reverse(), 'evil.test').timestamp).toBe(300);   // stored newest-first or not
+  });
+
+  it('only considers auto_block events of that host', () => {
+    const list = [ev(500, 'other.test'), ev(400, 'evil.test', 'false_positive'), ev(100)];
+    expect(CorsairBlockActions.pickAutoBlockEvent(list, 'evil.test').timestamp).toBe(100);
+    expect(CorsairBlockActions.pickAutoBlockEvent([], 'evil.test')).toBeNull();
+    expect(CorsairBlockActions.pickAutoBlockEvent(null, 'evil.test')).toBeNull();
+    expect(CorsairBlockActions.pickAutoBlockEvent([null, undefined, {}], 'evil.test')).toBeNull();
+  });
+});

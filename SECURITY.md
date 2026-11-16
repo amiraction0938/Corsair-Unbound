@@ -52,6 +52,17 @@ Privileged API-key read/write operations are behind the privileged capability pa
 | `unlimitedStorage` | Userscript code, cached libraries and saved values must not count against the 10 MB quota and starve the security data | The security data keeps its own 100 MB safety cap |
 | `browsingData` | The block page's "Block it, wipe its data" button deletes cookies and site data of **one** blocked domain | Always scoped to that domain's origins (`origins` filter); only after a real click and a confirmation; never from a web page |
 
+## Userscripts: network and download policy (1.10.1)
+
+- `GM_xmlhttpRequest` sends cookies only to the page's own site or to hosts listed in `@connect`; other hosts are contacted anonymously. Private / loopback / link-local addresses need an explicit `@connect` entry for that host, and redirects into them are refused. DNS rebinding cannot be detected from an extension.
+- `@require` and imports need HTTPS (HTTP only for `localhost`); `GM_openInTab` is limited to `http(s)` and `about:blank`; `GM_download` refuses executable, script and installer file types.
+- There is still no scan or size limit on the script's own code. Install only scripts you trust.
+
+## Updates
+
+- The extension and the update scripts accept only `https://github.com/<owner>/<repo>/releases/download/<tag>/corsair-unbound-extension.zip` of this repository, check the SHA-256 from `latest.json`, extract the archive safely and refuse to touch a folder that is not Corsair Unbound.
+- The SHA-256 comes from the same release as the archive, so it detects corruption and a wrong download URL, but it cannot protect against a compromised release or repository.
+
 ## Block page and Fortress actions
 
 - The block page is web-accessible, so its actions refuse to run when it is framed by another site, need a genuine user click (`isTrusted`), and the background accepts them only from the top frame of our own block page for the host it displays.

@@ -212,6 +212,20 @@ const CorsairBlockActions = (() => {
   }
 
   /**
+   * The NEWEST automatic-block event for a host. Events are stored newest-first, but this does
+   * not depend on the order: the highest timestamp wins (the block page used to show the oldest).
+   */
+  function pickAutoBlockEvent(events, host) {
+    if (!Array.isArray(events)) return null;
+    let best = null;
+    for (const e of events) {
+      if (!e || e.type !== 'auto_block' || e.domain !== host) continue;
+      if (!best || (Number(e.timestamp) || 0) > (Number(best.timestamp) || 0)) best = e;
+    }
+    return best;
+  }
+
+  /**
    * Only the TOP-LEVEL frame of our own block page, showing exactly this host, may trigger the
    * actions. blocked.html is web-accessible, so another site can frame it; a framed copy (or any
    * other extension page / frame) is refused.
@@ -228,7 +242,7 @@ const CorsairBlockActions = (() => {
     } catch { return false; }
   }
 
-  return { SNOOZE_MS, SITE_DATA_TYPES, originsFor, explain, proceedWithFortress, markFalsePositive, blockAndIsolate, isBlockPageSender };
+  return { SNOOZE_MS, SITE_DATA_TYPES, originsFor, explain, proceedWithFortress, markFalsePositive, blockAndIsolate, isBlockPageSender, pickAutoBlockEvent };
 })();
 
 globalThis.CorsairBlockActions = CorsairBlockActions;

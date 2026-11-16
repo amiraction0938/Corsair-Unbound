@@ -72,7 +72,6 @@ const CorsairAutoArm = (() => {
     if (!report) return { ...base, reason: REASON.NO_REPORT };
     if (report.status === 'error') return { ...base, reason: REASON.REPORT_ERROR };
     if (report.status === 'allowlisted' || isAllowlisted) return { ...base, reason: REASON.ALLOWLISTED };
-    if (risk < armMin) return { ...base, reason: REASON.BELOW_THRESHOLD };
 
     const optedOut = Boolean(profile) && profile.autoArmed === false;
     const protectedNow = Boolean(profile) && profile.protected === true;
@@ -82,7 +81,14 @@ const CorsairAutoArm = (() => {
     const t0 = Number.isFinite(now) ? now : Date.now();
     const snoozed = Boolean(profile) && Number(profile.autoBlockSnoozeUntil) > t0;
 
-    if (risk >= blockMin && !snoozed) {
+    // BUG FIX: "Block at" and "Arm at" are INDEPENDENT thresholds. The old code checked
+    // `risk < armMin` first, so with Block at = 1 and Arm at = 10 a 5% site returned
+    // "below-threshold" and was never blocked. Blocking is now decided first, on its own.
+    const wantsBlock = risk >= blockMin;
+
+    if (!wantsBlock && risk < armMin) return { ...base, reason: REASON.BELOW_THRESHOLD };
+
+    if (wantsBlock && !snoozed) {
       return {
         ...base,
         action: 'block',

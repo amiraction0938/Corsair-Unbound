@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] — 2026
+
+Security and reliability update on top of 1.10.0. Recommended for everyone.
+
+### Security
+- **The update path is locked down.** The extension now accepts a download only if it is exactly this repository's release asset (`https://github.com/<owner>/<repo>/releases/download/<tag>/corsair-unbound-extension.zip`, matching the tag in `latest.json`, no credentials, port, query or fragment). Before, any file from *any* repository served by `objects.githubusercontent.com`, or a path containing `..`, passed the prefix check.
+- **The update scripts** (`launcher/updater.bat`, `updater.ps1`, `updater.sh`, `scripts/update.ps1`) now pin the repository, require HTTPS and the exact asset URL, verify the SHA-256, extract the ZIP safely (no path traversal, size limits), and only replace or delete files after confirming that the target folder really is Corsair Unbound. Temporary files get unique names, a PowerShell strict-mode error and an operator-precedence bug were fixed, and the unpacked extension is now found in every Chrome profile (`Secure Preferences`).
+- **Userscript network policy** (`GM_xmlhttpRequest`): a request goes out WITH the user's cookies only to the page's own site or to hosts the script declares with `@connect` (`@connect *` allows any public host); everything else is sent anonymously. Private, loopback, link-local and `.local` / `.internal` addresses are refused unless the script names that exact host (`*` never covers them), and a redirect into a private address is refused. Known limits: the redirected request itself has already been sent when the refusal happens, and DNS rebinding cannot be detected from an extension.
+- `@require` / script imports must use HTTPS (plain `http://` only for `localhost`). `GM_openInTab` opens only `http(s)` pages and `about:blank`. `GM_download` refuses executable, script and installer file types (`.exe .msi .bat .cmd .ps1 .vbs .js .sh .dmg .pkg .iso ...`).
+- **Behaviour change for userscripts:** a script that reads cross-site responses *with your login cookies* must now declare the host with `@connect`. Scripts that only need public data keep working unchanged.
+
+### Fixed
+- **"Block at" now works on its own.** When the Block threshold was lower than the Arm threshold, a site that reached the block threshold was ignored because it was below "Arm at".
+- **Dashboard sliders and the Auto-Arm switch were only saved by the "Save settings" button**, so the toolbar popup (and the background) kept using the old values. They are saved as soon as you change them, and the dashboard and the popup now follow each other's changes. This was a root cause of "Arm at" seeming not to work.
+- **The "Clear activity log" button did nothing** (it was never connected). It now asks for confirmation and clears the log.
+- The popup ignores broken stored threshold values instead of turning them into 1% (same rule as the background).
+- **The block page showed the OLDEST automatic-block event** instead of the newest when explaining why a site was blocked.
+
 ## [1.10.0] — 2026
 
 Headline: a Tampermonkey-style **userscript manager**, a **block page that explains itself**, a much more reliable **Auto-Arm Fortress**, two **Fortress bypasses closed**, full **Persian** coverage, and complete **backups** (userscripts + optional API keys).

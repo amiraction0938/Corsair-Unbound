@@ -12,6 +12,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
 
+# Windows PowerShell 5.1 may default to TLS 1.0, which GitHub refuses.
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+
 # ----------------------------------------------------------------------------
 # Constants
 # ----------------------------------------------------------------------------
@@ -65,28 +68,44 @@ function Test-ExtensionManifest($dir) {
     } catch { return $null }
 }
 
+function Get-Prop($obj, $name) {
+    # BUG FIX: with Set-StrictMode 3.0, reading a property that does not exist THROWS. Many entries
+    # in Chrome's extension list have no "path", so the old loop aborted at the first such entry and
+    # the extension was never found.
+    if ($null -eq $obj) { return $null }
+    $p = $obj.PSObject.Properties[$name]
+    if ($p) { return $p.Value }
+    return $null
+}
+
 function Find-ExtensionPath {
-    # 1. Search Chrome Preferences
-    $chromeProfiles = @(
-        "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Preferences",
-        "$env:LOCALAPPDATA\Google\Chrome\User Data\Profile 1\Preferences",
-        "$env:LOCALAPPDATA\Google\Chrome\User Data\Profile 2\Preferences"
-    )
-    foreach ($pref in $chromeProfiles) {
-        if (Test-Path $pref) {
-            try {
-                $json = Get-Content $pref -Raw | ConvertFrom-Json
-                if ($json.extensions -and $json.extensions.settings) {
-                    foreach ($ext in $json.extensions.settings.PSObject.Properties) {
-                        if ($ext.Value.path -and (Test-Path $ext.Value.path)) {
-                            if ($ext.Value.manifest -and $ext.Value.manifest.name -eq 'Corsair Unbound') {
-                                return $ext.Value.path
-                            }
-                        }
-                    }
-                }
-            } catch {}
+    # 1. Search Chrome preference files of EVERY profile (newer Chrome keeps unpacked extensions
+    #    in "Secure Preferences", older versions in "Preferences").
+    $userData = Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data'
+    $prefFiles = @()
+    if (Test-Path $userData) {
+        $profiles = @(Get-ChildItem -Path $userData -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq 'Default' -or $_.Name -like 'Profile *' })
+        foreach ($p in $profiles) {
+            foreach ($n in @('Secure Preferences', 'Preferences')) {
+                $f = Join-Path $p.FullName $n
+                if (Test-Path $f) { $prefFiles += $f }
+            }
         }
+    }
+    foreach ($pref in $prefFiles) {
+        try {
+            $json = Get-Content $pref -Raw | ConvertFrom-Json
+            $settings = Get-Prop (Get-Prop $json 'extensions') 'settings'
+            if (-not $settings) { continue }
+            foreach ($ext in $settings.PSObject.Properties) {
+                $path = Get-Prop $ext.Value 'path'
+                $name = Get-Prop (Get-Prop $ext.Value 'manifest') 'name'
+                if ($path -and $name -eq 'Corsair Unbound' -and (Test-Path $path) -and (Test-ExtensionManifest $path)) {
+                    return $path
+                }
+            }
+        } catch {}
     }
 
     # 2. Check Config File
@@ -96,7 +115,9 @@ function Find-ExtensionPath {
     }
 
     # 3. Check default install dir
-    if (Test-Path $DefaultInstallDir -and (Test-ExtensionManifest $DefaultInstallDir)) {
+    # BUG FIX: "Test-Path $x -and (...)" makes PowerShell treat -and as a PARAMETER of Test-Path and
+    # throw. That crashed a fresh install. Each condition must be wrapped in its own parentheses.
+    if ((Test-Path $DefaultInstallDir) -and (Test-ExtensionManifest $DefaultInstallDir)) {
         return $DefaultInstallDir
     }
 
@@ -112,10 +133,23 @@ function Get-LatestManifest {
 
     if (-not $res.version -or $res.version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid version in latest.json" }
     if (-not $res.tag -or $res.tag -ne "v$($res.version)") { throw "tag/version mismatch" }
-    if (-not $res.download_url -or -not ($res.download_url -like "https://github.com/$Repo/releases/download/*")) { throw "invalid download_url" }
+    if (-not (Test-TrustedDownloadUrl $res.download_url $res.tag)) { throw "invalid or untrusted download_url" }
     if (-not $res.sha256 -or $res.sha256 -notmatch '^[a-fA-F0-9]{64}$') { throw "invalid sha256" }
     
     return $res
+}
+
+# SECURITY: the old check was  -like "https://github.com/<repo>/releases/download/*"  which accepts
+# "https://github.com/<repo>/releases/download/../../../evil/..." (the path is normalised AFTER the check)
+# and any file name. Parse the URL and require exactly this repository's release asset.
+function Test-TrustedDownloadUrl($url, $tag) {
+    try { $u = [System.Uri]([string]$url) } catch { return $false }
+    if ($u.Scheme -ne 'https') { return $false }
+    if ($u.UserInfo -or -not $u.IsDefaultPort) { return $false }
+    if ($u.Host -ne 'github.com') { return $false }
+    if ($u.Query -or $u.Fragment) { return $false }
+    $expected = "/$Repo/releases/download/$tag/$ExpectedZipName"
+    return ($u.AbsolutePath -ieq $expected)
 }
 
 function Compare-VersionString($a, $b) { return ([version]$a).CompareTo([version]$b) }
@@ -137,7 +171,11 @@ function Expand-ZipSafely($zipPath, $destDir) {
     Write-Step "Validating ZIP entries..."
     $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
     try {
+        $totalBytes = 0L
+        if ($zip.Entries.Count -gt 5000) { throw "ZIP has too many entries ($($zip.Entries.Count))" }
         foreach ($entry in $zip.Entries) {
+            $totalBytes += $entry.Length
+            if ($totalBytes -gt 200MB) { throw "ZIP is unexpectedly large when extracted" }
             $name = $entry.FullName
             if ([string]::IsNullOrWhiteSpace($name)) { continue }
             if ([System.IO.Path]::IsPathRooted($name) -or $name -match '(^|[/\\])\.\.([/\\]|$)' -or $name -match '^[A-Za-z]:') {
@@ -211,7 +249,14 @@ function Apply-Update {
     if ($obsolete.Count -gt 0) {
         Write-Step "Removing $($obsolete.Count) obsolete file(s)..."
         foreach ($rel in $obsolete) {
-            $full = Join-Path $extDir $rel
+            # SECURITY: installed-files.json is a plain file in %APPDATA%. If it held "..\..\x", the old
+            # code would delete files OUTSIDE the extension. Only delete paths that resolve inside it.
+            $full = [System.IO.Path]::GetFullPath((Join-Path $extDir ([string]$rel)))
+            $prefix = $resolvedExt.TrimEnd('\') + '\'
+            if (-not $full.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                Write-Note "Skipping unsafe path in installed-files.json: $rel"
+                continue
+            }
             if (-not (Test-Path $full)) { continue }
             $item = Get-Item -Path $full -ErrorAction SilentlyContinue
             if ($item -and $item.PSIsContainer) { continue } # Skip directories!

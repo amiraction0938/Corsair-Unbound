@@ -202,12 +202,7 @@ function forgetAutoArmDiag(host) {
 }
 
 async function findAutoBlockEvent(host) {
-  const events = await CorsairStorage.getEvents(500);
-  for (let i = events.length - 1; i >= 0; i--) {
-    const e = events[i];
-    if (e && e.type === 'auto_block' && e.domain === host) return e;
-  }
-  return null;
+  return CorsairBlockActions.pickAutoBlockEvent(await CorsairStorage.getEvents(500), host);
 }
 
 function blockActionDeps() {

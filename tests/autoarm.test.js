@@ -71,6 +71,41 @@ describe('CorsairAutoArm.decide', () => {
   });
 });
 
+describe('CorsairAutoArm.decide: Block at is independent of Arm at', () => {
+  const d = (over) => CorsairAutoArm.decide({ settings: S(), report: R(50), profile: null, isAllowlisted: false, isBlocked: false, ...over });
+
+  it('THE REPORTED BUG: Block at 1, Arm at 10, risk 5% => BLOCKED (not below-threshold)', () => {
+    const r = d({ settings: S({ autoBlockThreshold: 1, autoArmFortressThreshold: 10 }), report: R(5) });
+    expect(r).toMatchObject({ action: 'block', reason: 'block', addToBlocklist: true, armProfile: true });
+  });
+
+  it('blocks when Block at is lower than Arm at, for any risk at or above Block at', () => {
+    const s = S({ autoBlockThreshold: 3, autoArmFortressThreshold: 50 });
+    expect(d({ settings: s, report: R(2) })).toMatchObject({ action: 'none', reason: 'below-threshold' });
+    expect(d({ settings: s, report: R(3) }).action).toBe('block');
+    expect(d({ settings: s, report: R(40) }).action).toBe('block');
+  });
+
+  it('risk 0 is never blocked, even with Block at 1', () => {
+    expect(d({ settings: S({ autoBlockThreshold: 1 }), report: R(0) }).action).toBe('none');
+  });
+
+  it('still arms (without blocking) between Arm at and Block at', () => {
+    const s = S({ autoArmFortressThreshold: 10, autoBlockThreshold: 75 });
+    expect(d({ settings: s, report: R(9) }).reason).toBe('below-threshold');
+    expect(d({ settings: s, report: R(10) }).action).toBe('arm');
+    expect(d({ settings: s, report: R(74) }).action).toBe('arm');
+    expect(d({ settings: s, report: R(75) }).action).toBe('block');
+  });
+
+  it('respects the snooze after "back to the site" even when below Arm at', () => {
+    const s = S({ autoBlockThreshold: 1, autoArmFortressThreshold: 10 });
+    const snoozed = { protected: true, mode: 'fortress', autoBlockSnoozeUntil: 5000 };
+    expect(d({ settings: s, report: R(5), profile: snoozed, now: 1000 }).action).toBe('none');
+    expect(d({ settings: s, report: R(5), profile: snoozed, now: 9000 }).action).toBe('block');
+  });
+});
+
 describe('CorsairAutoArm.evaluate (applies the decision)', () => {
   let calls, store;
   const mkDeps = (over = {}) => {
