@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] — 2026
+
+The userscript menu moves into the toolbar popup, and the version metadata is consistent again.
+
+### Changed
+- **Userscript menu commands (`GM_registerMenuCommand`) are listed in the toolbar popup** under "Userscripts on this site" instead of a floating button drawn inside every page, which covered site content. Scripts that run in the sandbox world announce their commands over the private bridge; page-world scripts answer only when the popup asks. A command runs by dispatching a DOM event whose name contains a random 128-bit token. Listing and running commands is accepted only from extension pages, never from content scripts or web pages.
+- The popup's "Block at" slider starts at 75 % in the HTML, matching the stored default (it showed 70 % until the settings had loaded).
+
+### Fixed
+- `package.json` and `package-lock.json` still said 1.8.3 while the extension was 1.10.1; all three files now agree.
+
+### Security
+- Menu announcements are validated (the script exists and is enabled, it matches the tab URL, the token is 32 hex characters, at most 30 commands, names up to 100 characters, top frame only) and stored per tab in session storage, cleared on navigation and when the tab closes.
+- Known limit: a web page can forge menu entries for page-world userscripts. It can only make the popup show text; the button fires an event that the page itself listens to, so no extension code runs.
+
 ## [1.10.1] — 2026
 
 Security and reliability update on top of 1.10.0. Recommended for everyone.

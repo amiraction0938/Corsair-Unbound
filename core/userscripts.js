@@ -534,58 +534,72 @@ const CorsairUserScripts = (() => {
       return r ? r.dataUrl : null;
     };
 
-    /* ---------- menu commands (small floating menu, top frame only) ---------- */
+    /* ---------- menu commands ----------
+       They are NOT drawn inside the page any more (the old floating "pill" covered site content).
+       Instead the commands are announced to the extension and listed in the toolbar popup, which
+       triggers one by dispatching a DOM event whose name contains this instance's random token.
+         - sandbox world (has the bridge): the token is sent over the private bridge, so a web page
+           can neither read it nor fire the command;
+         - page world (no bridge): the script answers a sync request from the extension with a DOM
+           event that the extension collects at that very moment. The page could see that event, but
+           a page-world script is already as exposed as the page itself. */
     const commands = new Map();
     let cmdSeq = 1;
-    let menuHost = null;
-    let menuList = null;
-    const renderMenu = () => {
-      if (window.top !== window) return;
-      if (!commands.size) { if (menuHost) menuHost.style.display = 'none'; return; }
-      if (!menuHost) {
-        menuHost = document.createElement('div');
-        menuHost.setAttribute('data-corsair-gm-menu', ctx.id);
-        const root = menuHost.attachShadow({ mode: 'open' });
-        const slot = document.querySelectorAll('[data-corsair-gm-menu]').length;
-        root.innerHTML =
-          '<style>' +
-          ':host{all:initial}' +
-          '.pill{position:fixed;right:12px;bottom:' + (12 + slot * 38) + 'px;z-index:2147483647;font:12px/1 system-ui,sans-serif;direction:ltr}' +
-          'button{all:unset;cursor:pointer;background:#2b1b4d;color:#fff;border:1px solid #7c5cff;border-radius:999px;padding:7px 11px;opacity:.55}' +
-          'button:hover{opacity:1}' +
-          '.list{display:none;position:absolute;right:0;bottom:34px;background:#1b1230;border:1px solid #7c5cff;border-radius:10px;padding:6px;min-width:190px;max-width:320px}' +
-          '.pill.open .list{display:block}' +
-          '.item{display:block;width:auto;padding:7px 9px;border-radius:6px;color:#fff;opacity:1;background:none;border:0;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-          '.item:hover{background:#3a2766}' +
-          '</style><div class="pill"><div class="list"></div><button class="toggle"></button></div>';
-        const pill = root.querySelector('.pill');
-        menuList = root.querySelector('.list');
-        root.querySelector('.toggle').addEventListener('click', () => pill.classList.toggle('open'));
-        (document.body || document.documentElement).appendChild(menuHost);
-      }
-      menuHost.style.display = '';
-      const root = menuHost.shadowRoot;
-      root.querySelector('.toggle').textContent = '\u{1F9E9} ' + (ctx.name || 'Script') + ' (' + commands.size + ')';
-      menuList.textContent = '';
-      commands.forEach((c) => {
-        const b = document.createElement('button');
-        b.className = 'item';
-        b.textContent = c.name;
-        b.addEventListener('click', () => {
-          root.querySelector('.pill').classList.remove('open');
-          try { c.fn(); } catch (e) { console.error(e); }
-        });
-        menuList.appendChild(b);
-      });
+    let announceQueued = false;
+    let syncBound = false;
+    const isTop = (() => { try { return window.top === window; } catch (e) { return false; } })();
+    const menuToken = (() => {
+      try {
+        const a = new Uint8Array(16);
+        crypto.getRandomValues(a);
+        return Array.from(a, (b) => (b < 16 ? '0' : '') + b.toString(16)).join('');
+      } catch (e) { return ''; }
+    })();
+    const runEvent = (id) => 'corsair-gm-run-' + menuToken + '-' + id;
+    const announce = () => {
+      if (!isTop || !menuToken) return;
+      const list = [];
+      commands.forEach((c, id) => list.push({ id: id, name: c.name }));
+      try {
+        if (hasBridge) {
+          const p = send('menu:set', { token: menuToken, commands: list });
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } else {
+          document.dispatchEvent(new CustomEvent('corsair-gm-menu', {
+            detail: JSON.stringify({ id: ctx.id, token: menuToken, commands: list })
+          }));
+        }
+      } catch (e) {}
+    };
+    const queueAnnounce = () => {
+      // Page-world scripts have no private channel, so they only answer when the extension asks
+      // (the 'corsair-gm-menu-sync' event) and never broadcast on their own.
+      if (!hasBridge) return;
+      if (announceQueued) return;
+      announceQueued = true;
+      setTimeout(() => { announceQueued = false; announce(); }, 0);
     };
     impl.registermenucommand = (name, fn) => {
       const id = cmdSeq++;
-      commands.set(id, { name: String(name), fn: fn });
-      const go = () => { try { renderMenu(); } catch (e) { console.error(e); } };
-      if (document.body) go(); else document.addEventListener('DOMContentLoaded', go, { once: true });
+      const listener = () => { try { if (typeof fn === 'function') fn(); } catch (e) { console.error(e); } };
+      commands.set(id, { name: String(name), fn: fn, listener: listener });
+      if (isTop && menuToken) {
+        try { document.addEventListener(runEvent(id), listener); } catch (e) {}
+        if (!syncBound) {
+          syncBound = true;
+          // the popup asks every script to announce again when it opens
+          try { document.addEventListener('corsair-gm-menu-sync', announce); } catch (e) {}
+        }
+        queueAnnounce();
+      }
       return id;
     };
-    impl.unregistermenucommand = (id) => { commands.delete(id); try { renderMenu(); } catch (e) {} };
+    impl.unregistermenucommand = (id) => {
+      const c = commands.get(id);
+      if (c) { try { document.removeEventListener(runEvent(id), c.listener); } catch (e) {} }
+      commands.delete(id);
+      queueAnnounce();
+    };
 
     return { impl: impl, ready: ready };
   }
@@ -1202,6 +1216,173 @@ const CorsairUserScripts = (() => {
     try { const p = new URL(String(u)).protocol; return p === 'http:' || p === 'https:'; } catch { return false; }
   }
 
+  /* ============================================================
+     TOOLBAR-POPUP MENU (replaces the floating in-page button)
+     ============================================================ */
+  /** Would this script run on `url`? Mirrors buildPlan() / the registration + runtime filters. */
+  function urlMatchesMeta(meta, url) {
+    const u = String(url || '');
+    if (!/^https?:\/\//i.test(u)) return false;
+    const plan = buildPlan(meta || emptyMeta());
+    if (plan.noMatch) return false;
+    const norm = u.replace(/#.*$/, '');
+    const test = (src, flags) => {
+      try { const r = new RegExp(src, flags || ''); return r.test(u) || r.test(norm); } catch { return false; }
+    };
+    if (!plan.matches.some(m => test(matchToRegexSource(m)))) return false;
+    if (plan.includeGlobs.length && !plan.includeGlobs.some(g => test(globToRegexSource(g), 'i'))) return false;
+    if (plan.excludeMatches.some(m => test(matchToRegexSource(m)))) return false;
+    if (plan.excludeGlobs.some(g => test(globToRegexSource(g), 'i'))) return false;
+    if (plan.runtime) {
+      const any = (list) => list.some(([src, fl]) => test(src, fl));
+      if (!any(plan.runtime.i) || any(plan.runtime.e)) return false;
+    }
+    return true;
+  }
+
+  const MENU_PREFIX = 'gmMenu:';
+  let _menuChain = Promise.resolve();
+  function withMenuLock(fn) {
+    const run = _menuChain.then(fn, fn);
+    _menuChain = run.catch(() => {});
+    return run;
+  }
+  const hasSessionStore = () => typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session;
+
+  async function menuRead(tabId) {
+    if (!hasSessionStore()) return {};
+    const k = MENU_PREFIX + tabId;
+    const r = await chrome.storage.session.get(k);
+    return r[k] && typeof r[k] === 'object' && !Array.isArray(r[k]) ? r[k] : {};
+  }
+
+  function cleanMenuPayload(token, commands) {
+    if (typeof token !== 'string' || !/^[a-f0-9]{32}$/.test(token)) return null;
+    if (!Array.isArray(commands)) return null;
+    const list = [];
+    for (const c of commands.slice(0, 30)) {
+      const id = Number(c && c.id);
+      if (!Number.isInteger(id) || id < 1 || id > 100000) continue;
+      const name = String(c && c.name != null ? c.name : '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 100);
+      if (!name) continue;
+      list.push({ id, name });
+    }
+    return { token, commands: list };
+  }
+
+  async function menuSet(tabId, scriptId, token, commands) {
+    if (!Number.isInteger(tabId) || !hasSessionStore()) return { ok: false, error: 'no-tab' };
+    const clean = cleanMenuPayload(token, commands);
+    if (!clean) return { ok: false, error: 'bad-menu' };
+    return withMenuLock(async () => {
+      const cur = await menuRead(tabId);
+      if (clean.commands.length) cur[scriptId] = { token: clean.token, commands: clean.commands };
+      else delete cur[scriptId];
+      await chrome.storage.session.set({ [MENU_PREFIX + tabId]: cur });
+      return { ok: true };
+    });
+  }
+
+  async function clearTabMenu(tabId) {
+    if (!Number.isInteger(tabId) || !hasSessionStore()) return;
+    return withMenuLock(() => chrome.storage.session.remove(MENU_PREFIX + tabId)).catch(() => {});
+  }
+
+  /** Validate an announcement from a script that runs in the PAGE world (no bridge). */
+  async function announceFromPage(sender, payload) {
+    const tabId = sender && sender.tab && sender.tab.id;
+    if (!Number.isInteger(tabId) || (sender.frameId || 0) !== 0) return { ok: false, error: 'top-frame-only' };
+    const id = payload && payload.id;
+    if (typeof id !== 'string' || !id.startsWith(REG_PREFIX)) return { ok: false, error: 'bad-id' };
+    const rec = await readRecord(id);
+    if (!rec || rec.enabled === false) return { ok: false, error: 'unknown-script' };
+    const meta = rec.meta || emptyMeta();
+    // Sandbox-world scripts announce ONLY through the private bridge. Accepting a DOM announcement
+    // for them would let any web page overwrite their entry.
+    if (chooseWorld(meta) === 'USER_SCRIPT') return { ok: false, error: 'bridge-script' };
+    if (!urlMatchesMeta(meta, (sender.tab && sender.tab.url) || sender.url || '')) return { ok: false, error: 'not-for-this-page' };
+    return menuSet(tabId, id, payload.token, payload.commands);
+  }
+
+  /** What the popup shows: every enabled script that applies to this tab + its menu commands. */
+  async function getTabMenu(tabId) {
+    if (!Number.isInteger(tabId)) return { ok: false, error: 'bad-tab' };
+    let tab;
+    try { tab = await chrome.tabs.get(tabId); } catch { return { ok: false, error: 'no-tab' }; }
+    const url = (tab && tab.url) || '';
+    if (!/^https?:\/\//i.test(url)) return { ok: true, url, scripts: [] };
+
+    // Drop the old list and ask the running scripts to announce again, so what we show is current.
+    await clearTabMenu(tabId);
+    let pageAnnouncements = [];
+    try {
+      const out = await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [0] },
+        world: 'ISOLATED',
+        func: () => {
+          // Sandbox-world scripts answer over the private bridge. Page-world scripts answer with a
+          // DOM event, dispatched synchronously inside the sync event, so we can collect it here.
+          const found = [];
+          const onMenu = (ev) => {
+            try { if (typeof ev.detail === 'string' && ev.detail.length <= 8000) found.push(ev.detail); } catch (e) {}
+          };
+          document.addEventListener('corsair-gm-menu', onMenu);
+          try { document.dispatchEvent(new CustomEvent('corsair-gm-menu-sync')); } catch (e) {}
+          document.removeEventListener('corsair-gm-menu', onMenu);
+          return found.slice(0, 60);
+        }
+      });
+      pageAnnouncements = Array.isArray(out) && out[0] && Array.isArray(out[0].result) ? out[0].result : [];
+    } catch {}
+    // Validate each one exactly like any other announcement: real script record, enabled, matches
+    // this tab's url, page-world only, well-formed token + commands, top frame.
+    for (const raw of pageAnnouncements) {
+      let payload = null;
+      try { payload = JSON.parse(raw); } catch {}
+      if (payload && typeof payload === 'object') {
+        try { await announceFromPage({ tab: { id: tabId, url }, frameId: 0 }, payload); } catch {}
+      }
+    }
+    await new Promise(r => setTimeout(r, 250));   // let sandbox-world scripts answer over the bridge
+
+    const store = await menuRead(tabId);
+    const scripts = [];
+    for (const rec of await readAll()) {
+      if (!rec || rec.enabled === false) continue;
+      const meta = rec.meta || emptyMeta();
+      if (!urlMatchesMeta(meta, url)) continue;
+      const entry = Object.prototype.hasOwnProperty.call(store, rec.id) ? store[rec.id] : null;
+      scripts.push({
+        id: rec.id,
+        name: meta.name || 'Script',
+        version: meta.version || '',
+        commands: entry && Array.isArray(entry.commands) ? entry.commands.map(c => ({ id: c.id, name: c.name })) : []
+      });
+    }
+    return { ok: true, url, scripts };
+  }
+
+  async function runMenuCommand(tabId, scriptId, commandId) {
+    const cid = Number(commandId);
+    if (!Number.isInteger(tabId) || !Number.isInteger(cid) || cid < 1) return { ok: false, error: 'bad-request' };
+    const store = await menuRead(tabId);
+    const key = String(scriptId);
+    const entry = Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+    if (!entry || !Array.isArray(entry.commands) || !entry.commands.some(c => c.id === cid)) {
+      return { ok: false, error: 'command-not-found' };
+    }
+    if (typeof entry.token !== 'string' || !/^[a-f0-9]{32}$/.test(entry.token)) return { ok: false, error: 'bad-token' };
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [0] },
+        world: 'ISOLATED',
+        func: (name) => { document.dispatchEvent(new CustomEvent(name)); },
+        args: ['corsair-gm-run-' + entry.token + '-' + cid]
+      });
+    } catch (e) { return { ok: false, error: (e && e.message) || 'could-not-reach-tab' }; }
+    return { ok: true };
+  }
+
   /* ---------- GM_xmlhttpRequest access control ----------
      Before this fix every userscript could request ANY url with the user's cookies attached
      (credentials: 'include') and read the answer, including pages of other sites the user is
@@ -1354,6 +1535,12 @@ const CorsairUserScripts = (() => {
         let pageUrl = '';
         try { pageUrl = (sender && (sender.tab && sender.tab.url)) || (sender && sender.url) || ''; } catch {}
         return gmXhr(data, { connect: known.meta && known.meta.connect, pageUrl });
+      }
+
+      case 'menu:set': {
+        // top frame of a real tab only
+        if (!sender || !sender.tab || (sender.frameId || 0) !== 0) return { ok: false, error: 'top-frame-only' };
+        return menuSet(sender.tab.id, id, data.token, data.commands);
       }
 
       case 'xhr-abort': {
@@ -1627,6 +1814,12 @@ const CorsairUserScripts = (() => {
     importFromUrl,
     connectDecision,
     isPrivateHost,
+    urlMatchesMeta,
+    announceFromPage,
+    getTabMenu,
+    runMenuCommand,
+    clearTabMenu,
+    gmRuntime,
     migrateLegacy,
     importLegacy,
     exportForBackup,
