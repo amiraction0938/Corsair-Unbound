@@ -574,3 +574,29 @@ body[data-theme="light"] .auto-arm-badge {
 .auto-arm-status.ok   { border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.10); color: #34d399; }
 .auto-arm-status.warn { border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.10); color: #fbbf24; }
 .auto-arm-status.bad  { border-color: rgba(244, 63, 94, 0.45);  background: rgba(244, 63, 94, 0.10);  color: #fb7185; }
+
+/* Userscripts on this site (replaces the floating button that used to sit inside the page) */
+.gm-card[hidden] { display: none !important; }
+.gm-list { display: grid; gap: 8px; margin-top: 8px; }
+.gm-script { background: #090d16; border: 1px solid var(--card-border); border-radius: 8px; padding: 8px; display: grid; gap: 5px; }
+.gm-script-name { font-size: 11px; font-weight: 700; color: #c4b5fd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-cmd {
+  text-align: start;
+  background: #1e293b;
+  border: 1px solid var(--card-border);
+  color: #fff;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+.gm-cmd:hover { background: #334155; }
+.gm-cmd:disabled { opacity: .6; cursor: default; }
+body[data-theme="light"] .gm-script { background: #f8fafc; }
+body[data-theme="light"] .gm-cmd { background: #f1f5f9; color: #0f172a; }
+body[data-theme="light"] .gm-cmd:hover { background: #e2e8f0; }

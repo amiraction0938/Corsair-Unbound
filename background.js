@@ -1002,6 +1002,7 @@ chrome.webNavigation.onCommitted.addListener(async details => {
   if (details.frameId !== 0) return;
   const tabId = details.tabId;
   if (!Number.isInteger(tabId)) return;
+  try { if (typeof CorsairUserScripts !== 'undefined') CorsairUserScripts.clearTabMenu(tabId); } catch {}
 
   try {
     // Threat scan + auto-arm must not depend on redirect-chain bookkeeping
@@ -1097,6 +1098,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
    TABS REMOVED
    ============================================================ */
 chrome.tabs.onRemoved.addListener(async tabId => {
+  try { if (typeof CorsairUserScripts !== 'undefined') CorsairUserScripts.clearTabMenu(tabId); } catch {}
   try {
     if (typeof CorsairObservation !== 'undefined' && typeof CorsairObservation.clear === 'function') {
       await CorsairObservation.clear(tabId);
@@ -1281,6 +1283,22 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           // un-block any other domain, and the click must be genuine: see content.js).
           if (capability === 'PAGE_OBSERVATION' && !hostMatchesSender(m.host, s)) { send({ ok: false, error: 'host-mismatch' }); break; }
           send(await trustDomain(m.host || '') || { ok: true });
+          break;
+        }
+        /* ============ USERSCRIPT MENU (toolbar popup) ============ */
+        case 'gm-menu-get': {
+          // popup only (PRIVILEGED_INTERNAL): list scripts active on a tab + their menu commands
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          send(typeof CorsairUserScripts !== 'undefined'
+            ? await CorsairUserScripts.getTabMenu(Number(m.tabId))
+            : { ok: true, scripts: [] });
+          break;
+        }
+        case 'gm-menu-run': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          send(typeof CorsairUserScripts !== 'undefined'
+            ? await CorsairUserScripts.runMenuCommand(Number(m.tabId), m.scriptId, m.commandId)
+            : { ok: false, error: 'userscripts-unavailable' });
           break;
         }
         case 'untrust-domain': { send(await untrustDomain(m.host || '') || { ok: true }); break; }

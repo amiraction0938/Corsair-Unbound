@@ -38,6 +38,15 @@
       </button>
     </section>
 
+    <section id="gmSection" class="card gm-card" hidden>
+      <div class="card-header-row">
+        <div>
+          <strong id="gmTitle">&#129513; Userscripts on this site</strong>
+        </div>
+      </div>
+      <div id="gmList" class="gm-list"></div>
+    </section>
+
     <section class="card vt-card">
       <div class="card-header-row">
         <div>
@@ -73,8 +82,8 @@
       </div>
       <div class="threshold-row">
         <span class="threshold-label" data-i18n="popup.blockAt">Block at</span>
-        <input type="range" id="blockThreshold" min="1" max="100" value="70" class="threshold-slider">
-        <span id="blockThresholdValue" class="threshold-value">70%</span>
+        <input type="range" id="blockThreshold" min="1" max="100" value="75" class="threshold-slider">
+        <span id="blockThresholdValue" class="threshold-value">75%</span>
       </div>
       <p id="autoArmStatus" class="auto-arm-status" hidden></p>
     </section>

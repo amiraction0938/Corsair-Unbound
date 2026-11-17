@@ -58,6 +58,12 @@ Privileged API-key read/write operations are behind the privileged capability pa
 - `@require` and imports need HTTPS (HTTP only for `localhost`); `GM_openInTab` is limited to `http(s)` and `about:blank`; `GM_download` refuses executable, script and installer file types.
 - There is still no scan or size limit on the script's own code. Install only scripts you trust.
 
+## Userscripts: menu commands and network notes (1.10.2)
+
+- `GM_registerMenuCommand` entries are shown in the toolbar popup, not inside the page. The two background messages that list and run them (`gm-menu-get`, `gm-menu-run`) are accepted only from extension pages (`PRIVILEGED_INTERNAL`); content scripts keep exactly the six pinned messages (a test enforces this).
+- Sandbox-world scripts announce their commands only over the private bridge, so a web page cannot overwrite them. Page-world scripts announce with a DOM event that the page can also see; a hostile page can therefore forge menu text for such scripts, but it cannot make the extension run anything, because running a command only dispatches an event that the page itself listens to.
+- `@connect *` also lets a script read other sites WITH your cookies (as in Tampermonkey), and the "own site of the page" rule is string based and includes the parent domain; public suffixes such as `github.io` are not recognised. Install only scripts you trust and prefer naming exact hosts in `@connect`.
+
 ## Updates
 
 - The extension and the update scripts accept only `https://github.com/<owner>/<repo>/releases/download/<tag>/corsair-unbound-extension.zip` of this repository, check the SHA-256 from `latest.json`, extract the archive safely and refuse to touch a folder that is not Corsair Unbound.

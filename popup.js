@@ -109,6 +109,60 @@
     });
   }
 
+  /* ============================================================
+     USERSCRIPTS ON THIS SITE
+     (the commands used to be a floating button inside the page; they live here now)
+     ============================================================ */
+  async function renderUserscripts() {
+    const sec = $('gmSection');
+    const list = $('gmList');
+    if (!sec || !list) return;
+    const hide = () => { sec.hidden = true; list.textContent = ''; };
+
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !Number.isInteger(tab.id) || !normalizeHost(tab.url || '')) { hide(); return; }
+
+    let res;
+    try { res = await send({ type: 'gm-menu-get', tabId: tab.id }); } catch { hide(); return; }
+    const scripts = Array.isArray(res.scripts) ? res.scripts : [];
+    if (!scripts.length) { hide(); return; }     // nothing runs on this site: show nothing
+
+    const title = $('gmTitle');
+    if (title) title.textContent = '\u{1F9E9} ' + tx('Userscripts on this site', 'اسکریپت‌های فعال روی این سایت');
+    list.textContent = '';
+
+    for (const s of scripts) {
+      const box = el('div', { className: 'gm-script' });
+      box.appendChild(el('div', {
+        className: 'gm-script-name',
+        text: String(s.name || 'Script') + (s.version ? ' v' + s.version : '')
+      }));
+      const cmds = Array.isArray(s.commands) ? s.commands : [];
+      if (!cmds.length) {
+        box.appendChild(el('div', { className: 'muted-text', text: tx('Active on this site', 'روی این سایت فعال است') }));
+      }
+      for (const c of cmds) {
+        const btn = el('button', { className: 'gm-cmd', text: String(c.name || '') });
+        btn.type = 'button';
+        btn.title = String(c.name || '');
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await send({ type: 'gm-menu-run', tabId: tab.id, scriptId: s.id, commandId: c.id });
+            window.close();   // the command usually opens something in the page
+          } catch (err) {
+            showToast(err.message || tx('Could not run the command', 'اجرای فرمان ممکن نشد'), 'error');
+            btn.disabled = false;
+          }
+        });
+        box.appendChild(btn);
+      }
+      list.appendChild(box);
+    }
+    sec.hidden = false;
+  }
+
   async function activeDomain() {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     return normalizeHost(tabs[0]?.url || '');
@@ -447,6 +501,9 @@
       state.domain = await activeDomain();
       const domainEl = $('domain');
       if (domainEl) domainEl.textContent = state.domain || t('popup.unsupported', 'Unsupported page');
+
+      // runs in parallel (it waits a moment for the scripts to announce their commands)
+      renderUserscripts().catch(() => {});
 
       if (!state.domain) {
         state.profile = null;
