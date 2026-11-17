@@ -211,11 +211,6 @@ const CorsairBlockActions = (() => {
     return result(run, { newTab: true, wiped: origins });
   }
 
-  /**
-   * The NEWEST automatic-block event for a host. Events are stored newest-first, but this does
-   * not depend on the order: the highest timestamp wins (the block page used to show the oldest).
-   */
-
   /* ---------- quarantine already-open tabs for a globally blocked domain ---------- */
   /**
    * DNR rules only affect requests made after the rule is installed. Existing documents
@@ -274,6 +269,10 @@ const CorsairBlockActions = (() => {
     return { ok: failed.length === 0, redirected, failed, error: failed.length ? 'tab-navigation-failed' : '' };
   }
 
+  /**
+   * The NEWEST automatic-block event for a host. Events are stored newest-first, but this does
+   * not depend on the order: the highest timestamp wins (the block page used to show the oldest).
+   */
   function pickAutoBlockEvent(events, host) {
     if (!Array.isArray(events)) return null;
     let best = null;
