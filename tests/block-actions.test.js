@@ -164,6 +164,65 @@ describe('blockAndIsolate ("block, wipe its data, new tab")', () => {
   });
 });
 
+
+describe('quarantineOpenTabs (existing documents are redirected after a global block)', () => {
+  const makeDeps = (over = {}) => {
+    const navigated = [];
+    const tabs = [
+      { id: 1, url: 'https://soft98.example/' },
+      { id: 2, url: 'http://cdn.soft98.example/download' },
+      { id: 3, url: 'https://notsoft98.example/' },
+      { id: 4, url: 'https://other.example/', pendingUrl: 'https://sub.soft98.example/pending' },
+      { id: 5, url: 'chrome-extension://corsair/blocked.html?host=soft98.example' }
+    ];
+    const deps = {
+      normalizeHostname: (h) => String(h || '').trim().toLowerCase().replace(/\.$/, ''),
+      isValidHostname: (h) => /^[a-z0-9.-]+$/.test(h) && !h.includes('..'),
+      getTabs: async () => tabs,
+      extractHostname: (raw) => { try { return new URL(raw).hostname.toLowerCase(); } catch { return ''; } },
+      sameOrSubdomain: (candidate, base) => candidate === base || candidate.endsWith('.' + base),
+      getBlockedPageUrl: (host) => 'chrome-extension://corsair/blocked.html?reason=user-blocklist&host=' + encodeURIComponent(host),
+      navigateTab: async (tabId, url) => { navigated.push({ tabId, url }); },
+      ...over
+    };
+    return { deps, tabs, navigated };
+  };
+
+  it('redirects the blocked host, its subdomains, and matching pending navigations only', async () => {
+    const { deps, navigated } = makeDeps();
+    const r = await CorsairBlockActions.quarantineOpenTabs('soft98.example', deps);
+    expect(r).toMatchObject({ ok: true, redirected: [1, 2, 4], failed: [] });
+    expect(navigated).toHaveLength(3);
+    expect(navigated.every(x => x.url.includes('reason=user-blocklist'))).toBe(true);
+  });
+
+  it('does not redirect a hostname that only ends with the same characters', async () => {
+    const { deps, navigated } = makeDeps();
+    await CorsairBlockActions.quarantineOpenTabs('soft98.example', deps);
+    expect(navigated.map(x => x.tabId)).not.toContain(3);
+  });
+
+  it('continues processing other tabs and reports individual navigation failures', async () => {
+    const { deps, navigated } = makeDeps({
+      navigateTab: async (tabId) => { if (tabId === 2) throw new Error('tab-closed'); navigated.push(tabId); }
+    });
+    const r = await CorsairBlockActions.quarantineOpenTabs('soft98.example', deps);
+    expect(r.ok).toBe(false);
+    expect(r.redirected).toEqual([1, 4]);
+    expect(r.failed).toEqual([{ tabId: 2, error: 'tab-closed' }]);
+    expect(navigated).toEqual([1, 4]);
+  });
+
+  it('fails closed on invalid hosts and reports a tabs-query failure', async () => {
+    const invalid = makeDeps();
+    expect((await CorsairBlockActions.quarantineOpenTabs('bad host', invalid.deps)).error).toBe('invalid-host');
+    const unavailable = makeDeps({ getTabs: async () => { throw new Error('tabs-api-failed'); } });
+    expect(await CorsairBlockActions.quarantineOpenTabs('soft98.example', unavailable.deps)).toMatchObject({
+      ok: false, error: 'tabs-api-failed', redirected: [], failed: []
+    });
+  });
+});
+
 describe('verdict banner gate (once per visit, not per in-page route change)', () => {
   it('shows once per tab+host; SPA navigations and reloads do not show it again', () => {
     const gate = CorsairAutoArm.createBannerGate();
