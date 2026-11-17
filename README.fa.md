@@ -1,226 +1,172 @@
 <div dir="rtl" align="center">
 
-# 🏴☠️ Corsair Unbound
+# 🏴‍☠️ Corsair Unbound
 
-<strong>سپر مرورگر Local برای Chrome (Manifest V3)</strong>
+### مرورگر تو، کنترل دست تو.
+
+**یک ابزار امنیت و حریم خصوصی Local-first برای Google Chrome**
 
 <p>
   <a href="README.md">🇬🇧 English</a> ·
-  <a href="SECURITY.md">🔒 Security</a> ·
-  <a href="docs/SECURITY-AUDIT.md">🧪 Security Audit</a> ·
-  <a href="docs/UPDATE-POLICY.md">🔄 Update Policy</a>
+  <a href="SECURITY.md">🔒 سیاست امنیتی</a> ·
+  <a href="INSTALL.md">📦 راهنمای نصب</a> ·
+  <a href="docs/SECURITY-AUDIT.md">🧪 ممیزی امنیتی</a>
 </p>
 
-<img src="assets/corsair-unbound-hero.png" alt="Corsair Unbound" width="100%">
+<p>
+  <a href="https://github.com/amiraction0938/Corsair-Unbound/releases/latest"><img src="https://img.shields.io/github/v/release/amiraction0938/Corsair-Unbound?display_name=tag&style=for-the-badge&color=7c5ce7" alt="آخرین نسخه"></a>
+  <a href="https://github.com/amiraction0938/Corsair-Unbound/blob/main/LICENSE"><img src="https://img.shields.io/github/license/amiraction0938/Corsair-Unbound?style=for-the-badge" alt="مجوز MIT"></a>
+  <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome Manifest V3">
+</p>
 
-<strong>نسخه فعلی: v1.9.1</strong>
+<a href="https://github.com/amiraction0938/Corsair-Unbound/releases/latest"><strong>⬇️ دریافت آخرین نسخه</strong></a>
+
+<img src="assets/corsair-unbound-hero.png" alt="Corsair Unbound — امنیت محلی مرورگر" width="100%">
 
 </div>
 
-Corsair Unbound یک سپر مرورگر **Local-first** برای Chrome Manifest V3 است که روی حفاظت قطعی ناوبری، اجرای Fortress، مهار redirect، تحلیل heuristic، هوش تهدید اختیاری و یک داشبورد کامل محلی تمرکز دارد.
-
-هسته افزونه طوری طراحی شده که منطق حفاظتی و داده‌های کاربر تا حد ممکن روی خود دستگاه باقی بمانند. اتصال اختیاری VirusTotal به‌صورت **BYOK** است؛ یعنی کلید را خود کاربر وارد می‌کند و درخواست‌های مربوط به reputation و analysis مستقیماً به VirusTotal ارسال می‌شوند.
-
 ---
 
-## ✨ قابلیت‌ها
+## وب‌گردی امن‌تر، با کنترل بیشتر
 
-### 🛡️ حفاظت
+وب پر از ابزارها و اطلاعات مفید است؛ اما هر صفحه، پنجره بازشو، تغییرمسیر یا دانلودی قابل اعتماد نیست.
 
-- **Fortress Mode** — قفل‌گذاری روی هر دامنه با قوانین DNR session
-- **گارد ناوبری در سطح فریم** — اجرا در همه فریم‌های منطبق، حتی iframeهای شخص ثالث
-- **مهار Popup** — تشخیص burst و اعمال cooldown
-- **مهار طوفان Redirect** — containment بر پایه سیگنال‌های هوش تهدید
-- **محافظ دانلود** — مهار دانلودهای مرتبط با منابع مخرب
-- **حذف External Meta Refresh** — جلوگیری از ناوبری خارجی با meta-refresh
-- **Content Security Guard** — پوشش سیگنال‌های clipboard، CSP و form-jacking
+**Corsair Unbound** یک لایه محافظتی در خود مرورگر Chrome اضافه می‌کند. این افزونه کنترل ناوبری، محافظت در سطح فریم‌ها، تحلیل دامنه‌های مشکوک و اتصال اختیاری به سرویس‌های اطلاعات تهدید را در یک داشبورد محلی ترکیب می‌کند.
 
-### 🧠 هوش تهدید
+اصل طراحی پروژه ساده است: **تا جایی که عملی باشد، منطق اصلی محافظت و داده‌های مرور شما روی دستگاه خودتان باقی بمانند.**
 
-- **VirusTotal BYOK** — اتصال اختیاری با صف و محدودیت نرخ
-- **Heuristic Engine** — تشخیص typosquatting، homograph، TLD مشکوک، دامنه‌های تازه‌ثبت‌شده و برند در subdomain
-- **Smart Allowlist** — دامنه‌های مورداعتماد داخلی + همگام‌سازی allowlist از راه دور
-- **دامنه‌های مورد اعتماد کاربر** — اعتماد با یک کلیک از بنر داخل صفحه
-- **Behavior Intelligence** — طبقه‌بندی سیگنال‌ها و تجمیع ریسک در زمان اجرا
-- **هوش چندمنبعی** — ترکیب heuristic محلی با providerهای پشتیبانی‌شده
+> Corsair Unbound یک ابزار امنیتی است، نه تضمین شناسایی تمام صفحات مخرب یا همه حملات. Chrome و سیستم‌عامل خود را به‌روز نگه دارید و هنگام وب‌گردی همچنان با دقت تصمیم بگیرید.
 
-### 🎨 تجربه کاربری
+## چه کارهایی انجام می‌دهد؟
 
-- **رابط چندزبانه** — English، فارسی، العربية، Español، Deutsch، Français، Русский، 中文
-- **پشتیبانی کامل RTL** — چینش راست‌به‌چپ برای فارسی و عربی
-- **بنر نتیجه درون صفحه** — نمایش verdict محلی‌سازی‌شده
-- **Badge افزونه** — نمایش وضعیت امنیتی هر تب
-- **کلیدهای میانبر** — Ctrl+Shift+F برای Fortress و Ctrl+Shift+E برای Dashboard
-- **داشبورد کامل** — analyzer، Safe List، حریم خصوصی، تنظیمات، API & Intelligence و انتخاب زبان
-- **تم روشن/تاریک**
-- **بررسی‌کننده داخلی آپدیت** — بررسی امن نسخه در گیت‌هاب، اعلان، و لانچر اختصاصی ویندوز برای آپدیت یک‌کلیکی با تایید هش SHA-256.
+| قابلیت | توضیح |
+| --- | --- |
+| **محافظت از ناوبری** | با قوانین مرورگر، دسترسی و ناوبری به دامنه‌های مسدودشده را محدود می‌کند. |
+| **گارد در سطح فریم** | به مهار سوءاستفاده از popup و ناوبری در فریم‌های منطبق، از جمله iframeهای شخص ثالث، کمک می‌کند. |
+| **تشخیص فیشینگ با Heuristic** | نشانه‌هایی مثل دامنه‌های مشابه، ترفندهای homograph، پسوندهای مشکوک و نام برندها در زیردامنه‌ها را بررسی می‌کند. |
+| **مهار Redirect** | الگوهای مشکوک تغییرمسیر و طوفان redirect را شناسایی و مهار می‌کند. |
+| **Fortress Mode** | امکان قفل‌کردن یک دامنه با قوانین موقت مرورگر را فراهم می‌کند. |
+| **محافظ دانلود** | به مسدودسازی دانلودهای مرتبط با منابع مخرب کمک می‌کند. |
+| **محافظ Popup** | فعالیت ناگهانی و پرتعداد popupها را تشخیص می‌دهد و محدود می‌کند. |
+| **کنترل‌های حریم خصوصی** | مدیریت داده‌های محلی، آمار فضای ذخیره‌سازی، پشتیبان‌گیری، بازیابی و پاک‌سازی را فراهم می‌کند. |
 
-### 💾 داده و پایداری
+### بیشتر از یک هشدار امنیتی
 
-- **Safe Scanned Domains** — کش محلی با جست‌وجو و عملیات گروهی
-- **Backup & Restore** — JSON نسخه‌بندی‌شده با حذف فیلدهای حساس
-- **Safe List Export/Import** — فایل جداگانه برای جابه‌جایی
-- **Privacy Controls** — آمار storage و پاک‌سازی کامل
-- **Regression Suite** — تست‌های deterministic replay
-- **Security Audit** — بررسی credentialهای واضح و تنظیمات پرریسک manifest
+- **داشبورد امنیتی محلی** — نمای کلی، تحلیل‌ها، گزارش فعالیت، هوش دامنه، امنیت، حریم خصوصی، اسکریپت‌ها و تنظیمات.
+- **۸ زبان رابط کاربری** — English، فارسی، العربية، Español، Deutsch، Français، Русский و 中文.
+- **پشتیبانی RTL** — چینش راست‌به‌چپ برای فارسی و عربی.
+- **Userscripts** — مدیریت اسکریپت‌های سفارشی برای سایت‌هایی که انتخاب می‌کنید. فقط اسکریپت‌هایی را نصب کنید که به آن‌ها اعتماد دارید؛ اسکریپت‌ها با توجه به مجوزها و قوانین تطبیق خود می‌توانند به داده‌های صفحه دسترسی داشته باشند.
+- **دامنه‌های مورد اعتماد** — مدیریت فهرست اختصاصی سایت‌های مجاز.
+- **تم روشن و تاریک** — انتخاب ظاهر دلخواه داشبورد.
+- **میانبرهای صفحه‌کلید** — <code>Ctrl+Shift+F</code> برای Fortress و <code>Ctrl+Shift+E</code> برای داشبورد.
 
----
+## شروع کنید
 
-## 📦 نصب
+<div align="center">
 
-### Load unpacked
+### آماده‌اید امتحانش کنید؟
 
-۱. <code>chrome://extensions</code> را باز کنید  
-۲. **Developer mode** را فعال کنید  
-۳. روی **Load unpacked** بزنید  
-۴. ریشه repository را انتخاب کنید؛ همان پوشه‌ای که <code>manifest.json</code> داخل آن است  
-۵. Popup افزونه را باز کنید و وارد Dashboard شوید  
-۶. *(اختیاری)* از https://www.virustotal.com/gui/my-apikey یک VirusTotal API Key رایگان بگیرید  
-۷. کلید را در **Dashboard → API & Intelligence** وارد کنید  
-۸. در صورت نیاز **VirusTotal Threat Intelligence** و **Auto-Scan** را فعال کنید  
-۹. زبان موردنظر را انتخاب کنید
+<a href="https://github.com/amiraction0938/Corsair-Unbound/releases/latest"><img src="https://img.shields.io/badge/دانلود-Corsair%20Unbound-7656d6?style=for-the-badge&logo=github&logoColor=white" alt="دانلود Corsair Unbound"></a>
 
-> **بعد از آپدیت:** فایل‌های نسخه جدید را جایگزین کنید و سپس در <code>chrome://extensions</code> روی **Reload** بزنید. storage داخلی افزونه حفظ می‌شود.
+<sub>فایل ZIP را از آخرین نسخه GitHub دریافت کنید.</sub>
 
----
+</div>
 
-## 🔑 API Key و حریم خصوصی
+### نصب روی Chrome
 
-Corsair Unbound هیچ VirusTotal API Key واقعی را به‌صورت hard-code داخل سورس منتشر نمی‌کند.
+در حال حاضر Corsair Unbound به شکل **افزونه unpacked** منتشر می‌شود. این افزونه هنوز در Chrome Web Store فهرست نشده است؛ بنابراین نصب آن به Developer mode نیاز دارد.
 
-### مدل BYOK
+۱. فایل <code>corsair-unbound-extension.zip</code> را از [آخرین نسخه منتشرشده](https://github.com/amiraction0938/Corsair-Unbound/releases/latest) دانلود کنید.
 
-- کلید را خود کاربر به‌صورت محلی وارد می‌کند
-- هیچ سرور Corsair Unbound کلید را دریافت نمی‌کند
-- درخواست‌های VirusTotal در صورت فعال بودن قابلیت مستقیماً به VirusTotal ارسال می‌شوند
-- دامنه‌های allowlisted عمداً برای lookup به VirusTotal فرستاده نمی‌شوند
-- backup/export فیلدهای قدیمی plaintext API key را از بخش تنظیمات حذف می‌کند. کلیدهای API (VirusTotal و URLhaus) فقط وقتی در بلوک جداگانه‌ی `apiKeys` ذخیره می‌شوند که کاربر گزینه‌ی «کلیدهای API هم در بکاپ باشند» را تیک‌دار نگه دارد؛ داشبورد هشدار می‌دهد که فایل در آن حالت کلیدها را به‌صورت متن ساده دارد
-- سیاست امنیتی پروژه commit کردن API key، token، password، cookie و private key را ممنوع می‌کند
+۲. فایل ZIP را در یک پوشه دائمی، مثلاً <code>C:\CorsairUnbound</code>، استخراج کنید. بعد از نصب، این پوشه را جابه‌جا یا حذف نکنید.
 
-### نکته مهم درباره storage
+۳. در Chrome آدرس <code>chrome://extensions</code> را باز کنید.
 
-کلید فعال خارج از payload معمول settings و با مکانیزم application-level encrypted/obfuscated ذخیره می‌شود.
+۴. گزینه **Developer mode** را فعال کنید.
 
-این کار برای جلوگیری از باقی‌ماندن کلید به شکل plaintext معمولی مفید است، اما **password vault نیست** و در برابر compromise خود افزونه یا مهاجم بسیار قدرتمند روی browser profile مرز امنیتی مطلق ایجاد نمی‌کند؛ چون افزونه باید بتواند کلید را در زمان اجرا بازیابی کند.
+۵. روی **Load unpacked** بزنید و پوشه استخراج‌شده‌ای را انتخاب کنید که فایل <code>manifest.json</code> داخل آن قرار دارد.
 
-برای پاک‌سازی کامل: **Dashboard → Privacy & Data → Wipe ALL Local Data**
+۶. افزونه را به نوار ابزار Pin کنید، بازش کنید و مراحل راه‌اندازی اولیه را انجام دهید.
 
-جزئیات بیشتر در [SECURITY.md](SECURITY.md) و [Security Audit](docs/SECURITY-AUDIT.md) قرار دارد.
+**راهنمای کامل‌تر:** [راهنمای نصب و به‌روزرسانی](INSTALL.md)
 
----
+## حریم خصوصی و ارتباطات شبکه
 
-## 🔄 سیستم آپدیت
+Corsair Unbound یک افزونه **Local-first** است؛ نه یک حساب ابری و نه یک سرویس مرور از راه دور.
 
-Corsair Unbound دارای یک سیستم آپدیت امن و دو مرحله‌ای است که مخصوص نصب‌های unpacked (بدون نیاز به Chrome Web Store) طراحی شده است.
+- منطق اصلی افزونه و داده‌های امنیتی محلی در مرورگر شما نگهداری می‌شوند.
+- پروژه سروری ندارد که تاریخچه وب‌گردی یا کلیدهای API شما را دریافت کند.
+- **VirusTotal اختیاری است (BYOK):** اگر کلید API خودتان را وارد و این قابلیت را فعال کنید، درخواست‌های بررسی مرتبط مستقیماً از افزونه به VirusTotal ارسال می‌شوند.
+- **URLhaus اختیاری است:** اگر Auth-Key آن را وارد نکرده باشید، این منبع بدون ارسال درخواست نادیده گرفته می‌شود؛ در صورت تنظیم کلید و استفاده از آن، درخواست‌ها به سرویس URLhaus ارسال می‌شوند.
+- افزونه برای بررسی نسخه‌های جدید، اطلاعات انتشار را از GitHub دریافت می‌کند. آپدیتر جداگانه ویندوز فایل انتشار را دانلود می‌کند، SHA-256 آن را با اطلاعات منتشرشده تطبیق می‌دهد، نسخه پشتیبان می‌سازد و پس از اجرای دستی شما فایل‌ها را نصب می‌کند.
 
-### نحوه کار
-۱. **افزونه** به صورت دوره‌ای یک فایل امن به نام `latest.json` را در صفحه Releases گیت‌هاب بررسی می‌کند.
-۲. وقتی نسخه جدیدی پیدا شود، داشبورد به شما اطلاع می‌دهد و لینک صفحه آپدیت را نمایش می‌دهد.
-۳. **آپدیتر ویندوز (`updater.ps1`)** کارهای اصلی را انجام می‌دهد. شما آن را یک بار دانلود می‌کنید و این اسکریپت:
-   - جدیدترین فایل ZIP افزونه را مستقیماً از گیت‌هاب دانلود می‌کند.
-   - هش **SHA-256** فایل را با اطلاعات رسمی مقایسه می‌کند تا از دستکاری نشدن آن مطمئن شود.
-   - به طور خودکار یک نسخه پشتیبان (Backup) از افزونه فعلی شما می‌گیرد.
-   - فایل‌های افزونه را با امنیت کامل جایگزین می‌کند و به داده‌های شما کاری ندارد.
-   - کروم را باز می‌کند تا شما فقط دکمه "Reload" را بزنید.
+### شفافیت درباره مجوزها
 
-### امنیت آپدیت
-از آنجایی که این یک افزونه امنیتی است، فرآیند آپدیت حول محور یکپارچگی فایل‌ها بنا شده است. آپدیتر از نصب هر فایلی که دقیقاً با هش SHA-256 منتشر شده در ریلیز رسمی مطابقت نداشته باشد خودداری می‌کند. خود افزونه هرگز فایل ZIP را دانلود نمی‌کند تا از هرگونه خطر اجرای کدهای ناخواسته (Remote Code Execution) جلوگیری شود.
+افزونه برای اجرای محافظت ناوبری، فریم‌ها و صفحه‌ها به دسترسی HTTP و HTTPS نیاز دارد؛ به همین دلیل دسترسی آن به سایت‌ها گسترده است. این دسترسی بخشی از طراحی فعلی است و در عین حال مسئولیت امنیتی مهمی محسوب می‌شود.
 
----
+قبل از نصب، [سیاست امنیتی](SECURITY.md) را درباره مجوزها، نگهداری کلید API، ریسک Userscripts و محدودیت‌های سیستم به‌روزرسانی مطالعه کنید.
 
-## ⌨️ کلیدهای میانبر
+## اتصال اختیاری به منابع اطلاعات تهدید
+
+برای استفاده از قابلیت‌های اصلی Corsair Unbound نیازی به واردکردن کلید سرویس‌های خارجی ندارید. اگر بررسی‌های بیشتر می‌خواهید:
+
+- **VirusTotal:** کلید API خود را در مسیر **Dashboard → API & Intelligence** وارد کنید.
+- **URLhaus:** در صورت تمایل Auth-Key سرویس را در همان بخش اضافه کنید.
+
+این سرویس‌ها قوانین حریم خصوصی و محدودیت درخواست خودشان را دارند. با فعال‌کردن آن‌ها، اطلاعات دامنه‌های مرتبط برای بررسی به سرویس انتخاب‌شده ارسال می‌شود. فقط در صورتی کلید API وارد کنید که با این جریان داده موافق هستید.
+
+## به‌روزرسانی
+
+۱. صفحه [آخرین نسخه GitHub](https://github.com/amiraction0938/Corsair-Unbound/releases/latest) را باز کنید.
+
+۲. فایل <code>corsair-unbound-updater.ps1</code> را دانلود و با PowerShell اجرا کنید.
+
+۳. پیام‌های اسکریپت را بررسی کنید و پوشه نصب Corsair Unbound را انتخاب یا تأیید کنید.
+
+۴. آپدیتر SHA-256 فایل ZIP را بررسی می‌کند، نسخه پشتیبان می‌سازد و نسخه جدید را نصب می‌کند.
+
+۵. صفحه <code>chrome://extensions</code> را باز کنید و روی **Reload** در کارت Corsair Unbound بزنید.
+
+برای مراحل کامل به [راهنمای نصب و به‌روزرسانی](INSTALL.md) مراجعه کنید. آپدیتر یک ابزار ویندوزی است که خودتان اجرا می‌کنید؛ افزونه به‌صورت بی‌صدا خودش را به‌روزرسانی نمی‌کند.
+
+## میانبرهای صفحه‌کلید
 
 | میانبر | عملکرد |
-|---|---|
-| Ctrl+Shift+F | فعال/غیرفعال کردن Fortress روی تب فعلی |
-| Ctrl+Shift+E | باز کردن Dashboard |
+| --- | --- |
+| <code>Ctrl+Shift+F</code> | فعال یا غیرفعال کردن Fortress در تب فعلی |
+| <code>Ctrl+Shift+E</code> | باز کردن داشبورد Corsair Unbound |
 
----
+می‌توانید میانبرها را از مسیر <code>chrome://extensions/shortcuts</code> مشاهده یا تغییر دهید.
 
-## 🏗️ معماری پروژه
+## تست و توسعه
 
-    .
-    ├── assets/
-    │   └── corsair-unbound-hero.png
-    ├── core/
-    │   ├── security.js            پاک‌سازی، normalize و validation
-    │   ├── storage.js             storage تراکنشی + مدیریت API Key
-    │   ├── alarms.js              wrapper برای chrome.alarms
-    │   ├── bloom.js               جستجوی سریع در allowlist
-    │   ├── dnr.js                 اجرای declarativeNetRequest
-    │   ├── redirects.js           ردیابی redirect chain
-    │   ├── risk-aggregator.js     محاسبه ریسک چندمنبعی
-    │   ├── providers/
-    │   │   └── urlhaus.js         سرویس‌دهنده abuse.ch URLhaus (اختیاری)
-    │   ├── threat-intel.js        VirusTotal + allowlist intelligence
-    │   ├── heuristics.js          heuristicهای typosquat/homograph
-    │   ├── intelligence.js        طبقه‌بندی سیگنال
-    │   ├── verifier.js            منطق containment
-    │   ├── observation.js         مشاهده شبکه
-    │   ├── evidence.js            ذخیره شواهد
-    │   ├── migration.js           backup/restore نسخه‌بندی‌شده
-    │   ├── tool-router.js         API داخلی محدود
-    │   ├── replay.js              regression fixtureها
-    │   ├── event-filter.js        فیلترهای لاگ فعالیت
-    │   ├── i18n.js                ترجمه ۸ زبان + RTL
-    │   └── updater.js             بررسی‌کننده آپدیت بر پایه latest.json
-    ├── icons/
-    ├── launcher/
-    │   └── updater.ps1            لانچر امن آپدیت برای ویندوز
-    ├── background.js              service worker
-    ├── content-frame-guard.js     گارد popup در سطح فریم
-    ├── content-main-world.js      محافظ window.open در MAIN world
-    ├── content-security-guard.js  گارد clipboard/CSP/form-jacking
-    ├── content.js                 بنر و مشاهده در top frame
-    ├── popup.html / popup.css / popup.js
-    ├── dashboard.html / dashboard.css / dashboard.js
-    ├── blocked.html / blocked.js
-    ├── manifest.json
-    ├── scripts/
-    │   ├── build.mjs
-    │   └── security-audit.mjs
-    ├── tests/
-    ├── CHANGELOG.md
-    ├── INSTALL.md
-    ├── LICENSE
-    ├── SECURITY.md
-    └── README.md / README.fa.md
+پیش‌نیاز: Node.js و npm.
 
----
+```bash
+npm ci
+npm test
+npm run build
+node scripts/security-audit.mjs
+node scripts/security-audit.mjs --history
+```
 
-## 🧪 تست و بررسی
+موفق بودن تست‌ها و ممیزی ایستا، محافظی مفید است؛ اما به معنی اثبات نبود آسیب‌پذیری در افزونه نیست.
 
-اجرای تست‌های موجود:
+## مستندات
 
-    npm ci
-    npm test
-
-اجرای security audit:
-
-    node scripts/security-audit.mjs
-
-بررسی blobهای قابل‌دسترسی در تاریخچه Git:
-
-    node scripts/security-audit.mjs --history
-
-اسکریپت audit مقدار secret را چاپ نمی‌کند و فقط نام فایل و نوع finding را گزارش می‌دهد.
-
----
-
-## 📚 مستندات
-
+- [راهنمای نصب و به‌روزرسانی](INSTALL.md)
+- [سیاست امنیتی](SECURITY.md)
+- [ممیزی امنیتی](docs/SECURITY-AUDIT.md)
+- [سیاست به‌روزرسانی](docs/UPDATE-POLICY.md)
+- [تاریخچه تغییرات](CHANGELOG.md)
 - [English README](README.md)
-- [README فارسی](README.fa.md)
-- [Security Policy](SECURITY.md)
-- [Security Audit](docs/SECURITY-AUDIT.md)
-- [Update Policy](docs/UPDATE-POLICY.md)
-- [Install Guide](INSTALL.md)
-- [Changelog](CHANGELOG.md)
 
----
+## مشارکت و گزارش مشکلات امنیتی
 
-## 📜 مجوز
+گزارش باگ و مشارکت‌های فنی ارزشمند هستند. لطفاً کلیدها، اطلاعات خصوصی وب‌گردی یا جزئیات قابل سوءاستفاده از آسیب‌پذیری را در Issue عمومی منتشر نکنید. برای گزارش حساس، راهنمای خصوصی در [سیاست امنیتی](SECURITY.md) را دنبال کنید.
 
-MIT — [LICENSE](LICENSE)
+## مجوز
+
+Corsair Unbound تحت [مجوز MIT](LICENSE) منتشر شده است.
 
 </div>

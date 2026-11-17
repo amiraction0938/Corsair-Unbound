@@ -2,205 +2,160 @@
 
 # 🏴‍☠️ Corsair Unbound
 
-<strong>Local browser shield for Chrome (Manifest V3)</strong>
+### Your browser. Your control.
+
+**A local-first security and privacy toolkit for Google Chrome.**
 
 <p>
   <a href="README.fa.md">🇮🇷 فارسی</a> ·
-  <a href="SECURITY.md">🔒 Security</a> ·
-  <a href="docs/SECURITY-AUDIT.md">🧪 Security Audit</a> ·
-  <a href="docs/UPDATE-POLICY.md">🔄 Update Policy</a>
+  <a href="SECURITY.md">🔒 Security Policy</a> ·
+  <a href="INSTALL.md">📦 Installation Guide</a> ·
+  <a href="docs/SECURITY-AUDIT.md">🧪 Security Audit</a>
 </p>
 
-<img src="assets/corsair-unbound-hero.png" alt="Corsair Unbound" width="100%">
+<p>
+  <a href="https://github.com/amiraction0938/Corsair-Unbound/releases/latest"><img src="https://img.shields.io/github/v/release/amiraction0938/Corsair-Unbound?display_name=tag&style=for-the-badge&color=7c5ce7" alt="Latest release"></a>
+  <a href="https://github.com/amiraction0938/Corsair-Unbound/blob/main/LICENSE"><img src="https://img.shields.io/github/license/amiraction0938/Corsair-Unbound?style=for-the-badge" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome Manifest V3">
+</p>
+
+<a href="https://github.com/amiraction0938/Corsair-Unbound/releases/latest"><strong>⬇️ Download the latest version</strong></a>
+
+<img src="assets/corsair-unbound-hero.png" alt="Corsair Unbound — local-first browser security" width="100%">
 
 </div>
 
-Corsair Unbound is a local-first browser shield for Chrome Manifest V3 focused on deterministic navigation protection, Fortress enforcement, redirect containment, heuristic analysis, optional threat intelligence, and a full local dashboard.
+---
 
-The extension is designed to keep its core logic and user data on the device. Optional VirusTotal integration is BYOK (Bring Your Own Key): when enabled, the requested reputation and analysis traffic is sent directly to VirusTotal.
+## A calmer, more controlled browsing experience
 
-## ✨ Features
+The web is useful, but not every page, popup, redirect, or download deserves your trust.
 
-### 🛡️ Protection
+**Corsair Unbound** adds a layer of browser-side protection to Chrome. It combines navigation controls, frame-level guards, suspicious-domain analysis, and optional threat-intelligence lookups in one local dashboard.
 
-- **Fortress Mode** — per-domain lockdown through DNR session rules
-- **Frame-Level Navigation Guard** — protection in every matching frame, including third-party iframes
-- **Popup Lockdown** — burst detection with cooldown containment
-- **Redirect Storm Containment** — intelligence-based containment for redirect abuse
-- **Download Guard** — blocks downloads associated with malicious sources
-- **External Meta Refresh Stripper** — blocks external meta-refresh navigation
-- **Content Security Guard** — clipboard, CSP, and form-jacking related protection signals
+It is designed around a simple principle: **keep the core protection and your browsing data on your device wherever practical.**
 
-### 🧠 Intelligence
+> Corsair Unbound is a security tool, not a guarantee that every malicious page or attack will be detected. Keep Chrome and your operating system updated, and use your judgment when browsing.
 
-- **VirusTotal BYOK** — optional threat intelligence with a rate-limited request queue
-- **Heuristic Engine** — typosquatting, homograph, suspicious TLD, recently registered domains, and brand-in-subdomain signals
-- **Smart Allowlist** — built-in trusted domains plus remote allowlist synchronization
-- **User Trusted Domains** — one-click trust from the in-page verdict banner
-- **Behavior Intelligence** — real-time signal classification and risk aggregation
-- **Multi-Source Intelligence** — combines local heuristics with supported external threat-intelligence providers
+## What can it do?
 
-### 🎨 User Experience
+| Protection | What it does |
+| --- | --- |
+| **Navigation protection** | Applies browser rules to restrict navigation to blocked domains. |
+| **Frame-level guard** | Helps contain popup and navigation abuse in matching frames, including third-party iframes. |
+| **Phishing heuristics** | Looks for signals such as typosquatting, homograph tricks, suspicious TLDs, and brand names hidden in subdomains. |
+| **Redirect containment** | Detects and contains suspicious redirect patterns and redirect storms. |
+| **Fortress Mode** | Lets you lock down a domain with session-based browser rules. |
+| **Download Guard** | Helps block downloads associated with malicious sources. |
+| **Popup protection** | Detects bursts of popup activity and applies cooldown containment. |
+| **Privacy controls** | Gives you local data controls, storage information, backup, restore, and wipe options. |
 
-- **Multi-Language Interface** — English, فارسی, العربية, Español, Deutsch, Français, Русский, 中文
-- **Full RTL Support** — dedicated right-to-left text rendering for Persian and Arabic
-- **In-Page Verdict Banner** — localized verdicts for non-allowlisted sites
-- **Extension Badge** — per-tab security status
-- **Keyboard Shortcuts** — Ctrl+Shift+F for Fortress, Ctrl+Shift+E for Dashboard
-- **Full Dashboard** — analyzer, safe list, privacy controls, settings, API & intelligence, and language switching
-- **Light/Dark Theme**
-- **Built-in Update Checker** — secure GitHub version check, desktop notification, and a dedicated Windows launcher for one-click, SHA-256 verified updates.
-- **Onboarding Wizard** — first-run guided setup with language choice, API key entry, and preference selection
-- **Guided Product Tour** — 7-step overlay tour of the dashboard's main areas
+### More than a warning banner
 
-### 💾 Data & Reliability
+- **Local security dashboard** — overview, analytics, activity log, domain intelligence, security, privacy, userscripts, and settings.
+- **Eight interface languages** — English, فارسی, العربية, Español, Deutsch, Français, Русский, and 中文.
+- **RTL support** — dedicated right-to-left layouts for Persian and Arabic.
+- **Userscripts** — manage custom scripts for sites you choose. Only install scripts you trust; scripts can access page data according to their permissions and matching rules.
+- **Custom trusted domains** — manage your own allowlist.
+- **Light and dark themes** — choose the dashboard appearance that suits you.
+- **Keyboard shortcuts** — <code>Ctrl+Shift+F</code> for Fortress and <code>Ctrl+Shift+E</code> for the dashboard.
 
-- **Safe Scanned Domains** — local cache with search and bulk actions
-- **Backup & Restore** — versioned JSON export/import with sensitive-field removal
-- **Safe List Export/Import** — portable safe-list file
-- **Privacy Controls** — storage statistics and full local wipe
-- **Regression Suite** — deterministic replay tests
-- **Security Audit Tooling** — repository credential checks and manifest-risk checks
+## Get started
 
-## 📦 Installation
+<div align="center">
 
-### Load unpacked
+### Ready to try it?
 
-1. Open <code>chrome://extensions</code>
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select the repository root, the folder containing <code>manifest.json</code>
-5. Open the Corsair Unbound popup and launch the Dashboard
-6. Optional: get a free VirusTotal API key from https://www.virustotal.com/gui/my-apikey
-7. Paste it into **Dashboard → API & Intelligence**
-8. Enable **VirusTotal Threat Intelligence** and **Auto-Scan** when needed
-9. Choose your preferred language
+<a href="https://github.com/amiraction0938/Corsair-Unbound/releases/latest"><img src="https://img.shields.io/badge/Download-Corsair%20Unbound-7656d6?style=for-the-badge&logo=github&logoColor=white" alt="Download Corsair Unbound"></a>
 
-> After updating an unpacked installation, replace the extension files and click **Reload** in <code>chrome://extensions</code>. Browser-side extension storage is preserved.
+<sub>Download the ZIP from the latest GitHub Release.</sub>
 
-## 🔑 API Key & Privacy
+</div>
 
-Corsair Unbound does not ship with a hard-coded VirusTotal API key.
+### Install in Chrome
 
-### BYOK model
+Corsair Unbound is currently distributed as an **unpacked Chrome extension**. It is not currently listed on the Chrome Web Store, so installation requires Chrome's Developer mode.
 
-- You enter your own VirusTotal API key locally.
-- There are no Corsair Unbound servers receiving the key.
-- VirusTotal requests are sent directly to VirusTotal when the feature is enabled.
-- Allowlisted domains are intentionally skipped for VirusTotal lookups.
-- Backup/export removes legacy plaintext API-key fields from the settings block. API keys (VirusTotal, URLhaus) are written to a separate `apiKeys` block only when the user keeps the "Include API keys" option ticked; the dashboard warns that the file then holds secrets in plain text.
-- The repository security policy prohibits committing API keys, tokens, passwords, cookies, or private keys.
+1. Download <code>corsair-unbound-extension.zip</code> from the [latest release](https://github.com/amiraction0938/Corsair-Unbound/releases/latest).
+2. Extract the ZIP to a permanent folder, for example <code>C:\CorsairUnbound</code>. Do not delete or move this folder after installation.
+3. In Chrome, open <code>chrome://extensions</code>.
+4. Turn on **Developer mode**.
+5. Select **Load unpacked** and choose the extracted folder containing <code>manifest.json</code>.
+6. Pin Corsair Unbound to the toolbar, open it, and follow the first-run setup.
 
-### Important storage limitation
+**Need more detail?** Follow the [step-by-step installation guide](INSTALL.md).
 
-The active key is stored outside the normal settings payload using an application-level encrypted/obfuscated representation.
+## Privacy and network use
 
-This reduces ordinary plaintext exposure, but it is **not a password vault** and is not a cryptographic boundary against a compromised extension build or a fully privileged attacker on the browser profile. The extension must be able to recover the key at runtime to call VirusTotal.
+Corsair Unbound is **local-first**, not a cloud account or a remote browsing service.
 
-Use **Dashboard → Privacy & Data → Wipe ALL Local Data** to clear local extension data.
+- Core extension logic and its local security data are stored in your browser.
+- The project does not operate a Corsair Unbound server that receives your browsing history or API keys.
+- **VirusTotal is optional (BYOK):** if you add your own API key and enable the integration, relevant lookup requests are sent directly from the extension to VirusTotal.
+- **URLhaus is optional:** it is skipped when no URLhaus Auth-Key is configured; when configured and used, lookup requests go to the URLhaus service.
+- The extension checks GitHub Releases for update metadata. The separate Windows updater downloads the release archive, checks its SHA-256 against the published metadata, creates a backup, and installs the files after you run it.
 
-See [SECURITY.md](SECURITY.md) and [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md).
+### Permissions deserve transparency
 
-## 🔄 Updates
+The extension requests access to HTTP and HTTPS pages so its navigation, frame, and page-level protections can work across websites. This is broad access by design and is also a meaningful security responsibility.
 
-Corsair Unbound features a secure, two-part update system designed specifically for unpacked installations without relying on the Chrome Web Store.
+Review the [Security Policy](SECURITY.md) to understand the permission model, API-key handling, userscript risks, and update limitations before installing.
 
-### How it works
-1. **The Extension** periodically checks a secure `latest.json` file hosted on GitHub Releases.
-2. When a new version is found, the dashboard informs you and provides a link to the update page.
-3. **The Windows Updater (`updater.ps1`)** does the heavy lifting. You download it once, and it:
-   - Downloads the latest extension ZIP directly from GitHub.
-   - Calculates and verifies the **SHA-256 hash** against the official release metadata to ensure the file has not been tampered with.
-   - Automatically creates a timestamped backup of your current extension.
-   - Safely replaces the extension files without touching your data.
-   - Opens Chrome for you to simply click the "Reload" button.
+## Optional threat intelligence
 
-### Update security
-Because this is a security extension, the update process is built around integrity. The updater will refuse to install any file that does not perfectly match the SHA-256 hash published in the official release. The extension itself never downloads the ZIP, preventing any remote code execution risks.
+You can use Corsair Unbound without configuring external threat-intelligence keys. For additional lookups:
 
-## ⌨️ Keyboard Shortcuts
+- **VirusTotal:** add your own API key under **Dashboard → API & Intelligence**.
+- **URLhaus:** add an Auth-Key under the same area if you want to enable that provider.
+
+These services have their own terms, rate limits, and privacy policies. Enabling them means relevant domain information is sent to the selected provider. Do not add an API key unless you understand and accept that data flow.
+
+## Updating
+
+1. Open the latest [GitHub Release](https://github.com/amiraction0938/Corsair-Unbound/releases/latest).
+2. Download <code>corsair-unbound-updater.ps1</code> and run it with PowerShell.
+3. Review the prompts and select or confirm your Corsair Unbound installation folder.
+4. The updater verifies the release ZIP's SHA-256, creates a backup, and installs the new files.
+5. Open <code>chrome://extensions</code> and click **Reload** on Corsair Unbound.
+
+See the [installation and update guide](INSTALL.md) for the full procedure. The updater is a user-run Windows helper; it is not a silent self-updater.
+
+## Keyboard shortcuts
 
 | Shortcut | Action |
-|---|---|
-| Ctrl+Shift+F | Toggle Fortress on the current tab |
-| Ctrl+Shift+E | Open the Corsair Dashboard |
+| --- | --- |
+| <code>Ctrl+Shift+F</code> | Toggle Fortress on the current tab |
+| <code>Ctrl+Shift+E</code> | Open the Corsair Unbound dashboard |
 
-## 🏗️ Architecture
+You can review or change extension shortcuts at <code>chrome://extensions/shortcuts</code>.
 
-    .
-    ├── assets/
-    │   └── corsair-unbound-hero.png
-    ├── core/
-    │   ├── security.js            sanitization, normalization, validation
-    │   ├── storage.js             transactional storage + API-key handling
-    │   ├── alarms.js              chrome.alarms wrapper
-    │   ├── bloom.js               fast allowlist negative lookups
-    │   ├── dnr.js                 declarativeNetRequest enforcement
-    │   ├── redirects.js           redirect-chain tracking
-    │   ├── risk-aggregator.js     weighted multi-source risk scoring
-    │   ├── providers/
-    │   │   └── urlhaus.js         abuse.ch URLhaus provider (opt-in)
-    │   ├── threat-intel.js        VirusTotal + allowlist intelligence
-    │   ├── heuristics.js          typosquat/homograph heuristics
-    │   ├── intelligence.js        signal classification
-    │   ├── verifier.js            containment decisions
-    │   ├── observation.js         network observation
-    │   ├── evidence.js            evidence store
-    │   ├── migration.js           versioned backup/restore migration
-    │   ├── tool-router.js         bounded internal tool API
-    │   ├── replay.js              regression fixtures
-    │   ├── event-filter.js        pure activity-log filter helpers
-    │   ├── i18n.js                8-language translations + RTL support
-    │   └── updater.js             GitHub latest.json update checker
-    ├── icons/
-    ├── launcher/
-    │   └── updater.ps1            secure Windows update launcher
-    ├── background.js              service worker
-    ├── content-frame-guard.js     frame-level popup interception
-    ├── content-main-world.js      MAIN-world window.open protection
-    ├── content-security-guard.js  clipboard/CSP/form-jacking guard
-    ├── content.js                 top-frame banner and observation
-    ├── popup.html / popup.css / popup.js
-    ├── dashboard.html / dashboard.css / dashboard.js
-    ├── blocked.html / blocked.js
-    ├── manifest.json
-    ├── scripts/
-    │   ├── build.mjs
-    │   └── security-audit.mjs
-    ├── tests/
-    ├── CHANGELOG.md
-    ├── INSTALL.md
-    ├── LICENSE
-    ├── SECURITY.md
-    └── README.md / README.fa.md
+## Testing and development
 
-## 🧪 Verification
+Requirements: Node.js and npm.
 
-Run the existing regression suite:
+```bash
+npm ci
+npm test
+npm run build
+node scripts/security-audit.mjs
+node scripts/security-audit.mjs --history
+```
 
-    npm ci
-    npm test
+The test suite and static security audit are useful safeguards, but passing checks do not prove that the extension is free of vulnerabilities.
 
-Run the local repository audit:
+## Documentation
 
-    node scripts/security-audit.mjs
-
-Scan reachable Git history from a normal clone:
-
-    node scripts/security-audit.mjs --history
-
-The audit reports file names and finding types only; it does not print matched secret values.
-
-## 📚 Documentation
-
-- [English README](README.md)
-- [README فارسی](README.fa.md)
+- [Installation & Update Guide](INSTALL.md)
 - [Security Policy](SECURITY.md)
 - [Security Audit](docs/SECURITY-AUDIT.md)
 - [Update Policy](docs/UPDATE-POLICY.md)
-- [Install Guide](INSTALL.md)
 - [Changelog](CHANGELOG.md)
+- [فارسی — راهنمای فارسی](README.fa.md)
 
-## 📜 License
+## Contributing and reporting security issues
 
-MIT — see [LICENSE](LICENSE)
+Bug reports and thoughtful contributions are welcome. Please avoid posting credentials, private browsing data, or exploitable vulnerability details in public issues. For security-sensitive reports, follow the private reporting guidance in [SECURITY.md](SECURITY.md).
+
+## License
+
+Corsair Unbound is released under the [MIT License](LICENSE).
