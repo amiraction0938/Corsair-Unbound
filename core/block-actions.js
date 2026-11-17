@@ -215,6 +215,65 @@ const CorsairBlockActions = (() => {
    * The NEWEST automatic-block event for a host. Events are stored newest-first, but this does
    * not depend on the order: the highest timestamp wins (the block page used to show the oldest).
    */
+
+  /* ---------- quarantine already-open tabs for a globally blocked domain ---------- */
+  /**
+   * DNR rules only affect requests made after the rule is installed. Existing documents
+   * keep running, so every open tab on the blocked host (or one of its subdomains) must
+   * be navigated to the extension's block page as part of the same block operation.
+   * Browser APIs are injected so matching and failure behavior can be regression-tested.
+   */
+  async function quarantineOpenTabs(host, deps = {}) {
+    const empty = { ok: false, redirected: [], failed: [] };
+    if (typeof deps.normalizeHostname !== 'function' ||
+        typeof deps.isValidHostname !== 'function' ||
+        typeof deps.getTabs !== 'function' ||
+        typeof deps.extractHostname !== 'function' ||
+        typeof deps.sameOrSubdomain !== 'function' ||
+        typeof deps.getBlockedPageUrl !== 'function' ||
+        typeof deps.navigateTab !== 'function') {
+      return { ...empty, error: 'missing-dependency' };
+    }
+    const targetHost = deps.normalizeHostname(host || '');
+    if (!targetHost || !deps.isValidHostname(targetHost)) return { ...empty, error: 'invalid-host' };
+
+    let tabs;
+    try { tabs = await deps.getTabs(); }
+    catch (err) { return { ...empty, error: (err && err.message) || 'tabs-query-failed' }; }
+    if (!Array.isArray(tabs)) return { ...empty, error: 'tabs-query-invalid' };
+
+    let blockedPageUrl;
+    try {
+      blockedPageUrl = deps.getBlockedPageUrl(targetHost);
+      if (typeof blockedPageUrl !== 'string' || !blockedPageUrl.startsWith('chrome-extension://')) {
+        return { ...empty, error: 'invalid-blocked-page-url' };
+      }
+    } catch (err) {
+      return { ...empty, error: (err && err.message) || 'blocked-page-url-failed' };
+    }
+
+    const redirected = [];
+    const failed = [];
+    for (const tab of tabs) {
+      if (!tab || !Number.isInteger(tab.id)) continue;
+      // Check both values: during a pending navigation, tab.url may still be the old
+      // document while pendingUrl already points at the blocked host (or vice versa).
+      const candidates = [tab.pendingUrl, tab.url].filter(Boolean);
+      const matches = candidates.some(rawUrl => {
+        const candidateHost = deps.extractHostname(String(rawUrl));
+        return Boolean(candidateHost && deps.sameOrSubdomain(candidateHost, targetHost));
+      });
+      if (!matches) continue;
+      try {
+        await deps.navigateTab(tab.id, blockedPageUrl);
+        redirected.push(tab.id);
+      } catch (err) {
+        failed.push({ tabId: tab.id, error: (err && err.message) || 'tab-navigation-failed' });
+      }
+    }
+    return { ok: failed.length === 0, redirected, failed, error: failed.length ? 'tab-navigation-failed' : '' };
+  }
+
   function pickAutoBlockEvent(events, host) {
     if (!Array.isArray(events)) return null;
     let best = null;
@@ -242,7 +301,7 @@ const CorsairBlockActions = (() => {
     } catch { return false; }
   }
 
-  return { SNOOZE_MS, SITE_DATA_TYPES, originsFor, explain, proceedWithFortress, markFalsePositive, blockAndIsolate, isBlockPageSender, pickAutoBlockEvent };
+  return { SNOOZE_MS, SITE_DATA_TYPES, originsFor, explain, proceedWithFortress, markFalsePositive, blockAndIsolate, quarantineOpenTabs, isBlockPageSender, pickAutoBlockEvent };
 })();
 
 globalThis.CorsairBlockActions = CorsairBlockActions;
