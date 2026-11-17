@@ -133,13 +133,13 @@ You can review or change extension shortcuts at <code>chrome://extensions/shortc
 
 Requirements: Node.js and npm.
 
-\`\`\`bash
+```bash
 npm ci
 npm test
 npm run build
 node scripts/security-audit.mjs
 node scripts/security-audit.mjs --history
-\`\`\`
+```
 
 The test suite and static security audit are useful safeguards, but passing checks do not prove that the extension is free of vulnerabilities.
 
