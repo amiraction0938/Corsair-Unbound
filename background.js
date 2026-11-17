@@ -471,10 +471,61 @@ async function blockDomainGlobally(host) {
     await CorsairThreatIntel.refreshUserTrusted();
   } catch {}
 
-  if (res.sync && res.sync.ok === false) {
-    return { ok: false, error: `dnr-sync-failed: ${res.sync.error || 'unknown'}`, domains: res.arr, sync: res.sync };
+  // DNR prevents future main-frame requests, but cannot stop documents that were
+  // already loaded. Replace every open tab on this host/subtree with our block page.
+  // Do this even if DNR synchronization failed: existing pages still need containment
+  // while the persisted blocklist is reconciled on the next startup.
+  const quarantine = await CorsairBlockActions.quarantineOpenTabs(h, {
+    normalizeHostname: CorsairSecurity.normalizeHostname,
+    isValidHostname: CorsairSecurity.isValidHostname,
+    getTabs: () => chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }),
+    extractHostname: CorsairSecurity.extractHostname,
+    sameOrSubdomain: CorsairSecurity.sameOrSubdomain,
+    getBlockedPageUrl: (blockedHost) => chrome.runtime.getURL(
+      'blocked.html?reason=user-blocklist&host=' + encodeURIComponent(blockedHost)
+    ),
+    navigateTab: (tabId, url) => chrome.tabs.update(tabId, { url })
+  });
+
+  for (const tabId of quarantine.redirected) {
+    try {
+      await CorsairStorage.appendEvent({
+        type: 'existing_tab_quarantined', domain: h, severity: 'high', tabId,
+        reason: 'an already-open tab was navigated to the global block page'
+      });
+    } catch {}
+    try {
+      await CorsairEvidence.add({
+        kind: 'existing_tab_quarantined', origin: h, tabId,
+        data: { reason: 'global-blocklist-applied' }
+      });
+    } catch {}
   }
-  return { ok: true, domains: res.arr, sync: res.sync };
+
+  if (!quarantine.ok) {
+    try {
+      await CorsairStorage.appendEvent({
+        type: 'existing_tab_quarantine_failed', domain: h, severity: 'high',
+        reason: quarantine.error || 'one or more matching tabs could not be navigated'
+      });
+    } catch {}
+  }
+
+  if (res.sync && res.sync.ok === false) {
+    return {
+      ok: false,
+      error: 'dnr-sync-failed: ' + (res.sync.error || 'unknown'),
+      domains: res.arr, sync: res.sync, quarantine
+    };
+  }
+  if (!quarantine.ok) {
+    return {
+      ok: false,
+      error: 'active-tab-quarantine-failed: ' + (quarantine.error || 'unknown'),
+      domains: res.arr, sync: res.sync, quarantine
+    };
+  }
+  return { ok: true, domains: res.arr, sync: res.sync, quarantine };
 }
 async function unblockDomainGlobally(host) {
   const h = CorsairSecurity.normalizeHostname(host || '');
