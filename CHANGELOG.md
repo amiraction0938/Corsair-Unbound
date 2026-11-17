@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.3] — 2026-11-18
+
+### Fixed
+- **Automatic quarantine now contains already-open tabs.** When a domain is added to the global blocklist (automatically or manually), every open tab on that exact domain or one of its subdomains is navigated to the Corsair block page. Successful and failed tab containment is recorded; unrelated lookalike hostnames are not touched.
+
 ## [1.10.2] — 2026
 
 The userscript menu moves into the toolbar popup, and the version metadata is consistent again.
