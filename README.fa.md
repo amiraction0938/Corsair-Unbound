@@ -142,13 +142,13 @@ Corsair Unbound یک افزونه **Local-first** است؛ نه یک حساب ا
 
 پیش‌نیاز: Node.js و npm.
 
-\`\`\`bash
+```bash
 npm ci
 npm test
 npm run build
 node scripts/security-audit.mjs
 node scripts/security-audit.mjs --history
-\`\`\`
+```
 
 موفق بودن تست‌ها و ممیزی ایستا، محافظی مفید است؛ اما به معنی اثبات نبود آسیب‌پذیری در افزونه نیست.
 
