@@ -27,6 +27,12 @@
 
 ---
 
+> **What's new in v1.13.0:** **Automatic Userscript Execution** (zero popup clicks required, automatic registration recovery across updates & Chrome 138+ setup guidance), **AI Script Studio** (originating-tab context, anti-prompt-injection framing, CSP-safe static security review, one-time Chrome 135+ `userScripts.execute` preview, explicit approval), and **AI Providers & Models** with first-class local LLM support (`llama.cpp`, `Ollama`, `LM Studio`, `vLLM`, `LocalAI`, `Jan`, `KoboldCpp`, etc.) + cloud adapters. See [docs/AI-SCRIPT-STUDIO.md](docs/AI-SCRIPT-STUDIO.md).
+>
+> **Previously in v1.12.0:** Five new local-first security layers — **Credential & Phishing Form Guard** (pre-submit Shadow-DOM warning, zero credential-value reading), **ClickFix & Fake-CAPTCHA Protection**, **Offline Bloom-Filter Threat Intelligence** (zero API keys, SHA-256 verified), **HTTPS-First DNR upgrades** (`950000–959999`), and **Tracking Parameter Stripping** (`960000–969999`). See [CHANGELOG.md](CHANGELOG.md) and [SECURITY.md](SECURITY.md).
+>
+> **Previously in v1.11.0:** Unified Obsidian/Porcelain design system (`core/design-system.css`) with cohesive SVG iconography across Dashboard, Popup, and Blocked page, plus a Tampermonkey-class Userscripts engine with syntax-highlighted local editor, `GM_getTab`/`GM_saveTab`, cross-tab value sync, `.user.js` auto-install, and 1-click inject-anywhere controls. See [CHANGELOG.md](CHANGELOG.md) and [docs/USERSCRIPTS-COMPATIBILITY.md](docs/USERSCRIPTS-COMPATIBILITY.md).
+
 ## A calmer, more controlled browsing experience
 
 The web is useful, but not every page, popup, redirect, or download deserves your trust.

@@ -121,36 +121,104 @@
 
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const tab = tabs[0];
-    if (!tab || !Number.isInteger(tab.id) || !normalizeHost(tab.url || '')) { hide(); return; }
+    const host = normalizeHost((tab && tab.url) || '');
+    if (!tab || !Number.isInteger(tab.id) || !host) { hide(); return; }
 
     let res;
     try { res = await send({ type: 'gm-menu-get', tabId: tab.id }); } catch { hide(); return; }
     const scripts = Array.isArray(res.scripts) ? res.scripts : [];
-    if (!scripts.length) { hide(); return; }     // nothing runs on this site: show nothing
+    const otherScripts = Array.isArray(res.otherScripts) ? res.otherScripts : [];
+    if (!scripts.length && !otherScripts.length) { hide(); return; }
 
     const title = $('gmTitle');
-    if (title) title.textContent = '\u{1F9E9} ' + tx('Userscripts on this site', 'اسکریپت‌های فعال روی این سایت');
+    if (title) title.textContent = '\u{1F9E9} ' + tx('Userscripts on this site', 'اسکریپت‌های کاربر روی این سایت');
     list.textContent = '';
 
     for (const s of scripts) {
-      const box = el('div', { className: 'gm-script' });
-      box.appendChild(el('div', {
+      const enabled = s.enabled !== false;
+      const box = el('div', { className: 'gm-script' + (enabled ? '' : ' disabled') });
+
+      const head = el('div', { className: 'gm-script-head' });
+      const nameEl = el('div', {
         className: 'gm-script-name',
         text: String(s.name || 'Script') + (s.version ? ' v' + s.version : '')
-      }));
+      });
+      nameEl.title = nameEl.textContent;
+
+      const rightControls = el('div', { className: 'gm-script-controls' });
+      const runNowBtn = el('button', { className: 'gm-mini-btn', text: '▶' });
+      runNowBtn.type = 'button';
+      runNowBtn.title = tx('Inject & run now on this tab', 'تزریق و اجرای فوری روی این تب');
+      runNowBtn.addEventListener('click', async () => {
+        runNowBtn.disabled = true;
+        try {
+          const r = await send({ type: 'us-run-now', id: s.id, tabId: tab.id });
+          if (r && r.ok) showToast(tx('Injected on this tab', 'روی این تب تزریق شد'));
+          else showToast((r && r.error) || tx('Injection failed', 'تزریق ناموفق بود'), 'error');
+        } catch (err) {
+          showToast(err.message || tx('Injection failed', 'تزریق ناموفق بود'), 'error');
+        } finally {
+          runNowBtn.disabled = false;
+        }
+      });
+
+      const toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.className = 'gm-script-toggle';
+      toggle.checked = enabled;
+      toggle.title = enabled ? tx('Disable script', 'غیرفعال کردن') : tx('Enable script', 'فعال کردن');
+      toggle.addEventListener('change', async () => {
+        toggle.disabled = true;
+        try {
+          const tr = await send({ type: 'us-toggle', id: s.id, enabled: toggle.checked });
+          if (tr && tr.ok) {
+            box.classList.toggle('disabled', !toggle.checked);
+            showToast(toggle.checked ? tx('Script enabled (reload page)', 'اسکریپت فعال شد (صفحه را بازخوانی کنید)') : tx('Script disabled', 'اسکریپت غیرفعال شد'));
+          } else {
+            toggle.checked = !toggle.checked;
+          }
+        } catch {
+          toggle.checked = !toggle.checked;
+        } finally {
+          toggle.disabled = false;
+        }
+      });
+
+      const editBtn = el('button', { className: 'gm-mini-btn', text: '✎' });
+      editBtn.type = 'button';
+      editBtn.title = tx('Edit script in Dashboard', 'ویرایش اسکریپت در داشبورد');
+      editBtn.addEventListener('click', () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html?edit=' + encodeURIComponent(s.id)) });
+        window.close();
+      });
+      rightControls.append(runNowBtn, editBtn, toggle);
+      head.append(nameEl, rightControls);
+      box.appendChild(head);
+
+      if (s.lastError) {
+        box.appendChild(el('div', { className: 'gm-script-err', text: String(s.lastError) }));
+      }
+
       const cmds = Array.isArray(s.commands) ? s.commands : [];
       if (!cmds.length) {
-        box.appendChild(el('div', { className: 'muted-text', text: tx('Active on this site', 'روی این سایت فعال است') }));
+        box.appendChild(el('div', {
+          className: 'muted-text',
+          text: enabled
+            ? (s.runEverywhere ? tx('Active on all sites', 'فعال روی همه سایت‌ها') : tx('Active on this site', 'روی این سایت فعال است'))
+            : tx('Disabled on this site', 'غیرفعال روی این سایت')
+        }));
       }
       for (const c of cmds) {
-        const btn = el('button', { className: 'gm-cmd', text: String(c.name || '') });
+        const label = String(c.name || '') + (c.accessKey ? ` [${c.accessKey}]` : '');
+        const btn = el('button', { className: 'gm-cmd', text: label });
         btn.type = 'button';
         btn.title = String(c.name || '');
+        btn.disabled = !enabled;
         btn.addEventListener('click', async () => {
           btn.disabled = true;
           try {
             await send({ type: 'gm-menu-run', tabId: tab.id, scriptId: s.id, commandId: c.id });
-            window.close();   // the command usually opens something in the page
+            window.close();
           } catch (err) {
             showToast(err.message || tx('Could not run the command', 'اجرای فرمان ممکن نشد'), 'error');
             btn.disabled = false;
@@ -160,9 +228,56 @@
       }
       list.appendChild(box);
     }
+
+    // Quick-inject ANY other installed script onto this tab on demand
+    if (otherScripts.length) {
+      const injectBox = el('div', { className: 'gm-inject-bar' });
+      const sel = document.createElement('select');
+      sel.className = 'gm-inject-select';
+      for (const o of otherScripts) {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = String(o.name || 'Script');
+        sel.appendChild(opt);
+      }
+      const runOther = el('button', { className: 'gm-mini-btn', text: tx('▶ Run', '▶ اجرا') });
+      runOther.type = 'button';
+      runOther.title = tx('Inject selected script on this tab now', 'تزریق فوری اسکریپت انتخاب‌شده روی این تب');
+      runOther.addEventListener('click', async () => {
+        runOther.disabled = true;
+        try {
+          const r = await send({ type: 'us-run-now', id: sel.value, tabId: tab.id });
+          if (r && r.ok) showToast(tx('Injected on this tab', 'روی این تب تزریق شد'));
+          else showToast((r && r.error) || tx('Injection failed', 'تزریق ناموفق بود'), 'error');
+        } catch (err) {
+          showToast(err.message || tx('Injection failed', 'تزریق ناموفق بود'), 'error');
+        } finally {
+          runOther.disabled = false;
+        }
+      });
+      const addSiteBtn = el('button', { className: 'gm-mini-btn', text: tx('+ Site', '+ سایت') });
+      addSiteBtn.type = 'button';
+      addSiteBtn.title = tx(`Always match *://${host}/*`, `افزودن همیشگی به *://${host}/*`);
+      addSiteBtn.addEventListener('click', async () => {
+        addSiteBtn.disabled = true;
+        try {
+          const r = await send({ type: 'us-add-match', id: sel.value, pattern: `*://${host}/*` });
+          if (r && r.ok) {
+            showToast(tx(`Added to ${host}`, `به ${host} اضافه شد`));
+            renderUserscripts().catch(() => {});
+          } else {
+            showToast((r && r.error) || tx('Failed', 'ناموفق'), 'error');
+          }
+        } finally {
+          addSiteBtn.disabled = false;
+        }
+      });
+      injectBox.append(sel, runOther, addSiteBtn);
+      list.appendChild(injectBox);
+    }
+
     sec.hidden = false;
   }
-
   async function activeDomain() {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     return normalizeHost(tabs[0]?.url || '');
@@ -725,13 +840,21 @@
   /* ============================================================
      THEME
      ============================================================ */
+  const POPUP_THEMES = [
+    { id: 'amethyst', en: 'Royal Amethyst', fa: 'بنفش سلطنتی' },
+    { id: 'dark', en: 'Midnight Obsidian', fa: 'شب سرمه‌ای' },
+    { id: 'cyber-cyan', en: 'Arctic Sentinel', fa: 'فیروزه‌ای سایبری' },
+    { id: 'emerald-ops', en: 'Emerald Ops', fa: 'زمردی امنیتی' },
+    { id: 'solar-gold', en: 'Solar Gold', fa: 'سفید و زرد طلایی' },
+    { id: 'light', en: 'Porcelain Light', fa: 'روشن کلاسیک' }
+  ];
   $('theme')?.addEventListener('click', async () => {
     const current = (await chrome.storage.local.get('theme')).theme || 'dark';
-    const next = current === 'light' ? 'dark' : 'light';
-    await chrome.storage.local.set({ theme: next });
-    document.body.dataset.theme = next;
-    const btn = $('theme');
-    if (btn) btn.textContent = next === 'light' ? '🌙' : '☀';
+    const idx = POPUP_THEMES.findIndex(t => t.id === current);
+    const nextObj = POPUP_THEMES[(idx + 1) % POPUP_THEMES.length];
+    await chrome.storage.local.set({ theme: nextObj.id });
+    document.body.dataset.theme = nextObj.id;
+    showToast(tx('Theme: ' + nextObj.en, 'تم: ' + nextObj.fa));
   });
 
   /* ============================================================
@@ -747,15 +870,17 @@
       const { theme = 'dark' } = await chrome.storage.local.get('theme');
       document.body.dataset.theme = theme;
       const btn = $('theme');
-      if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀';
+      if (btn) btn.textContent = '🎨';
     } catch {}
 
     applyI18n(document);
     await refresh();
+    initAiStudioPopup().catch(() => {});
 
     // BUG FIX: keep the popup in sync when settings are changed in the dashboard while it is open.
     try {
       chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.theme && changes.theme.newValue) { document.body.dataset.theme = changes.theme.newValue; }
         if (area !== 'local' || !changes.globalSettings) return;
         const next = changes.globalSettings.newValue;
         if (!next || typeof next !== 'object') return;
@@ -776,4 +901,63 @@
       });
     } catch {}
   })();
+
+  /* ============ AI SCRIPT STUDIO ENTRY (v1.13.0) ============ */
+  async function initAiStudioPopup() {
+    const sel = $('aiPopupProvider');
+    const siteEl = $('aiPopupSite');
+    const promptEl = $('aiPopupPrompt');
+    const genBtn = $('aiPopupGenerateBtn');
+    const openBtn = $('aiOpenFullBtn');
+    const ctxEl = $('aiPopupCtx');
+    const statusEl = $('aiPopupStatus');
+    if (!sel || !openBtn) return;
+
+    let originTabId = null;
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const t = tabs && tabs[0];
+      if (t && Number.isInteger(t.id)) {
+        originTabId = t.id;
+        let host = '';
+        try { host = new URL(t.url || '').hostname; } catch {}
+        if (siteEl) siteEl.textContent = host ? `Target: ${host}` : 'Standalone mode';
+      }
+    } catch {}
+
+    try {
+      const r = await send({ type: 'ai-providers-list' });
+      if (r && r.ok && Array.isArray(r.profiles)) {
+        sel.textContent = '';
+        for (const p of r.profiles) {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = `[${(p.locality || 'local').toUpperCase()}] ${p.name}${p.model ? ' · ' + p.model : ''}`;
+          sel.appendChild(opt);
+        }
+        if (r.defaultProfileId) sel.value = r.defaultProfileId;
+      }
+    } catch {}
+
+    const launchStudio = async (withPrompt) => {
+      if (statusEl) statusEl.textContent = 'Opening AI Script Studio…';
+      await send({
+        type: 'ai-open-studio',
+        tabId: originTabId,
+        providerId: sel.value || '',
+        prompt: withPrompt ? (promptEl?.value || '').trim() : '',
+        includeContext: Boolean(ctxEl?.checked),
+        autoGen: Boolean(withPrompt && (promptEl?.value || '').trim())
+      });
+    };
+
+    openBtn.addEventListener('click', () => launchStudio(false));
+    if (genBtn) genBtn.addEventListener('click', () => launchStudio(true));
+    if (promptEl) {
+      promptEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); launchStudio(true); }
+      });
+    }
+  }
+
 })();

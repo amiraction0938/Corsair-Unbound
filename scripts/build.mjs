@@ -34,6 +34,9 @@ const RUNTIME_FILES = [
   'popup.html',
   'popup.css',
   'popup.js',
+  'ai-studio.html',
+  'ai-studio.css',
+  'ai-studio.js',
   'core',
   'icons'
 ];

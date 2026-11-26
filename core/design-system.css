@@ -1,0 +1,362 @@
+/* ============================================================
+   CORSAIR UNBOUND — NEXT-GEN CYBERSECURITY DESIGN SYSTEM (v1.11.0)
+   ------------------------------------------------------------
+   Atmospheric Midnight Obsidian & Electric Indigo / Cyan / Emerald
+   (Dark Mode) paired with Crisp Porcelain & Slate (Light Mode).
+   Shared across Dashboard, Toolbar Popup, and Blocked Page.
+   ============================================================ */
+
+:root {
+  /* Atmospheric Midnight Canvas & Layered Surfaces */
+  --bg: #060911;
+  --bg-canvas:
+    radial-gradient(ellipse 75% 45% at 15% -12%, rgba(56, 189, 248, 0.09), transparent 60%),
+    radial-gradient(ellipse 65% 42% at 88% -8%, rgba(99, 102, 241, 0.11), transparent 58%),
+    radial-gradient(ellipse 50% 35% at 50% 108%, rgba(16, 185, 129, 0.05), transparent 60%),
+    #060911;
+  --bg-elevated: #0b101b;
+  --surface: #0f1624;
+  --surface-2: #151e30;
+  --surface-hover: #1b263d;
+  --surface-glass: rgba(15, 22, 36, 0.78);
+  --card: var(--surface);
+  --card2: var(--surface-2);
+  --card-hover: var(--surface-hover);
+
+  /* Typography Hierarchy */
+  --text: #f3f6fc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #8b9db8;
+  --text-dim: #5d708c;
+
+  /* Specular Hairline Borders */
+  --border: rgba(148, 163, 184, 0.11);
+  --border-subtle: rgba(148, 163, 184, 0.06);
+  --border-strong: rgba(148, 163, 184, 0.22);
+  --specular: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  /* Distinctive Corsair Cyber Palette */
+  --brand: #6366f1;
+  --brand-hover: #4f46e5;
+  --brand-cyan: #38bdf8;
+  --brand-soft: rgba(99, 102, 241, 0.16);
+  --brand-gradient: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%);
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-glow: rgba(99, 102, 241, 0.28);
+
+  --accent: #10b981;
+  --accent-soft: rgba(16, 185, 129, 0.14);
+  --accent-glow: rgba(16, 185, 129, 0.26);
+
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, 0.15);
+  --warn-glow: rgba(245, 158, 11, 0.24);
+
+  --danger: #f43f5e;
+  --danger-soft: rgba(244, 63, 94, 0.15);
+  --danger-glow: rgba(244, 63, 94, 0.26);
+
+  --purple: #8b5cf6;
+  --focus-ring: #38bdf8;
+
+  /* Typography */
+  --font-sans: 'Inter var', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Menlo, Monaco, Consolas, monospace;
+  --font-rtl: 'Vazirmatn', 'Sahel', 'Estedad', 'Noto Sans Arabic', Tahoma, system-ui, sans-serif;
+
+  /* Geometry */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-pill: 9999px;
+
+  /* Layered Depth */
+  --shadow-xs: 0 2px 4px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.34);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.56);
+
+  /* Motion */
+  --transition-fast: 150ms cubic-bezier(0.2, 0, 0, 1);
+  --transition-base: 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 360ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Shell Dimensions */
+  --sidebar-width: 264px;
+  --sidebar-collapsed-width: 72px;
+  --header-height: 64px;
+}
+
+/* ============================================================
+   LIGHT THEME — Crisp Porcelain, Mineral Slate & Cobalt Accent
+   ============================================================ */
+body[data-theme="light"],
+html[data-theme="light"] body {
+  --bg: #f3f6fb;
+  --bg-canvas:
+    radial-gradient(ellipse 75% 45% at 15% -12%, rgba(56, 189, 248, 0.12), transparent 60%),
+    radial-gradient(ellipse 65% 42% at 88% -8%, rgba(99, 102, 241, 0.1), transparent 58%),
+    #f3f6fb;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #eef2f8;
+  --surface-hover: #e4ebf4;
+  --surface-glass: rgba(255, 255, 255, 0.84);
+  --card: var(--surface);
+  --card2: var(--surface-2);
+  --card-hover: var(--surface-hover);
+
+  --text: #0b1220;
+  --text-secondary: #334155;
+  --text-muted: #52647d;
+  --text-dim: #7b8da6;
+
+  --border: rgba(15, 23, 42, 0.09);
+  --border-subtle: rgba(15, 23, 42, 0.05);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --specular: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+
+  --brand: #4f46e5;
+  --brand-hover: #4338ca;
+  --brand-cyan: #0284c7;
+  --brand-soft: rgba(79, 70, 229, 0.1);
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-glow: rgba(79, 70, 229, 0.18);
+
+  --accent: #059669;
+  --accent-soft: rgba(5, 150, 105, 0.11);
+  --accent-glow: rgba(5, 150, 105, 0.18);
+
+  --warn: #d97706;
+  --warn-soft: rgba(217, 119, 6, 0.12);
+  --danger: #e11d48;
+  --danger-soft: rgba(225, 29, 72, 0.1);
+  --focus-ring: #4f46e5;
+
+  --shadow-xs: 0 1px 3px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.07);
+  --shadow-md: 0 12px 28px rgba(15, 23, 42, 0.09);
+  --shadow-lg: 0 22px 48px rgba(15, 23, 42, 0.13);
+}
+
+/* ============================================================
+   ACCESSIBILITY: FOCUS & REDUCED MOTION
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   SVG ICON PRIMITIVES
+   ============================================================ */
+.cu-icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  vertical-align: middle;
+}
+.cu-icon-sm { width: 15px; height: 15px; }
+.cu-icon-lg { width: 22px; height: 22px; }
+.cu-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--brand-gradient);
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  flex-shrink: 0;
+}
+.cu-brand-mark svg { width: 21px; height: 21px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+
+/* ============================================================
+   THEME: ROYAL AMETHYST (LUXURY VIOLET / PURPLE)
+   ============================================================ */
+body[data-theme="amethyst"],
+html[data-theme="amethyst"] body {
+  --bg: #080412;
+  --bg-canvas:
+    radial-gradient(ellipse 80% 50% at 16% -10%, rgba(168, 85, 247, 0.22), transparent 60%),
+    radial-gradient(ellipse 68% 46% at 86% -6%, rgba(217, 70, 239, 0.15), transparent 58%),
+    radial-gradient(ellipse 55% 40% at 50% 108%, rgba(124, 58, 237, 0.14), transparent 62%),
+    #080412;
+  --bg-elevated: #0f0820;
+  --surface: #140c29;
+  --surface-2: #1c1238;
+  --surface-hover: #26194a;
+  --surface-glass: rgba(17, 10, 36, 0.82);
+  --card: var(--surface);
+  --card2: var(--surface-2);
+  --card-hover: var(--surface-hover);
+
+  --text: #faf6ff;
+  --text-secondary: #ddd0f5;
+  --text-muted: #a692cc;
+  --text-dim: #735f9c;
+
+  --border: rgba(192, 132, 252, 0.16);
+  --border-subtle: rgba(192, 132, 252, 0.08);
+  --border-strong: rgba(192, 132, 252, 0.32);
+  --specular: inset 0 1px 0 rgba(233, 213, 255, 0.1);
+
+  --brand: #a855f7;
+  --brand-hover: #9333ea;
+  --brand-cyan: #e879f9;
+  --brand-soft: rgba(168, 85, 247, 0.2);
+  --brand-gradient: linear-gradient(135deg, #9333ea 0%, #c026d3 52%, #6366f1 100%);
+  --primary: #9333ea;
+  --primary-hover: #7e22ce;
+  --primary-glow: rgba(168, 85, 247, 0.36);
+
+  --accent: #c084fc;
+  --accent-soft: rgba(192, 132, 252, 0.16);
+  --accent-glow: rgba(192, 132, 252, 0.32);
+
+  --focus-ring: #c084fc;
+  --shadow-sm: 0 4px 18px rgba(8, 2, 24, 0.45);
+  --shadow-md: 0 14px 36px rgba(8, 2, 24, 0.56);
+  --shadow-lg: 0 24px 60px rgba(8, 2, 24, 0.68);
+}
+
+/* ============================================================
+   THEME: ARCTIC SENTINEL (CYBER CYAN)
+   ============================================================ */
+body[data-theme="cyber-cyan"],
+html[data-theme="cyber-cyan"] body {
+  --bg: #030a12;
+  --bg-canvas:
+    radial-gradient(ellipse 78% 48% at 15% -12%, rgba(6, 182, 212, 0.18), transparent 60%),
+    radial-gradient(ellipse 65% 44% at 88% -8%, rgba(56, 189, 248, 0.14), transparent 58%),
+    #030a12;
+  --bg-elevated: #071320;
+  --surface: #0b1929;
+  --surface-2: #102338;
+  --surface-hover: #162f4a;
+  --surface-glass: rgba(7, 19, 32, 0.84);
+  --card: var(--surface);
+  --card2: var(--surface-2);
+  --card-hover: var(--surface-hover);
+
+  --border: rgba(56, 189, 248, 0.15);
+  --border-subtle: rgba(56, 189, 248, 0.07);
+  --border-strong: rgba(56, 189, 248, 0.3);
+
+  --brand: #06b6d4;
+  --brand-hover: #0891b2;
+  --brand-cyan: #22d3ee;
+  --brand-soft: rgba(6, 182, 212, 0.18);
+  --brand-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  --primary: #0891b2;
+  --primary-hover: #0e7490;
+  --primary-glow: rgba(6, 182, 212, 0.32);
+  --focus-ring: #22d3ee;
+}
+
+/* ============================================================
+   THEME: EMERALD OPS (STEALTH GREEN)
+   ============================================================ */
+body[data-theme="emerald-ops"],
+html[data-theme="emerald-ops"] body {
+  --bg: #040d0a;
+  --bg-canvas:
+    radial-gradient(ellipse 78% 48% at 18% -12%, rgba(16, 185, 129, 0.17), transparent 60%),
+    radial-gradient(ellipse 62% 42% at 86% -8%, rgba(20, 184, 166, 0.13), transparent 58%),
+    #040d0a;
+  --bg-elevated: #081712;
+  --surface: #0c1f19;
+  --surface-2: #122b23;
+  --surface-hover: #18382e;
+  --surface-glass: rgba(8, 23, 18, 0.84);
+  --card: var(--surface);
+  --card2: var(--surface-2);
+  --card-hover: var(--surface-hover);
+
+  --border: rgba(52, 211, 153, 0.15);
+  --border-subtle: rgba(52, 211, 153, 0.07);
+  --border-strong: rgba(52, 211, 153, 0.3);
+
+  --brand: #10b981;
+  --brand-hover: #059669;
+  --brand-cyan: #34d399;
+  --brand-soft: rgba(16, 185, 129, 0.18);
+  --brand-gradient: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+  --primary: #059669;
+  --primary-hover: #047857;
+  --primary-glow: rgba(16, 185, 129, 0.32);
+  --focus-ring: #34d399;
+}
+
+
+/* ============================================================
+   THEME: SOLAR GOLD (CRISP WHITE & SUNLIT YELLOW/GOLD)
+   ============================================================ */
+body[data-theme="solar-gold"],
+html[data-theme="solar-gold"] body {
+  --bg: #fffdf5;
+  --bg-canvas:
+    radial-gradient(ellipse 80% 48% at 14% -10%, rgba(250, 204, 21, 0.24), transparent 60%),
+    radial-gradient(ellipse 65% 44% at 88% -6%, rgba(245, 158, 11, 0.18), transparent 58%),
+    #fffdf5;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #fef9e7;
+  --surface-hover: #fef3c7;
+  --surface-glass: rgba(255, 253, 245, 0.88);
+  --card: var(--surface);
+  --card2: var(--surface-2);
+  --card-hover: var(--surface-hover);
+
+  --text: #1c1917;
+  --text-secondary: #44403c;
+  --text-muted: #78716c;
+  --text-dim: #a8a29e;
+
+  --border: rgba(217, 119, 6, 0.18);
+  --border-subtle: rgba(217, 119, 6, 0.1);
+  --border-strong: rgba(217, 119, 6, 0.36);
+  --specular: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+
+  --brand: #d97706;
+  --brand-hover: #b45309;
+  --brand-cyan: #f59e0b;
+  --brand-soft: rgba(245, 158, 11, 0.16);
+  --brand-gradient: linear-gradient(135deg, #f59e0b 0%, #eab308 55%, #d97706 100%);
+  --primary: #d97706;
+  --primary-hover: #b45309;
+  --primary-glow: rgba(245, 158, 11, 0.28);
+
+  --accent: #ca8a04;
+  --accent-soft: rgba(234, 179, 8, 0.16);
+  --accent-glow: rgba(234, 179, 8, 0.28);
+
+  --warn: #d97706;
+  --danger: #dc2626;
+  --focus-ring: #d97706;
+
+  --shadow-xs: 0 1px 3px rgba(120, 53, 15, 0.06);
+  --shadow-sm: 0 4px 14px rgba(120, 53, 15, 0.08);
+  --shadow-md: 0 12px 28px rgba(120, 53, 15, 0.1);
+  --shadow-lg: 0 22px 48px rgba(120, 53, 15, 0.14);
+}

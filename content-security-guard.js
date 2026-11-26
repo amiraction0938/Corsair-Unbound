@@ -287,4 +287,155 @@
       } catch {}
     }, true);
   })();
+
+  /* ============================================================
+     4. CREDENTIAL & PHISHING FORM GUARD + CLICKFIX GUARD (v1.12.0)
+     Uses isolated Shadow DOM warnings; NEVER reads input values.
+     ============================================================ */
+  const _warnedKeys = new Set();
+
+  function showSecurityOverlay({ id, severity, title, body, details, allowProceed, onProceed, onCancel }) {
+    try {
+      if (document.getElementById(id)) return;
+      const host = document.createElement('div');
+      host.id = id;
+      host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:auto;';
+      const shadow = host.attachShadow({ mode: 'closed' });
+      const accent = severity === 'critical' ? '#ef4444' : '#f59e0b';
+      shadow.innerHTML = `
+        <style>
+          .backdrop{position:fixed;inset:0;background:rgba(6,9,17,0.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;}
+          .card{max-width:480px;width:100%;background:#0f1624;color:#f1f5f9;border:1px solid ${accent};border-radius:14px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.6);}
+          .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;background:rgba(239,68,68,0.16);color:${accent};margin-bottom:10px;}
+          h2{margin:0 0 8px;font-size:18px;font-weight:700;}
+          p{margin:0 0 12px;font-size:13.5px;line-height:1.6;color:#cbd5e1;}
+          .meta{background:#090d16;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:12px;color:#fbbf24;word-break:break-word;margin-bottom:16px;}
+          .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;}
+          button{border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,0.14);background:#181f2e;color:#f1f5f9;}
+          button.primary{background:${accent};border-color:transparent;color:#fff;}
+        </style>
+        <div class="backdrop" role="alertdialog" aria-modal="true">
+          <div class="card">
+            <div class="badge">Corsair Unbound Security Warning</div>
+            <h2 id="t"></h2>
+            <p id="b"></p>
+            <div class="meta" id="d"></div>
+            <div class="actions">
+              <button type="button" id="proceedBtn" hidden>Proceed once</button>
+              <button type="button" class="primary" id="cancelBtn">Cancel &amp; Stay Safe</button>
+            </div>
+          </div>
+        </div>`;
+      shadow.getElementById('t').textContent = title;
+      shadow.getElementById('b').textContent = body;
+      shadow.getElementById('d').textContent = details;
+      const pBtn = shadow.getElementById('proceedBtn');
+      const cBtn = shadow.getElementById('cancelBtn');
+      if (allowProceed && pBtn) {
+        pBtn.hidden = false;
+        pBtn.addEventListener('click', () => { host.remove(); if (typeof onProceed === 'function') onProceed(); });
+      }
+      cBtn.addEventListener('click', () => { host.remove(); if (typeof onCancel === 'function') onCancel(); });
+      (document.documentElement || document.body).appendChild(host);
+    } catch {}
+  }
+
+  // Feature 1: Pre-submit Credential & Phishing Form Guard
+  if (typeof CorsairCredentialGuard !== 'undefined') {
+    const _proceededForms = new WeakSet();
+    document.addEventListener('submit', (e) => {
+      try {
+        const form = e.target;
+        if (!form || _proceededForms.has(form)) return;
+        const actionAttr = form.getAttribute ? (form.getAttribute('action') || location.href) : location.href;
+        const verdict = CorsairCredentialGuard.evaluateSubmission({
+          pageUrl: location.href,
+          actionUrl: actionAttr,
+          fields: form
+        });
+        if (!verdict.shouldWarn) return;
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        sendBg({
+          type: 'content-security-event',
+          kind: 'credential_phishing_warning',
+          page: String(location.href || ''),
+          host: _selfHost,
+          severity: verdict.severity === 'critical' ? 'high' : 'medium',
+          data: {
+            destinationHost: verdict.destHost,
+            categories: verdict.categories,
+            reasons: verdict.reasons,
+            risk: verdict.risk
+          }
+        });
+
+        showSecurityOverlay({
+          id: 'corsair-cred-guard-overlay',
+          severity: verdict.severity,
+          title: 'Suspicious Credential or Payment Submission Detected',
+          body: 'This form requests sensitive information (' + verdict.categories.join(', ') + ') and is sending it to a suspicious or insecure destination. Corsair Unbound did not read or store your typed values.',
+          details: 'Destination: ' + verdict.destHost + ' | Signals: ' + verdict.reasons.join(', '),
+          allowProceed: true,
+          onProceed: () => {
+            _proceededForms.add(form);
+            try { HTMLFormElement.prototype.submit.call(form); } catch {}
+          }
+        });
+      } catch {}
+    }, true);
+  }
+
+  // Feature 2: ClickFix & Fake-CAPTCHA Clipboard Guard
+  if (typeof CorsairClickFixGuard !== 'undefined') {
+    const handleClickFixCandidate = (text, source) => {
+      try {
+        const pageText = (document.body && document.body.innerText) ? document.body.innerText.slice(0, 4000) : '';
+        const res = CorsairClickFixGuard.analyze({ text, pageText, host: _selfHost, source });
+        if (!res.suspicious) return false;
+
+        const key = 'cf:' + _selfHost + ':' + res.signals.join(',');
+        if (_warnedKeys.has(key)) return res.shouldSuppress;
+        _warnedKeys.add(key);
+
+        sendBg({
+          type: 'content-security-event',
+          kind: 'clickfix_detected',
+          page: String(location.href || ''),
+          host: _selfHost,
+          severity: 'high',
+          data: { score: res.score, signals: res.signals, source, preview: res.preview }
+        });
+
+        showSecurityOverlay({
+          id: 'corsair-clickfix-overlay',
+          severity: res.severity,
+          title: 'Possible ClickFix / Fake CAPTCHA Command Attack',
+          body: 'This page attempted to place a potentially dangerous operating-system command into your clipboard. Do NOT paste it into Windows Run (Win+R) or a terminal unless you fully trust this source.',
+          details: 'Detected signals: ' + res.signals.join(', ') + ' | Preview: ' + res.preview,
+          allowProceed: false
+        });
+        return res.shouldSuppress;
+      } catch { return false; }
+    };
+
+    window.addEventListener('copy', (e) => {
+      try {
+        const cd = e.clipboardData;
+        const txt = (cd && typeof cd.getData === 'function' ? cd.getData('text/plain') : '') ||
+          (window.getSelection ? String(window.getSelection().toString() || '') : '');
+        if (txt) handleClickFixCandidate(txt, 'copy');
+      } catch {}
+    }, false);
+
+    document.addEventListener('corsair-clipboard-write', (e) => {
+      try {
+        const txt = e && e.detail ? String(e.detail) : '';
+        if (txt) handleClickFixCandidate(txt, 'clipboard-api');
+      } catch {}
+    });
+  }
+
 })();

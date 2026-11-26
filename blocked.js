@@ -1,5 +1,14 @@
 (function () {
   'use strict';
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get('theme').then((r) => {
+        if (r && ['amethyst', 'dark', 'cyber-cyan', 'emerald-ops', 'solar-gold', 'light'].includes(r.theme)) {
+          document.body.setAttribute('data-theme', r.theme);
+        }
+      }).catch(() => {});
+    }
+  } catch {}
 
   const t = (k, fb) => {
     try {

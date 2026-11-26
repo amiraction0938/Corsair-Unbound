@@ -2,77 +2,219 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Navigation Blocked — Corsair Unbound</title>
+<link rel="stylesheet" href="core/design-system.css">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     min-height: 100vh;
-    display: flex; align-items: center; justify-content: center;
-    background: #080d1a; color: #f8fafc;
-    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-canvas);
+    color: var(--text);
+    font-family: var(--font-sans);
+    padding: 28px 20px;
+    -webkit-font-smoothing: antialiased;
   }
   .card {
-    max-width: 520px; width: 100%;
-    background: #101827; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px; padding: 40px 32px; text-align: center;
+    max-width: 600px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 36px 32px 28px;
+    text-align: center;
+    box-shadow: var(--specular), var(--shadow-lg);
   }
-  .shield { font-size: 64px; margin-bottom: 16px; }
-  h1 { font-size: 22px; margin-bottom: 12px; color: #f87171; }
-  p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+  .shield {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 18px;
+    border-radius: 18px;
+    background: var(--danger-soft);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    color: var(--danger);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+  }
+  .shield svg {
+    width: 32px;
+    height: 32px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.85;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+  p {
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.65;
+    margin-bottom: 12px;
+  }
   code {
-    background: #090d16; padding: 3px 8px; border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #38bdf8;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--brand);
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+  .why {
+    text-align: start;
+    margin: 20px 0 8px;
+    padding: 16px 18px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .why h2 {
+    font-size: 13px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+    color: var(--text-secondary);
+  }
+  .why ul {
+    margin: 0 0 10px;
+    padding-inline-start: 20px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.7;
   }
   .reason {
-    background: #090d16; border-radius: 10px; padding: 12px;
-    font-family: 'JetBrains Mono', monospace; font-size: 12px;
-    color: #fbbf24; margin: 16px 0;
-    word-break: break-all;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 11px 13px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--warn);
+    margin: 10px 0;
+    word-break: break-word;
   }
-  .actions {
-    display: flex; gap: 10px; justify-content: center;
-    flex-wrap: wrap; margin-top: 12px;
+  .fp-note {
+    font-size: 12.5px;
+    margin: 8px 0 0;
+    color: var(--text-muted);
+  }
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 18px 0 10px;
   }
   button {
-    background: #2563eb; color: #fff; border: none;
-    padding: 10px 20px; border-radius: 8px;
-    font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
   }
-  button:hover { background: #1d4ed8; }
+  .choice {
+    text-align: start;
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .choice:active { transform: translateY(1px); }
+  .choice strong {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 650;
+    margin-bottom: 3px;
+  }
+  .choice small {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+  .choice.good {
+    background: var(--accent-soft);
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  .choice.good:hover { border-color: rgba(16, 185, 129, 0.65); }
+  .choice.safe {
+    background: var(--brand-soft);
+    border-color: rgba(99, 102, 241, 0.35);
+  }
+  .choice.safe:hover { border-color: rgba(99, 102, 241, 0.65); }
+  .choice.danger {
+    background: var(--danger-soft);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+  .choice.danger:hover { border-color: rgba(239, 68, 68, 0.65); }
+  .choice:disabled, button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .status {
+    margin: 12px 0 0;
+    padding: 11px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: start;
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .status.ok   { border-color: rgba(16, 185, 129, 0.45); color: var(--accent); }
+  .status.bad  { border-color: rgba(239, 68, 68, 0.45); color: var(--danger); }
+  .status.warn { border-color: rgba(245, 158, 11, 0.45); color: var(--warn); }
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
   button.secondary {
-    background: #1e293b; border: 1px solid #334155;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
   }
-  button.secondary:hover { background: #334155; }
-  .hint { font-size: 12px; color: #64748b; margin-top: 20px; }
-
-  .card { max-width: 580px; }
-  .why { text-align: start; margin: 18px 0 6px; padding: 14px 16px; background: #0b1322; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
-  .why h2 { font-size: 14px; margin-bottom: 8px; color: #e2e8f0; }
-  .why ul { margin: 0 0 8px; padding-inline-start: 20px; color: #cbd5e1; font-size: 13px; line-height: 1.7; }
-  .why .reason { margin: 10px 0; }
-  .fp-note { font-size: 12.5px; margin: 8px 0 0; color: #94a3b8; }
-  .choices { display: flex; flex-direction: column; gap: 10px; margin: 18px 0 6px; }
-  .choice { text-align: start; width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid transparent; }
-  .choice strong { display: block; font-size: 14px; margin-bottom: 3px; }
-  .choice small { display: block; font-size: 12px; font-weight: 400; line-height: 1.55; opacity: 0.85; }
-  .choice.good   { background: #0f3d2e; border-color: rgba(16,185,129,.45); }
-  .choice.good:hover   { background: #11503b; }
-  .choice.safe   { background: #12304f; border-color: rgba(56,189,248,.45); }
-  .choice.safe:hover   { background: #163e66; }
-  .choice.danger { background: #4a1620; border-color: rgba(248,113,113,.5); }
-  .choice.danger:hover { background: #5d1b28; }
-  .choice:disabled, button:disabled { opacity: .55; cursor: not-allowed; }
-  .status { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.6; text-align: start; background: #0b1322; color: #cbd5e1; border: 1px solid rgba(255,255,255,0.08); }
-  .status.ok  { border-color: rgba(16,185,129,.5); color: #34d399; }
-  .status.bad { border-color: rgba(248,113,113,.55); color: #fca5a5; }
-  .status.warn { border-color: rgba(245,158,11,.5); color: #fbbf24; }
+  button.secondary:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-subtle);
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="shield" id="shieldIcon">🛡️</div>
+  <main class="card" role="main">
+    <div class="shield" id="shieldIcon" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2L4 5v6c0 5.25 3.4 9.74 8 11 4.6-1.26 8-5.75 8-11V5l-8-3z"/>
+        <line x1="12" y1="8" x2="12" y2="12.5"/>
+        <circle cx="12" cy="16" r="0.8" fill="currentColor"/>
+      </svg>
+    </div>
     <h1 id="titleText">Navigation Blocked</h1>
     <p id="introText">
       Corsair Unbound intercepted a third-party navigation from a
@@ -105,20 +247,20 @@
         <small id="wipeHint2">Keeps it blocked, turns on Fortress, deletes its cookies and stored site data, then moves you to a new tab.</small>
       </button>
     </div>
-    <div class="status" id="statusBox" role="status" hidden></div>
+    <div class="status" id="statusBox" role="status" aria-live="polite" hidden></div>
 
     <p id="hintText">
       If you trust the destination, open the extension popup on the source site
       and add the domain to your allowlist.
     </p>
     <div class="actions">
-      <button id="escapeBtn" class="secondary">← Leave this page</button>
-      <button id="dashboardBtn" class="secondary">Open Corsair Dashboard</button>
+      <button type="button" id="escapeBtn" class="secondary">← Leave this page</button>
+      <button type="button" id="dashboardBtn" class="secondary">Open Corsair Dashboard</button>
     </div>
     <div class="hint" id="footerText">
       Protected by Corsair Unbound — local-first browser shield
     </div>
-  </div>
+  </main>
   <script src="core/i18n.js"></script>
   <script src="blocked.js"></script>
 </body>

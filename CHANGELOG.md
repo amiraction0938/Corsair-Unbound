@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] — 2026-11-25
+
+Final Engineering Audit, Security Hardening & Performance Optimization release.
+
+### Fixed
+- **Backup/Restore Theme & AI Data Completeness (`core/migration.js`):** Fixed `validateCandidate()` stripping 4 of the 6 themes (`amethyst`, `cyber-cyan`, `emerald-ops`, `solar-gold`) on import, and added full export/restore support for `advancedSecurity`, `aiSettings` (coding rules & system instructions), and `aiProviders` (with API keys excluded unless explicitly opted in).
+- **XSS Hardening (`ai-studio.js`):** Removed the remaining `innerHTML` usage in validation stage headers in favor of `document.createElement` + `textContent`.
+- **Defense-in-Depth Message Authorization (`background.js`):** Added explicit `PRIVILEGED_INTERNAL` sender capability checks on all sensitive AI provider, context-collection, generation, and preview message handlers.
+- **Popup-to-Studio Auto-Generation (`popup.js`, `ai-studio.js`, `background.js`):** Clicking **Generate** directly in the popup now forwards `autoGen=1` and begins generation immediately after binding the originating tab context.
+- **Dashboard AI Providers UI (`dashboard.html`, `dashboard.css`, `dashboard.js`):** Registered `'ai-providers'` in `VIEW_KEYS`, fixed white-on-white `Custom Global System Instructions` textarea contrast, and added curated + live-discovered Model ID dropdown auto-fill across all 19 presets.
+
+### Performance
+- **Compact AI Context Framing (`core/ai-script-generator.js`):** Reduced default website context payload size by ~80–85% (compact single-line top-12 element summary + `maxTokens: 2048`), lowering local LLM prompt token load and KV cache pressure.
+- **Cached Automatic Userscript Fallback (`core/userscripts.js`):** Added short-lived availability (5s) and enabled-record (10s) caches invalidated on every mutation/sync so `webNavigation` checks run in sub-millisecond time with zero redundant storage reads.
+
+
+## [1.13.0] — 2026-11-25
+
+AI Userscript Studio, First-Class Local & Cloud LLM Provider Management, and Automatic Userscript Execution Engine.
+
+### Fixed
+- **Automatic Userscript Execution Without Opening Popup (`core/userscripts.js`, `background.js`):**
+  - Fixed sticky failed `init()` state when Chrome's `Allow User Scripts` (Chrome 138+) or `Developer mode` (Chrome 120–137) permission is enabled after extension install/startup.
+  - Added throttled `CorsairUserScripts.ensureSynced()` reconciliation wired to `onInstalled`, `onStartup`, and top-frame `webNavigation.onBeforeNavigate` so registrations cleared by Chrome on extension updates or SW restarts are restored automatically without clicking the toolbar icon and without unregistering unrelated scripts.
+  - Added `DOMContentLoaded` fallback to `document-body` timing while preserving exact `document-start`, `document-body`, `document-end`, and `document-idle` behaviors and `@noframes`.
+  - Upgraded `checkAvailability()` with Chrome 138+ vs Chrome 120–137 setup instructions and Chrome 135+ `userScripts.execute` feature detection.
+
+### Added
+- **AI Script Studio (`ai-studio.html`, `ai-studio.css`, `ai-studio.js`, `popup.html`, `popup.js`):**
+  - Compact **AI Script Studio** entry card in the toolbar popup bound to the originating tab ID, plus a dedicated full-screen extension-owned Studio workspace.
+  - Privacy-preserving sanitized website context collector (`core/ai-script-generator.js`) that strips query/fragment params by default, never reads password/card/cookie/token/hidden-input values, and wraps page data in `<UNTRUSTED_PAGE_CONTEXT>` to resist prompt injection.
+  - CSP-safe pure-JS syntax validator & static security analyzer (`core/ai-script-validator.js`, zero `eval`/`new Function`) flagging remote script injection, obfuscation, `eval`, exfiltration, `@match *://*/*`, `@connect *`, aggressive polling, and privileged GM grants.
+  - One-time, tab-targeted **Test on This Tab** preview (`CorsairUserScripts.executePreview()`) using Chrome 135+ `chrome.userScripts.execute()` in isolated `USER_SCRIPT` world without permanently registering the script (with honest Chrome 120–134 fallback guidance).
+  - Iterative improvement with immutable version history (Undo/Redo), TypeScript-to-JavaScript type stripping, and explicit approval (**Save as Draft** / **Save & Enable** via `CorsairUserScripts.save()` / **Discard**).
+- **Multi-Provider AI Management (`core/ai-providers.js`, `core/ai-request-manager.js`, Dashboard `AI Providers & Models`):**
+  - First-class local presets: **llama.cpp** (configurable port, default `127.0.0.1:9101/v1`), **Ollama** (native `/api/chat` + `/api/tags` & OpenAI-compat), **LM Studio**, **vLLM**, **LocalAI**, **Jan**, **Text Generation WebUI**, **KoboldCpp**, and **Generic Local OpenAI-Compatible**.
+  - Cloud adapters: **OpenAI**, **Google Gemini** (native `x-goog-api-key`), **Anthropic Claude** (native `/messages`), **OpenRouter**, **DeepSeek**, **Alibaba Qwen / DashScope**, **Mistral**, **Groq**, **xAI**, and **Custom OpenAI-Compatible**.
+  - Service-worker-only execution with timeout/AbortController cancellation, SSE & NDJSON streaming, verified connection testing, optional model discovery, session-storage-first API keys, strict secret redaction, and zero silent local-to-cloud fallback.
+- **Documentation & Tests:** Added `docs/AI-SCRIPT-STUDIO.md`, updated `README.md`, `README.fa.md`, `SECURITY.md`, and added `tests/auto-execution-v13.test.js`, `tests/ai-providers-v13.test.js`, and `tests/ai-studio-v13.test.js`.
+
+
+## [1.12.0] — 2026-11-25
+
+Advanced Security Expansion adding five isolated, local-first protection layers without modifying the Userscripts subsystem.
+
+### Added
+- **Credential & Phishing Form Guard (`core/credential-guard.js`):** Multi-signal sensitive form detection (password, payment card fields, Persian banking/Shaparak labels, ARIA/placeholder cues) with destination verification (plain HTTP submission, cross-origin form actions, Iranian & global brand impersonation, IDN/punycode homographs, legitimate OAuth/Shaparak allowlist) and an isolated closed-Shadow-DOM pre-submit warning overlay. Strictly never reads, logs, or transmits field values.
+- **ClickFix & Fake-CAPTCHA Protection (`core/clickfix-guard.js`, `content-main-world.js`):** Contextual detection of malicious clipboard command chains (`powershell`, `pwsh`, `-enc`, `mshta`, `cmd.exe`, `certutil`, `bitsadmin`, `rundll32`, `regsvr32`, `iwr|iex`, `curl|sh`) combined with fake-CAPTCHA / `Win+R` page lure cues, developer-documentation dampening, and an isolated closed-Shadow-DOM warning overlay.
+- **Offline Threat Intelligence (`core/offline-intel.js`):** Local Bloom-filter (`core/bloom.js`) threat database with bundled baseline indicators compatible with URLhaus CC0 and OpenPhish community formats, URL/domain/IDN normalization, 14-day freshness tracking, SHA-256 integrity verification, and atomic update/rollback. Runs 100% offline with zero API keys.
+- **HTTPS-First Protection (`core/https-first.js`):** Chrome MV3 Declarative Net Request (`upgradeScheme`) at dedicated rule ID range `950000–959999` (rule `950001`, priority `10`, strictly below Fortress `50` and Block `100`), scoped to `main_frame` `GET` navigations and excluding `localhost`, `127.0.0.1`, `::1`, private LAN/dev domains, and user exceptions.
+- **Tracking Parameter Stripping (`core/tracking-strip.js`):** Chrome MV3 DNR `redirect.transform.queryTransform.removeParams` at dedicated rule ID range `960000–969999` (rule `960001`, priority `15`) removing 32 explicitly enumerated tracking parameters (`utm_*`, `fbclid`, `gclid`, `dclid`, `gbraid`, `wbraid`, `msclkid`, `ttclid`, `twclid`, `igshid`, `mc_cid`, `mc_eid`, `yclid`, etc.) while excluding critical auth/OAuth/payment domains (Google, Stripe, PayPal, Shaparak, etc.) and preserving signed URLs (`X-Amz-Signature`, `X-Goog-Signature`).
+- **Security Controls & Localization:** Dedicated `#advSecurityPanel` in the Dashboard Security view with per-feature toggles and offline threat-feed metadata, localized across all 8 languages (`en`, `fa`, `ar`, `es`, `de`, `fr`, `ru`, `zh`).
+- **Security Expansion Tests (`tests/security-expansion-v12.test.js`):** Unit and regression tests covering all five new layers, DNR rule-ID isolation, privacy invariants, and false-positive safeguards.
+
+### Security & Platform Notes
+- **Zero-Credential-Reading Invariant:** The Credential & Phishing Form Guard inspects only structural DOM metadata (input types, names, autocomplete tokens, labels, form action URLs) and never accesses `.value` on password, card, or OTP inputs.
+- **ClickFix Platform Boundary:** Browser extensions cannot intercept or block manual execution inside Windows `Win+R` (Run), PowerShell, or terminal applications; ClickFix protection operates strictly at the browser clipboard/copy and page-lure warning layer.
+- **Userscripts Isolation:** The entire Userscripts subsystem (`core/userscripts.js`, `core/userscript-editor.js`, UI, GM APIs, message contracts, and tests) was kept completely untouched.
+
+
+## [1.11.0] — 2026-11-25
+
+Complete UI/UX visual rebirth with a unified design system and a Tampermonkey-class Userscripts engine.
+
+### Added
+- **Unified Design System (`core/design-system.css`):** Shared semantic tokens for Obsidian dark mode, Porcelain light mode, typography, spacing, borders, elevation, accessible `:focus-visible` rings, and `prefers-reduced-motion` support across Dashboard, Toolbar Popup, and Navigation Blocked page.
+- **Cohesive SVG Iconography:** Replaced emoji-based brand, sidebar navigation, overview hero, stat card, popup, and blocked-page icons with crisp inline vector SVGs.
+- **Tampermonkey-Class Userscripts Engine (`core/userscripts.js`):**
+  - Full metadata parser supporting UTF-8 BOM, CRLF/LF/CR, localized keys (`@name:fa`), IDN/Punycode hosts, `.tld` magic TLD, regex `@include`/`@exclude`, `file://` URLs, and preserved diagnostics for unsupported/unknown directives.
+  - Complete `GM_*` and `GM.*` APIs including `GM_getTab`/`GM_saveTab`/`GM_getTabs`, cross-tab `GM_addValueChangeListener` sync via `chrome.runtime.onUserScriptConnect`, atomic `GM_setValues`/`GM_deleteValues`, full `GM_xmlhttpRequest` lifecycle, and `window.onurlchange` for SPAs.
+  - Unrestricted injection controls: `<all_urls>` host permissions, auto-grant detection when `@grant` is omitted, 1-click **▶ Run** on active tab (`executeNow`), **🌐 All sites** (`runEverywhere`), 1-click **+ Site** & **✎ Edit** in the toolbar popup, `.user.js` URL auto-intercept for 1-click install, and 12-hour scheduled background updates (`checkAllUpdates`) that protect local edits.
+- **Dedicated Local Code Editor (`core/userscript-editor.js`):** Zero-CDN, CSP-safe JavaScript & `==UserScript==` syntax highlighting, Find & Replace (case/regex), smart indentation, `Ctrl+/` commenting, metadata directive inserter, template generator, live advisory diagnostics, and an inline **GM Storage Inspector**.
+- **Compatibility Documentation (`docs/USERSCRIPTS-COMPATIBILITY.md`):** Full Tampermonkey API & Chrome MV3 compatibility matrix.
+
+### Changed
+- **Dashboard, Toolbar Popup, and Blocked Page:** Redesigned surfaces, typography, button states, and logical RTL spacing while preserving all 8 languages, existing DOM contracts, and dark/light theme synchronization (including theme sync on `blocked.html`).
+- **Backup/Restore:** Preserves per-script `runEverywhere` settings across export/restore round trips.
+
+### Fixed
+- **Userscript Header/Preamble SyntaxErrors (e.g. RedGIFs line-offset `Unexpected identifier`):** Added `sanitizeExecutableCode()` to neutralize uncommented preamble/header lines through `// ==/UserScript==` while preserving exact 1-to-1 line numbering.
+- **MV3 CSP Safety:** Replaced dynamic code evaluation in validation with a pure-JS lexical checker so Service Worker and Dashboard CSP (`script-src 'self'`) never trigger `EvalError`.
+
 ## [1.10.3] — 2026-11-18
 
 ### Fixed

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Corsair Unbound — AI Script Studio</title>
+  <link rel="stylesheet" href="core/design-system.css">
+  <link rel="stylesheet" href="ai-studio.css">
+</head>
+<body>
+  <div class="studio-shell">
+    <header class="studio-header">
+      <div class="studio-brand">
+        <span class="cu-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 2L4 5v6c0 5.25 3.4 9.74 8 11 4.6-1.26 8-5.75 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        </span>
+        <div>
+          <h1 data-i18n="ai.studioTitle">AI Script Studio</h1>
+          <p class="studio-sub" id="originBanner">Originating tab: detecting…</p>
+        </div>
+      </div>
+      <div class="studio-header-actions">
+        <span id="providerLocalityBadge" class="locality-badge local">LOCAL</span>
+        <button id="openProvidersBtn" class="btn-secondary" data-i18n="ai.manageProviders">AI Providers &amp; Rules</button>
+        <button id="openDashboardBtn" class="btn-secondary" data-i18n="popup.dashboardShort">Dashboard</button>
+      </div>
+    </header>
+
+    <div id="cloudPrivacyBanner" class="privacy-banner" hidden>
+      <strong>Cloud Provider Selected:</strong> Your prompt and any enabled website context will be sent to <span id="cloudProviderHost"></span>. Passwords, card numbers, cookies, and hidden inputs are never collected.
+    </div>
+
+    <div id="availabilityBanner" class="warn-banner" hidden></div>
+
+    <main class="studio-grid">
+      <!-- LEFT COLUMN: Prompt, Context & Provider -->
+      <section class="studio-pane prompt-pane">
+        <div class="pane-card">
+          <div class="pane-title-row">
+            <h2 data-i18n="ai.providerModel">Provider &amp; Model</h2>
+            <span id="genLatency" class="muted"></span>
+          </div>
+          <div class="field-row">
+            <label for="studioProvider" data-i18n="ai.provider">Provider</label>
+            <select id="studioProvider"></select>
+          </div>
+          <div class="field-row">
+            <label for="studioModel" data-i18n="ai.model">Model</label>
+            <input id="studioModel" type="text" placeholder="e.g. qwen2.5-coder:7b">
+          </div>
+          <div class="field-row">
+            <label for="studioTemplate" data-i18n="ai.template">Prompt Template</label>
+            <select id="studioTemplate"></select>
+          </div>
+          <div class="field-row">
+            <label for="studioScope" data-i18n="ai.scope">Default @match Scope</label>
+            <select id="studioScope">
+              <option value="exact-origin">Current site origin only (recommended)</option>
+              <option value="exact-path">Current page path</option>
+              <option value="domain-subdomains">Domain &amp; subdomains</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <div class="pane-title-row">
+            <h2 data-i18n="ai.websiteContext">Website Context</h2>
+            <button id="refreshContextBtn" class="btn-mini">Refresh</button>
+          </div>
+          <label class="check-row">
+            <input type="checkbox" id="includeContextChk" checked>
+            <span data-i18n="ai.includeContext">Include sanitized page structure</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="includeQueryChk">
+            <span data-i18n="ai.includeQuery">Include URL query parameters (opt-in)</span>
+          </label>
+          <pre id="contextPreview" class="context-preview">No website context loaded yet.</pre>
+        </div>
+
+        <div class="pane-card">
+          <h2 data-i18n="ai.requestPrompt">Describe Your Userscript</h2>
+          <textarea id="studioPrompt" rows="5" placeholder="e.g. Improve the video player with keyboard shortcuts, playback speed memory, and a clean settings overlay."></textarea>
+          <div class="btn-row">
+            <button id="generateBtn" class="btn-primary" data-i18n="ai.generate">Generate Script</button>
+            <button id="iterateBtn" class="btn-secondary" data-i18n="ai.iterate" disabled>Improve / Fix Current</button>
+            <button id="cancelBtn" class="btn-danger" hidden>Cancel</button>
+          </div>
+          <div id="genStatus" class="status-line"></div>
+        </div>
+      </section>
+
+      <!-- CENTER COLUMN: Code Editor & Version History -->
+      <section class="studio-pane editor-pane">
+        <div class="pane-card editor-card">
+          <div class="pane-title-row">
+            <h2 data-i18n="ai.generatedCode">Generated Userscript</h2>
+            <div class="btn-row-inline">
+              <button id="undoVerBtn" class="btn-mini" disabled>↶ Undo</button>
+              <button id="redoVerBtn" class="btn-mini" disabled>↷ Redo</button>
+              <span id="versionBadge" class="muted">v0</span>
+              <button id="revalidateBtn" class="btn-mini">Validate</button>
+            </div>
+          </div>
+          <textarea id="codeEditor" class="code-area" spellcheck="false" placeholder="// Generated userscript will appear here for your review and edits…"></textarea>
+        </div>
+
+        <div class="pane-card approval-card">
+          <div class="approval-info">
+            <strong data-i18n="ai.explicitApproval">Explicit User Approval Required</strong>
+            <p class="muted" data-i18n="ai.approvalNote">Generated scripts are never registered automatically. Review permissions and test before saving.</p>
+          </div>
+          <div class="btn-row">
+            <button id="saveDraftBtn" class="btn-secondary" disabled data-i18n="ai.saveDraft">Save as Draft</button>
+            <button id="saveEnableBtn" class="btn-primary" disabled data-i18n="ai.saveEnable">Save &amp; Enable</button>
+            <button id="discardBtn" class="btn-danger" disabled data-i18n="ai.discard">Discard</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: Validation, Permissions & Test on Tab -->
+      <section class="studio-pane review-pane">
+        <div class="pane-card">
+          <h2 data-i18n="ai.validationStages">Validation &amp; Security Review</h2>
+          <div id="validationStages" class="stages-list">
+            <p class="muted">Generate or paste a userscript to run CSP-safe syntax, metadata, and static security checks.</p>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h2 data-i18n="ai.permissions">Permissions &amp; Scope</h2>
+          <div id="permissionsBox" class="perm-box">
+            <p class="muted">—</p>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h2 data-i18n="ai.liveTest">Test on Originating Tab</h2>
+          <p class="muted test-warn">One-time, non-registered preview on the originating tab only. Never runs on other tabs. Defaults to isolated <code>USER_SCRIPT</code> world.</p>
+          <div class="field-row">
+            <label for="testWorldSelect">Execution World</label>
+            <select id="testWorldSelect">
+              <option value="USER_SCRIPT">USER_SCRIPT (isolated — recommended)</option>
+              <option value="MAIN">MAIN (page world — use only if required)</option>
+            </select>
+          </div>
+          <div class="btn-row">
+            <button id="testOnTabBtn" class="btn-primary" disabled data-i18n="ai.testOnTab">Test on This Tab</button>
+            <button id="sendErrorToAiBtn" class="btn-secondary" hidden>Send Error to AI</button>
+          </div>
+          <pre id="testOutput" class="test-output">Not yet executed.</pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="core/i18n.js"></script>
+  <script src="ai-studio.js"></script>
+</body>
+</html>

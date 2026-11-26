@@ -34,7 +34,7 @@ const CorsairMigration = (() => {
   const prefTheme = String(rawPrefs.theme || '').slice(0, 20);
   const prefLang  = String(rawPrefs.language || '').slice(0, 8);
   candidate.preferences = {
-    theme: (prefTheme === 'light' || prefTheme === 'dark') ? prefTheme : null,
+    theme: ['amethyst', 'dark', 'cyber-cyan', 'emerald-ops', 'solar-gold', 'light'].includes(prefTheme) ? prefTheme : null,
     language: /^[a-z]{2}$/.test(prefLang) ? prefLang : null,
     tourCompleted: rawPrefs.tourCompleted === true,
     onboardingCompletedV1: rawPrefs.onboardingCompletedV1 === true
@@ -139,6 +139,13 @@ const CorsairMigration = (() => {
       for (const name of ['virustotal', 'urlhaus']) {
         const v = candidate.apiKeys[name];
         if (typeof v === 'string' && /^[\x21-\x7E]{8,256}$/.test(v.trim())) cleanKeys[name] = v.trim();
+      }
+      if (candidate.apiKeys.aiProviderKeys && typeof candidate.apiKeys.aiProviderKeys === 'object' && !Array.isArray(candidate.apiKeys.aiProviderKeys)) {
+        const cleanAiKeys = {};
+        for (const [pid, v] of Object.entries(candidate.apiKeys.aiProviderKeys)) {
+          if (typeof v === 'string' && v.trim().length >= 4 && v.trim().length <= 512) cleanAiKeys[String(pid)] = v.trim();
+        }
+        if (Object.keys(cleanAiKeys).length) cleanKeys.aiProviderKeys = cleanAiKeys;
       }
     }
     candidate.apiKeys = cleanKeys;
@@ -390,6 +397,35 @@ const CorsairMigration = (() => {
         restored.push('urlhaus');
       }
     } catch (e) { out.apiKeyError = (e && e.message) || 'api-key-restore-failed'; }
+    try {
+      const localUpdates = {};
+      if (candidate.advancedSecurity && typeof candidate.advancedSecurity === 'object' && !Array.isArray(candidate.advancedSecurity)) {
+        localUpdates.corsairAdvancedSecurity = candidate.advancedSecurity;
+        out.importedAdvancedSecurity = true;
+      }
+      if (candidate.aiSettings && typeof candidate.aiSettings === 'object' && !Array.isArray(candidate.aiSettings)) {
+        localUpdates['cai:settings'] = candidate.aiSettings;
+        out.importedAiSettings = true;
+      }
+      if (candidate.aiProviders && typeof candidate.aiProviders === 'object' && Array.isArray(candidate.aiProviders.profiles)) {
+        localUpdates['cai:profiles'] = candidate.aiProviders.profiles;
+        if (typeof candidate.aiProviders.defaultProfileId === 'string') {
+          localUpdates['cai:defaultProfileId'] = candidate.aiProviders.defaultProfileId;
+        }
+        out.importedAiProviders = candidate.aiProviders.profiles.length;
+      }
+      if (Object.keys(localUpdates).length) {
+        await chrome.storage.local.set(localUpdates);
+      }
+      if (keys.aiProviderKeys && typeof CorsairAIProviders !== 'undefined') {
+        for (const [pid, k] of Object.entries(keys.aiProviderKeys)) {
+          const prof = (candidate.aiProviders?.profiles || []).find(x => x.id === pid);
+          await CorsairAIProviders.setApiKey(pid, k, prof?.keyPersistence || 'session');
+        }
+        restored.push('aiProviders');
+      }
+    } catch {}
+
     if (restored.length) out.importedApiKeys = restored;
 
     return out;
@@ -433,7 +469,7 @@ const CorsairMigration = (() => {
         'theme', 'language', 'tourCompleted', 'onboardingCompletedV1'
       ]);
       prefs = {
-        theme: (raw.theme === 'light' || raw.theme === 'dark') ? raw.theme : null,
+        theme: ['amethyst', 'dark', 'cyber-cyan', 'emerald-ops', 'solar-gold', 'light'].includes(raw.theme) ? raw.theme : null,
         language: typeof raw.language === 'string' && /^[a-z]{2}$/.test(raw.language) ? raw.language : null,
         tourCompleted: raw.tourCompleted === true,
         onboardingCompletedV1: raw.onboardingCompletedV1 === true
@@ -462,6 +498,35 @@ const CorsairMigration = (() => {
     let userscripts = { version: 1, scripts: [], values: {} };
     try {
       if (typeof CorsairUserScripts !== 'undefined') userscripts = await CorsairUserScripts.exportForBackup();
+    } catch {}
+
+    let advancedSecurity = null;
+    let aiSettings = null;
+    let aiProviders = null;
+    try {
+      const extraRaw = await chrome.storage.local.get(['corsairAdvancedSecurity', 'cai:settings', 'cai:profiles', 'cai:defaultProfileId']);
+      if (extraRaw.corsairAdvancedSecurity && typeof extraRaw.corsairAdvancedSecurity === 'object') {
+        advancedSecurity = extraRaw.corsairAdvancedSecurity;
+      }
+      if (extraRaw['cai:settings'] && typeof extraRaw['cai:settings'] === 'object') {
+        aiSettings = extraRaw['cai:settings'];
+      }
+      if (Array.isArray(extraRaw['cai:profiles'])) {
+        aiProviders = {
+          profiles: extraRaw['cai:profiles'].map(({ apiKey, hasKey, keyStorage, isDefault, ...rest }) => rest),
+          defaultProfileId: typeof extraRaw['cai:defaultProfileId'] === 'string' ? extraRaw['cai:defaultProfileId'] : ''
+        };
+      }
+      if (includeSecrets && typeof CorsairAIProviders !== 'undefined' && aiProviders && aiProviders.profiles.length) {
+        const aiKeys = {};
+        for (const p of aiProviders.profiles) {
+          try {
+            const k = await CorsairAIProviders.getApiKey(p.id);
+            if (k) aiKeys[p.id] = k;
+          } catch {}
+        }
+        if (Object.keys(aiKeys).length) apiKeys.aiProviderKeys = aiKeys;
+      }
     } catch {}
 
     // Build a human-readable summary so the user knows exactly what
@@ -506,6 +571,9 @@ const CorsairMigration = (() => {
       chains,
       customDomainScripts,
       userscripts,
+      advancedSecurity,
+      aiSettings,
+      aiProviders,
       apiKeys,
       userTrustedDomains,
       userBlockedDomains,

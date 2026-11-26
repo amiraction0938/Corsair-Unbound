@@ -145,3 +145,20 @@ Use GitHub private security reporting features when available. Include the affec
 The repository includes static security-audit tooling and CI checks.
 
 A passing static audit does not prove that the extension is vulnerability-free. It is a guardrail against common repository mistakes, not a substitute for a full security assessment.
+
+## Advanced Security Expansion (1.12.0)
+
+Version 1.12.0 introduces five isolated, local-first security modules without altering the existing Userscripts subsystem or adding new manifest permissions:
+
+1. **Credential & Phishing Form Guard (`core/credential-guard.js`):** Inspects only form structure (`input[type]`, `name`, `id`, `autocomplete`, ARIA/label text, and `form.action` destination) to warn before submitting sensitive forms over HTTP, to unexpected cross-origin endpoints, or on impersonated brand/IDN domains. It **never** reads, stores, logs, or transmits credential or payment field values.
+2. **ClickFix & Fake-CAPTCHA Guard (`core/clickfix-guard.js`):** Detects high-risk shell command chains written to or copied into the clipboard in the presence of fake-CAPTCHA / `Win+R` social-engineering cues, with dampening on legitimate developer documentation domains. *Known limit:* Chrome extensions cannot intercept or block manual execution inside OS dialogs (`Win+R`, PowerShell, or terminal); this guard warns at the browser clipboard/copy layer.
+3. **Offline Threat Intelligence (`core/offline-intel.js`):** Uses a local Bloom filter (`core/bloom.js`) with bundled baseline indicators, URL/domain/IDN normalization, 14-day staleness tracking, SHA-256 integrity checks, and atomic rollback on corruption. Operates 100% offline with zero external API keys.
+4. **HTTPS-First Protection (`core/https-first.js`):** Uses MV3 DNR `upgradeScheme` in dedicated rule ID range `950000–959999` (rule `950001`, priority `10`, below Fortress `50` and Block `100`), limited to `main_frame` `GET` requests, excluding loopback (`localhost`, `127.0.0.1`, `::1`), local/LAN hosts, and user exceptions.
+5. **Tracking Parameter Stripping (`core/tracking-strip.js`):** Uses MV3 DNR `queryTransform.removeParams` in dedicated rule ID range `960000–969999` (rule `960001`, priority `15`) for 32 explicitly listed tracking parameters while excluding authentication, OAuth, and payment gateways and preserving signed URL parameters.
+
+## AI Script Studio & Provider Security (1.13.0)
+
+- **Trusted Service Worker Execution:** All AI provider requests execute exclusively inside the extension's background service worker under `PRIVILEGED_INTERNAL` messaging; webpage scripts and userscripts can never invoke AI endpoints or read API keys.
+- **Credential Storage:** API keys default to `chrome.storage.session` (cleared on browser exit). Opt-in persistent storage uses app-level encoding in `chrome.storage.local` and is explicitly disclosed as not hardware-vault encryption. Secrets are redacted from all error strings.
+- **Zero Silent Local-to-Cloud Fallback:** If a local LLM server fails, requests never automatically fail over to a cloud provider.
+- **Untrusted Website Context & Code:** Page context strips query/fragment parameters by default, excludes password/card/token/cookie/hidden-input values, and is delimited as `<UNTRUSTED_PAGE_CONTEXT>`. AI-generated code is validated via CSP-safe static analysis without `eval`/`new Function`, previewed one-time in isolated `USER_SCRIPT` world (Chrome 135+), and never registered without explicit user approval.

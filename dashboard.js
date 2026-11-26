@@ -126,6 +126,7 @@ const VIEW_KEYS = {
   security: 'view.security',
   privacy: 'view.privacy',
   scripts: 'view.scripts',
+  'ai-providers': 'ai.navProviders',
   api: 'view.api',
   settings: 'view.settings',
   about: 'view.about'
@@ -133,6 +134,7 @@ const VIEW_KEYS = {
 
 function getViewTitle(viewName) {
   if (viewName === 'scripts') return tx('Userscripts', 'اسکریپت‌ها');
+  if (viewName === 'ai-providers') return t('ai.providersTitle', tx('AI Providers & Models', 'مدیریت ارائه‌دهندگان و مدل‌های AI'));
   const key = VIEW_KEYS[viewName];
   const fb = viewName.charAt(0).toUpperCase() + viewName.slice(1);
   return key ? t(key, fb) : fb;
@@ -172,6 +174,13 @@ function initNavigation() {
   $$('[data-navigate]').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.navigate));
   });
+
+  const applyHashView = () => {
+    const h = (location.hash || '').replace(/^#/, '');
+    if (h && VIEW_KEYS[h]) switchView(h);
+  };
+  applyHashView();
+  window.addEventListener('hashchange', applyHashView);
 
   safeOn('sidebarToggle', 'click', () => {
     const sidebar = $('sidebar');
@@ -214,10 +223,17 @@ function animateNumber(el, target, duration = 600) {
 /* ============================================================
    THEME
    ============================================================ */
+const VALID_THEMES = ['amethyst', 'dark', 'cyber-cyan', 'emerald-ops', 'solar-gold', 'light'];
+
 function applyTheme(theme) {
-  document.body.dataset.theme = theme === 'light' ? 'light' : 'dark';
-  const btn = $('theme');
-  if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀';
+  const t = VALID_THEMES.includes(theme) ? theme : 'dark';
+  document.body.dataset.theme = t;
+  const menu = $('themeMenu');
+  if (menu) {
+    menu.querySelectorAll('.theme-opt').forEach(el => {
+      el.classList.toggle('active', el.dataset.themeId === t);
+    });
+  }
 }
 
 async function initTheme() {
@@ -227,11 +243,26 @@ async function initTheme() {
   } catch { applyTheme('dark'); }
 }
 
-safeOn('theme', 'click', async () => {
-  const current = (await chrome.storage.local.get('theme')).theme || 'dark';
-  const next = current === 'light' ? 'dark' : 'light';
+safeOn('theme', 'click', (e) => {
+  e.stopPropagation();
+  const menu = $('themeMenu');
+  if (menu) menu.hidden = !menu.hidden;
+});
+
+safeOn('themeMenu', 'click', async (e) => {
+  const btn = e.target.closest('.theme-opt');
+  if (!btn) return;
+  const next = btn.dataset.themeId || 'dark';
   await chrome.storage.local.set({ theme: next });
   applyTheme(next);
+  const menu = $('themeMenu');
+  if (menu) menu.hidden = true;
+});
+
+document.addEventListener('click', (e) => {
+  const menu = $('themeMenu');
+  const sel = $('themeSelector');
+  if (menu && !menu.hidden && sel && !sel.contains(e.target)) menu.hidden = true;
 });
 
 /* ============================================================
@@ -275,6 +306,7 @@ function buildLangMenu() {
       updateCurrentLangDisplay();
       menu.classList.remove('open');
       renderCustomScripts();
+      renderOverviewDefenseMatrix();
       renderSafeDomains();
       renderTrustedList();
       renderBlockedList();
@@ -899,6 +931,32 @@ function renderCustomScripts() {
   const total = state.customScripts.length;
   const countEl = $('scriptCount');
 
+  // Populate domain filter dropdown if present
+  const domainSel = $('scriptDomainFilter');
+  if (domainSel) {
+    const prevVal = state.scriptDomainFilter || domainSel.value || '';
+    const domSet = new Set();
+    for (const s of state.customScripts) {
+      for (const d of usTargetDomains(s.matches)) {
+        if (d.kind === 'domain') domSet.add(d.label);
+      }
+    }
+    const domList = Array.from(domSet).sort((a, b) => a.localeCompare(b));
+    domainSel.textContent = '';
+    const optAll = document.createElement('option');
+    optAll.value = '';
+    optAll.textContent = tx('All domains', 'همه‌ی دامنه‌ها');
+    domainSel.appendChild(optAll);
+    for (const d of domList) {
+      const o = document.createElement('option');
+      o.value = d;
+      o.textContent = d;
+      domainSel.appendChild(o);
+    }
+    domainSel.value = domList.includes(prevVal) ? prevVal : '';
+    state.scriptDomainFilter = domainSel.value;
+  }
+
   if (!total) {
     if (countEl) countEl.textContent = '';
     box.innerHTML = `<div class="empty">${tx('No userscripts yet. Click "New script" or import one from a URL or file.', 'هنوز اسکریپتی نیست. روی «اسکریپت جدید» بزنید یا یکی را از لینک یا فایل وارد کنید.')}</div>`;
@@ -906,14 +964,34 @@ function renderCustomScripts() {
   }
 
   const q = (state.scriptQuery || '').trim().toLowerCase();
-  const sorted = [...state.customScripts].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
+  const domFilter = (state.scriptDomainFilter || '').trim().toLowerCase();
+  const statusFilter = state.scriptStatusFilter || 'all';
+  const sortBy = state.scriptSort || 'name';
+
+  const sorted = [...state.customScripts].sort((a, b) => {
+    if (sortBy === 'updated') return (b.updatedAt || 0) - (a.updatedAt || 0);
+    if (sortBy === 'lines') return (b.lines || 0) - (a.lines || 0);
+    if (sortBy === 'status') {
+      const ae = a.enabled !== false ? 1 : 0;
+      const be = b.enabled !== false ? 1 : 0;
+      if (ae !== be) return be - ae;
+    }
+    return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
+  });
+
   const visible = sorted.filter(item => {
+    if (statusFilter === 'enabled' && item.enabled === false) return false;
+    if (statusFilter === 'disabled' && item.enabled !== false) return false;
+    if (statusFilter === 'errors' && !item.lastError) return false;
+    const doms = usTargetDomains(item.matches).map(d => d.label.toLowerCase());
+    if (domFilter && !doms.includes(domFilter)) return false;
     if (!q) return true;
-    const hay = [item.name, item.description, ...usTargetDomains(item.matches).map(d => d.label)].join(' ').toLowerCase();
+    const hay = [item.name, item.description, item.author, ...(item.tags || []), ...doms].filter(Boolean).join(' ').toLowerCase();
     return hay.includes(q);
   });
 
-  if (countEl) countEl.textContent = q ? `${visible.length} / ${total}` : tx(`${total} script${total === 1 ? '' : 's'}`, `${total} اسکریپت`);
+  const isFiltered = Boolean(q || domFilter || (statusFilter && statusFilter !== 'all'));
+  if (countEl) countEl.textContent = isFiltered ? `${visible.length} / ${total}` : tx(`${total} script${total === 1 ? '' : 's'}`, `${total} اسکریپت`);
 
   if (!visible.length) {
     box.innerHTML = `<div class="empty">${tx('No scripts match your search.', 'هیچ اسکریپتی با جستجوی شما مطابقت ندارد.')}</div>`;
@@ -925,7 +1003,7 @@ function renderCustomScripts() {
   for (const item of visible) {
     const enabled = item.enabled !== false;
     const row = document.createElement('div');
-    row.className = 'script-item' + (enabled ? '' : ' disabled');
+    row.className = 'script-item' + (enabled ? '' : ' disabled') + (item.lastError ? ' has-error' : '');
     row.dataset.id = item.id;
     if (state.highlightScriptId && state.highlightScriptId === item.id) flashEl = row;
 
@@ -937,17 +1015,56 @@ function renderCustomScripts() {
     const title = document.createElement('div');
     title.className = 'script-host';
     title.textContent = item.name + (item.version ? '  v' + item.version : '');
+
     const meta = document.createElement('div');
     meta.className = 'script-meta';
     const world = item.world === 'MAIN' ? tx('page', 'حالت صفحه') : tx('sandbox', 'حالت ایزوله');
     meta.textContent = [
       item.description || '',
+      item.author ? tx('by ', 'توسط ') + item.author : '',
       tx(`${item.lines} lines`, `${item.lines} خط`),
       item.runAt,
       world,
       item.sourceUrl ? tx('from URL', 'از لینک') : (item.migratedFrom ? tx('migrated', 'منتقل‌شده') : tx('local', 'محلی'))
     ].filter(Boolean).join(' • ');
     left.append(title, meta);
+
+    // Permissions & dependencies pills
+    const grants = Array.isArray(item.grant) ? item.grant.filter(g => g.toLowerCase() !== 'none') : [];
+    const reqCount = Array.isArray(item.require) ? item.require.length : 0;
+    const resCount = Array.isArray(item.resource) ? item.resource.length : 0;
+    if (grants.length || reqCount || resCount) {
+      const pills = document.createElement('div');
+      pills.className = 'script-pills';
+      grants.slice(0, 4).forEach(g => {
+        const p = document.createElement('span');
+        p.className = 'script-pill grant';
+        p.textContent = g;
+        pills.appendChild(p);
+      });
+      if (grants.length > 4) {
+        const more = document.createElement('span');
+        more.className = 'script-pill grant';
+        more.textContent = '+' + (grants.length - 4);
+        more.title = grants.slice(4).join(', ');
+        pills.appendChild(more);
+      }
+      if (reqCount) {
+        const p = document.createElement('span');
+        p.className = 'script-pill dep';
+        p.textContent = `@require ×${reqCount}`;
+        p.title = item.require.join('\n');
+        pills.appendChild(p);
+      }
+      if (resCount) {
+        const p = document.createElement('span');
+        p.className = 'script-pill dep';
+        p.textContent = `@resource ×${resCount}`;
+        p.title = item.resource.map(r => r.name + ' → ' + r.url).join('\n');
+        pills.appendChild(p);
+      }
+      left.appendChild(pills);
+    }
 
     if (item.noMatch) {
       const warn = document.createElement('div');
@@ -958,7 +1075,7 @@ function renderCustomScripts() {
     if (item.lastError) {
       const warn = document.createElement('div');
       warn.className = 'script-warn';
-      warn.textContent = tx('Registration error: ', 'خطای ثبت: ') + item.lastError;
+      warn.textContent = tx('Error: ', 'خطا: ') + item.lastError;
       left.appendChild(warn);
     }
 
@@ -987,11 +1104,106 @@ function renderCustomScripts() {
 
     const editBtn = document.createElement('button');
     editBtn.className = 'btn-script-edit';
+    editBtn.type = 'button';
     editBtn.textContent = t('scripts.edit', 'Edit');
     editBtn.addEventListener('click', () => openEditor(item.id));
 
+    const runBtn = document.createElement('button');
+    runBtn.className = 'btn-script-action';
+    runBtn.type = 'button';
+    runBtn.textContent = tx('▶ Run', '▶ اجرا');
+    runBtn.title = tx('Inject and run immediately on active tab', 'تزریق و اجرای فوری روی تب فعال');
+    runBtn.addEventListener('click', async () => {
+      const res = await send({ type: 'us-run-now', id: item.id });
+      if (res?.ok) showToast(tx(`Injected "${item.name}" into active tab`, `«${item.name}» روی تب فعال تزریق شد`));
+      else showToast(res?.error || tx('Could not inject on active tab', 'تزریق روی تب فعال ممکن نشد'), 'error');
+    });
+
+    const everyBtn = document.createElement('button');
+    everyBtn.className = 'btn-script-action' + (item.runEverywhere ? ' active' : '');
+    everyBtn.type = 'button';
+    everyBtn.textContent = item.runEverywhere ? tx('🌐 All sites: ON', '🌐 همه سایت‌ها: روشن') : tx('🌐 All sites', '🌐 همه سایت‌ها');
+    everyBtn.title = tx('Inject this script on every site (<all_urls>)', 'تزریق این اسکریپت روی همه‌ی سایت‌ها');
+    everyBtn.addEventListener('click', async () => {
+      const next = !item.runEverywhere;
+      const res = await send({ type: 'us-set-everywhere', id: item.id, enabled: next });
+      if (res?.ok) {
+        item.runEverywhere = next;
+        showToast(next ? tx(`"${item.name}" now runs on all sites`, `«${item.name}» روی همه سایت‌ها فعال شد`) : tx(`"${item.name}" restored to header rules`, `«${item.name}» به قوانین هدر برگشت`));
+        await refresh();
+      } else {
+        showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
+      }
+    });
+
+        const dupBtn = document.createElement('button');
+    dupBtn.className = 'btn-script-action';
+    dupBtn.type = 'button';
+    dupBtn.textContent = tx('Duplicate', 'کپی');
+    dupBtn.title = tx('Duplicate script', 'ایجاد کپی از اسکریپت');
+    dupBtn.addEventListener('click', async () => {
+      const res = await send({ type: 'us-duplicate', id: item.id });
+      if (res?.ok) { showToast(tx(`Duplicated ${item.name}`, `کپی از ${item.name} ساخته شد`)); await refresh(); }
+      else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
+    });
+
+    const expBtn = document.createElement('button');
+    expBtn.className = 'btn-script-action';
+    expBtn.type = 'button';
+    expBtn.textContent = tx('Export', 'خروجی');
+    expBtn.title = tx('Download .user.js', 'دانلود فایل .user.js');
+    expBtn.addEventListener('click', async () => {
+      const res = await send({ type: 'us-get', id: item.id });
+      if (!res?.ok || !res.script) { showToast(tx('Export failed', 'خروجی ناموفق بود'), 'error'); return; }
+      const fname = String(res.script.name || 'script').replace(/[^a-z0-9._-]+/gi, '_') + '.user.js';
+      const blob = new Blob([res.script.code || ''], { type: 'text/javascript;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    actions.append(toggleLabel, runBtn, everyBtn, editBtn, dupBtn, expBtn);
+
+    if ((item.require && item.require.length) || (item.resource && item.resource.length)) {
+      const depBtn = document.createElement('button');
+      depBtn.className = 'btn-script-action';
+      depBtn.type = 'button';
+      depBtn.textContent = tx('Refresh deps', 'بروزرسانی وابستگی');
+      depBtn.title = tx('Re-download @require & @resource cache', 'دانلود مجدد @require و @resource');
+      depBtn.addEventListener('click', async () => {
+        const res = await send({ type: 'us-refresh-deps', id: item.id });
+        if (res?.ok) { showToast(tx(`Refreshed dependencies for ${item.name}`, `وابستگی‌های ${item.name} بروزرسانی شد`)); await refresh(); }
+        else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
+      });
+      actions.appendChild(depBtn);
+    }
+
+        if (item.updateURL || item.downloadURL || item.sourceUrl) {
+      const updBtn = document.createElement('button');
+      updBtn.className = 'btn-script-action';
+      updBtn.type = 'button';
+      updBtn.textContent = tx('Update', 'بروزرسانی');
+      updBtn.title = tx('Check remote update', 'بررسی نسخه جدید');
+      updBtn.addEventListener('click', async () => {
+        let res = await send({ type: 'us-update-remote', id: item.id, force: false });
+        if (res && !res.ok && res.error === 'local-modifications') {
+          if (!confirm(tx('This script has local edits. Overwrite with remote version?', 'این اسکریپت ویرایش محلی دارد. با نسخه جدید جایگزین شود؟'))) return;
+          res = await send({ type: 'us-update-remote', id: item.id, force: true });
+        }
+        if (res?.ok) {
+          showToast(res.updated ? tx(`Updated ${item.name}`, `${item.name} بروزرسانی شد`) : tx('Already up to date', 'اسکریپت به‌روز است'));
+          await refresh();
+        } else {
+          showToast(res?.error || tx('Update failed', 'بروزرسانی ناموفق بود'), 'error');
+        }
+      });
+      actions.appendChild(updBtn);
+    }
+
     const delBtn = document.createElement('button');
     delBtn.className = 'btn-script-remove';
+    delBtn.type = 'button';
     delBtn.textContent = t('scripts.remove', 'Remove');
     delBtn.addEventListener('click', async () => {
       if (!confirm(t('scripts.confirmRemove', 'Remove this script? This cannot be undone.'))) return;
@@ -1000,7 +1212,7 @@ function renderCustomScripts() {
       else showToast(res?.error || tx('Failed', 'ناموفق'), 'error');
     });
 
-    actions.append(toggleLabel, editBtn, delBtn);
+    actions.appendChild(delBtn);
 
     const side = document.createElement('div');
     side.className = 'script-side';
@@ -1028,7 +1240,6 @@ function renderCustomScripts() {
     setTimeout(() => { try { flashEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch {} }, 30);
   }
 }
-
 function reportSaveResult(res, fallbackName) {
   if (!res?.ok) { showToast(res?.error || tx('Failed to save', 'ذخیره ناموفق بود'), 'error'); return false; }
   const name = res.script?.name || fallbackName || 'script';
@@ -1067,8 +1278,173 @@ async function importUserscriptFiles(files) {
 }
 
 /* ============================================================
-   CODE EDITOR
+   CODE EDITOR (Syntax Highlighted + Find/Replace + Live Validator)
    ============================================================ */
+let _editorValidateTimer = null;
+let _editorErrorLine = null;
+let _editorFindMatches = [];
+let _editorFindIndex = -1;
+
+function syncEditorHighlight() {
+  const ta = $('editorCode');
+  const codeEl = $('editorHighlightCode');
+  const pre = $('editorHighlight');
+  if (!ta || !codeEl) return;
+  if (window.CorsairUserscriptEditor) {
+    codeEl.innerHTML = CorsairUserscriptEditor.highlightCode(ta.value);
+  } else {
+    codeEl.textContent = ta.value + '\n';
+  }
+  if (pre) {
+    pre.scrollTop = ta.scrollTop;
+    pre.scrollLeft = ta.scrollLeft;
+  }
+}
+
+function updateCursorPosition() {
+  const ta = $('editorCode');
+  const curEl = $('editorCursor');
+  if (!ta || !curEl) return;
+  const pos = window.CorsairUserscriptEditor
+    ? CorsairUserscriptEditor.cursorLineCol(ta.value, ta.selectionStart)
+    : { line: 1, col: 1 };
+  curEl.textContent = `Ln ${pos.line}, Col ${pos.col}`;
+}
+
+function jumpToEditorLine(line) {
+  const ta = $('editorCode');
+  if (!ta || !line || line < 1) return;
+  const lines = ta.value.split('\n');
+  let offset = 0;
+  for (let i = 0; i < Math.min(line - 1, lines.length); i++) offset += lines[i].length + 1;
+  ta.focus();
+  ta.selectionStart = offset;
+  ta.selectionEnd = offset + (lines[line - 1] ? lines[line - 1].length : 0);
+  const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+  ta.scrollTop = Math.max(0, (line - 4) * lineHeight);
+  syncEditorHighlight();
+  updateLineNumbers();
+  updateCursorPosition();
+}
+
+function runEditorValidation() {
+  const ta = $('editorCode');
+  const badge = $('editorSyntaxStatus');
+  const diag = $('editorDiagnostic');
+  if (!ta) return;
+  _editorErrorLine = null;
+  if (!window.CorsairUserScripts) return;
+
+  const code = ta.value;
+  const parsed = CorsairUserScripts.parseMetadata(code);
+  const res = CorsairUserScripts.validateScript({ code, meta: parsed.meta });
+
+  if (!res.ok) {
+    _editorErrorLine = res.line || 1;
+    if (badge) {
+      badge.className = 'editor-status-item editor-syntax-badge err';
+      badge.textContent = tx(`✕ Syntax error (Ln ${_editorErrorLine})`, `✕ خطای نحوی (خط ${_editorErrorLine})`);
+    }
+    if (diag) {
+      diag.hidden = false;
+      diag.className = 'editor-diagnostic err';
+      diag.textContent = res.formatted || res.error;
+      diag.title = tx('Click to jump to error line', 'برای رفتن به خط خطا کلیک کنید');
+      diag.onclick = () => jumpToEditorLine(_editorErrorLine);
+    }
+  } else {
+    const warns = [...(parsed.meta.warnings || []), ...(parsed.meta.unsupported || []).map(u => `${u.directive} ${u.value || ''}: ${u.reason}`)];
+    if (warns.length) {
+      if (badge) {
+        badge.className = 'editor-status-item editor-syntax-badge warn';
+        badge.textContent = tx(`⚠ ${warns.length} warning${warns.length > 1 ? 's' : ''}`, `⚠ ${warns.length} هشدار`);
+      }
+      if (diag) {
+        diag.hidden = false;
+        diag.className = 'editor-diagnostic warn';
+        diag.textContent = warns[0];
+        diag.onclick = null;
+      }
+    } else {
+      if (badge) {
+        badge.className = 'editor-status-item editor-syntax-badge ok';
+        badge.textContent = tx('✓ Valid JS', '✓ کد معتبر');
+      }
+      if (diag) { diag.hidden = true; diag.textContent = ''; diag.onclick = null; }
+    }
+  }
+  updateLineNumbers();
+}
+
+function scheduleEditorValidation() {
+  clearTimeout(_editorValidateTimer);
+  _editorValidateTimer = setTimeout(runEditorValidation, 220);
+}
+
+function refreshFindMatches(jump = false) {
+  const ta = $('editorCode');
+  const qEl = $('editorFindInput');
+  const countEl = $('editorFindCount');
+  if (!ta || !qEl) return;
+  const query = qEl.value || '';
+  const opts = {
+    caseSensitive: Boolean($('editorFindCase')?.checked),
+    regex: Boolean($('editorFindRegex')?.checked)
+  };
+  _editorFindMatches = window.CorsairUserscriptEditor
+    ? CorsairUserscriptEditor.findMatches(ta.value, query, opts)
+    : [];
+  if (!_editorFindMatches.length) {
+    _editorFindIndex = -1;
+    if (countEl) countEl.textContent = '0 / 0';
+    return;
+  }
+  if (_editorFindIndex < 0 || _editorFindIndex >= _editorFindMatches.length) _editorFindIndex = 0;
+  if (countEl) countEl.textContent = `${_editorFindIndex + 1} / ${_editorFindMatches.length}`;
+  if (jump) {
+    const m = _editorFindMatches[_editorFindIndex];
+    ta.focus();
+    ta.setSelectionRange(m.start, m.end);
+    updateCursorPosition();
+  }
+}
+
+function stepFindMatch(delta) {
+  if (!_editorFindMatches.length) { refreshFindMatches(true); return; }
+  _editorFindIndex = (_editorFindIndex + delta + _editorFindMatches.length) % _editorFindMatches.length;
+  refreshFindMatches(true);
+}
+
+function openFindBar(focusReplace = false) {
+  const bar = $('editorFindBar');
+  if (!bar) return;
+  bar.hidden = false;
+  const ta = $('editorCode');
+  const qEl = $('editorFindInput');
+  if (ta && qEl && ta.selectionEnd > ta.selectionStart && ta.selectionEnd - ta.selectionStart < 120) {
+    const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+    if (!sel.includes('\n')) qEl.value = sel;
+  }
+  refreshFindMatches(false);
+  const target = focusReplace ? $('editorReplaceInput') : qEl;
+  if (target) { target.focus(); target.select(); }
+}
+
+function closeFindBar() {
+  const bar = $('editorFindBar');
+  if (bar) bar.hidden = true;
+  const ta = $('editorCode');
+  if (ta) ta.focus();
+}
+
+function applyEditorTextEdit(nextText, selStart, selEnd) {
+  const ta = $('editorCode');
+  if (!ta) return;
+  ta.value = nextText;
+  ta.setSelectionRange(selStart, selEnd);
+  ta.dispatchEvent(new Event('input'));
+}
+
 async function openEditor(id) {
   let code = USERSCRIPT_TEMPLATE;
   let name = 'New script';
@@ -1087,13 +1463,21 @@ async function openEditor(id) {
   const fileEl = $('editorFilename');
   const ta = $('editorCode');
   const tab = $('editorTab');
+  const findBar = $('editorFindBar');
 
   if (hostEl) hostEl.textContent = name;
   if (fileEl) fileEl.textContent = name.replace(/[^a-z0-9.-]/gi, '_') + '.user.js';
-  if (ta) { ta.value = code; ta.focus(); }
+  if (ta) { ta.value = code; ta.scrollTop = 0; ta.scrollLeft = 0; }
   if (tab) tab.classList.remove('dirty');
+  if (findBar) findBar.hidden = true;
+  const stPanel = $('editorStoragePanel');
+  if (stPanel) stPanel.hidden = true;
 
+  _editorErrorLine = null;
+  syncEditorHighlight();
   updateLineNumbers();
+  updateCursorPosition();
+  runEditorValidation();
   modal.hidden = false;
   setTimeout(() => ta && ta.focus(), 50);
 }
@@ -1102,6 +1486,7 @@ function closeEditor() {
   const modal = $('editorModal');
   if (modal) modal.hidden = true;
   state.editingScript = null;
+  _editorErrorLine = null;
 }
 
 function isEditorDirty() {
@@ -1139,9 +1524,15 @@ function updateLineNumbers() {
   if (!ta || !gutter) return;
 
   const lines = ta.value.split('\n').length;
-  const arr = [];
-  for (let i = 1; i <= lines; i++) arr.push(String(i));
-  gutter.textContent = arr.join('\n');
+  const frag = document.createDocumentFragment();
+  for (let i = 1; i <= lines; i++) {
+    const span = document.createElement('span');
+    span.className = 'editor-ln' + (_editorErrorLine === i ? ' err' : '');
+    span.textContent = String(i);
+    frag.appendChild(span);
+  }
+  gutter.textContent = '';
+  gutter.appendChild(frag);
   gutter.scrollTop = ta.scrollTop;
 
   if (linesEl) {
@@ -1153,39 +1544,187 @@ function updateLineNumbers() {
 safeOn('editorCode', 'keydown', (e) => {
   const ta = $('editorCode');
   if (!ta) return;
+  const mod = e.ctrlKey || e.metaKey;
+
   if (e.key === 'Tab') {
     e.preventDefault();
-    // insertText keeps the browser's undo history (Ctrl+Z) intact
+    if (window.CorsairUserscriptEditor && (ta.selectionStart !== ta.selectionEnd || e.shiftKey)) {
+      const r = CorsairUserscriptEditor.indentSelection(ta.value, ta.selectionStart, ta.selectionEnd, e.shiftKey);
+      applyEditorTextEdit(r.text, r.start, r.end);
+      return;
+    }
     let done = false;
     try { done = document.execCommand('insertText', false, '  '); } catch {}
     if (!done) {
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
-      ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
-      ta.selectionStart = ta.selectionEnd = start + 2;
+      applyEditorTextEdit(ta.value.substring(0, start) + '  ' + ta.value.substring(end), start + 2, start + 2);
+      return;
     }
+    syncEditorHighlight();
     updateLineNumbers();
+    updateCursorPosition();
+    return;
   }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+
+  if (e.key === 'Enter') {
+    const pos = ta.selectionStart;
+    if (pos === ta.selectionEnd) {
+      const lineStart = ta.value.lastIndexOf('\n', pos - 1) + 1;
+      const lineBefore = ta.value.slice(lineStart, pos);
+      const indentMatch = /^([ \t]*)/.exec(lineBefore);
+      let indent = indentMatch ? indentMatch[1] : '';
+      if (/[{\[\(]\s*$/.test(lineBefore)) indent += '  ';
+      if (indent) {
+        e.preventDefault();
+        let done = false;
+        try { done = document.execCommand('insertText', false, '\n' + indent); } catch {}
+        if (!done) {
+          applyEditorTextEdit(ta.value.slice(0, pos) + '\n' + indent + ta.value.slice(pos), pos + 1 + indent.length, pos + 1 + indent.length);
+          return;
+        }
+        syncEditorHighlight();
+        updateLineNumbers();
+        updateCursorPosition();
+        return;
+      }
+    }
+  }
+
+  if (mod && e.key === '/') {
     e.preventDefault();
-    saveEditor();
+    if (window.CorsairUserscriptEditor) {
+      const r = CorsairUserscriptEditor.toggleLineComments(ta.value, ta.selectionStart, ta.selectionEnd);
+      applyEditorTextEdit(r.text, r.start, r.end);
+    }
+    return;
   }
+  if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openFindBar(false); return; }
+  if (mod && e.key.toLowerCase() === 'h') { e.preventDefault(); openFindBar(true); return; }
+  if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveEditor(); return; }
   if (e.key === 'Escape') {
     e.preventDefault();
-    requestCloseEditor();
+    const bar = $('editorFindBar');
+    if (bar && !bar.hidden) closeFindBar();
+    else requestCloseEditor();
   }
 });
 
 safeOn('editorCode', 'input', () => {
+  syncEditorHighlight();
   updateLineNumbers();
+  updateCursorPosition();
+  scheduleEditorValidation();
   const tab = $('editorTab');
   if (tab && state.editingScript) tab.classList.toggle('dirty', isEditorDirty());
 });
 
+safeOn('editorCode', 'keyup', updateCursorPosition);
+safeOn('editorCode', 'click', updateCursorPosition);
+
 safeOn('editorCode', 'scroll', () => {
   const ta = $('editorCode');
   const gutter = $('editorGutter');
+  const pre = $('editorHighlight');
   if (ta && gutter) gutter.scrollTop = ta.scrollTop;
+  if (ta && pre) { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; }
+});
+
+safeOn('editorInsertDirective', 'change', (e) => {
+  const val = e.target.value;
+  e.target.value = '';
+  const ta = $('editorCode');
+  if (!val || !ta || !window.CorsairUserscriptEditor) return;
+  const next = CorsairUserscriptEditor.insertDirective(ta.value, val);
+  applyEditorTextEdit(next, ta.selectionStart, ta.selectionEnd);
+});
+
+safeOn('editorFindToggle', 'click', () => {
+  const bar = $('editorFindBar');
+  if (bar && !bar.hidden) closeFindBar();
+  else openFindBar(false);
+});
+safeOn('editorFindClose', 'click', closeFindBar);
+safeOn('editorFindInput', 'input', () => refreshFindMatches(false));
+safeOn('editorFindInput', 'keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); stepFindMatch(e.shiftKey ? -1 : 1); }
+  if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
+});
+safeOn('editorFindCase', 'change', () => refreshFindMatches(false));
+safeOn('editorFindRegex', 'change', () => refreshFindMatches(false));
+safeOn('editorFindPrev', 'click', () => stepFindMatch(-1));
+safeOn('editorFindNext', 'click', () => stepFindMatch(1));
+safeOn('editorReplaceOne', 'click', () => {
+  const ta = $('editorCode');
+  const rep = $('editorReplaceInput')?.value ?? '';
+  if (!ta || _editorFindIndex < 0 || !_editorFindMatches[_editorFindIndex]) return;
+  const m = _editorFindMatches[_editorFindIndex];
+  const next = ta.value.slice(0, m.start) + rep + ta.value.slice(m.end);
+  applyEditorTextEdit(next, m.start, m.start + rep.length);
+  refreshFindMatches(true);
+});
+safeOn('editorReplaceAll', 'click', () => {
+  const ta = $('editorCode');
+  const rep = $('editorReplaceInput')?.value ?? '';
+  if (!ta || !_editorFindMatches.length) return;
+  let next = ta.value;
+  for (let i = _editorFindMatches.length - 1; i >= 0; i--) {
+    const m = _editorFindMatches[i];
+    next = next.slice(0, m.start) + rep + next.slice(m.end);
+  }
+  applyEditorTextEdit(next, 0, 0);
+  refreshFindMatches(false);
+});
+async function refreshEditorStoragePanel() {
+  const pre = $('editorStorageContent');
+  if (!pre || !state.editingScript || !state.editingScript.id) {
+    if (pre) pre.textContent = tx('(Save the script first to inspect its GM storage)', '(ابتدا اسکریپت را ذخیره کنید تا حافظه‌ی آن نمایش داده شود)');
+    return;
+  }
+  const res = await send({ type: 'us-get-vals', id: state.editingScript.id });
+  if (res && res.ok) {
+    const vals = res.values || {};
+    pre.textContent = Object.keys(vals).length ? JSON.stringify(vals, null, 2) : '{}';
+  } else {
+    pre.textContent = '{}';
+  }
+}
+
+safeOn('editorTemplateBtn', 'click', () => {
+  const ta = $('editorCode');
+  if (!ta || !window.CorsairUserscriptEditor) return;
+  const next = CorsairUserscriptEditor.insertTemplate(ta.value);
+  if (next === ta.value) {
+    showToast(tx('Header template already exists', 'هدر ==UserScript== از قبل وجود دارد'));
+    return;
+  }
+  applyEditorTextEdit(next, 0, 0);
+  showToast(tx('Inserted ==UserScript== template', 'قالب ==UserScript== اضافه شد'));
+});
+
+safeOn('editorStorageBtn', 'click', () => {
+  const panel = $('editorStoragePanel');
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) refreshEditorStoragePanel();
+});
+safeOn('editorStorageRefresh', 'click', refreshEditorStoragePanel);
+safeOn('editorStorageClose', 'click', () => { const p = $('editorStoragePanel'); if (p) p.hidden = true; });
+safeOn('editorStorageClear', 'click', async () => {
+  if (!state.editingScript || !state.editingScript.id) return;
+  if (!confirm(tx('Clear all saved GM_setValue data for this script?', 'تمام داده‌های ذخیره‌شده‌ی این اسکریپت پاک شوند؟'))) return;
+  const res = await send({ type: 'us-clear-vals', id: state.editingScript.id });
+  if (res && res.ok) { showToast(tx('Script storage cleared', 'حافظه‌ی اسکریپت پاک شد')); refreshEditorStoragePanel(); }
+});
+
+safeOn('editorExportBtn', 'click', () => {
+  const ta = $('editorCode');
+  const fname = ($('editorFilename')?.textContent || 'script.user.js').trim();
+  const blob = new Blob([ta ? ta.value : ''], { type: 'text/javascript;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
 safeOn('editorSave', 'click', saveEditor);
@@ -3934,6 +4473,63 @@ document.querySelectorAll('[data-guide-tab]').forEach(b => b.addEventListener('c
   renderUserscriptGuide();
 })();
 safeOn('scriptSearch', 'input', (e) => { state.scriptQuery = e.target.value || ''; renderCustomScripts(); });
+safeOn('scriptDomainFilter', 'change', (e) => { state.scriptDomainFilter = e.target.value || ''; renderCustomScripts(); });
+safeOn('scriptStatusFilter', 'change', (e) => { state.scriptStatusFilter = e.target.value || 'all'; renderCustomScripts(); });
+safeOn('scriptSort', 'change', (e) => { state.scriptSort = e.target.value || 'name'; renderCustomScripts(); });
+safeOn('scriptCheckUpdatesBtn', 'click', async () => {
+  showToast(tx('Checking scripts for updates…', 'در حال بررسی بروزرسانی اسکریپت‌ها…'));
+  const res = await send({ type: 'us-check-all-updates' });
+  if (res && res.ok) {
+    showToast(tx(`Checked ${res.checked}: ${res.updated} updated`, `${res.checked} اسکریپت بررسی شد: ${res.updated} بروزرسانی شد`));
+    if (res.updated) await refresh();
+  } else {
+    showToast((res && res.error) || tx('Update check failed', 'بررسی بروزرسانی ناموفق بود'), 'error');
+  }
+});
+
+// Handle auto-intercepted .user.js install URL (?install=...)
+(function handlePendingInstallUrl() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const editId = params.get('edit');
+    if (editId) {
+      history.replaceState({}, '', location.pathname);
+      setTimeout(() => {
+        try { if (typeof switchView === 'function') switchView('scripts'); } catch {}
+        openEditor(editId);
+      }, 300);
+      return;
+    }
+    const installUrl = params.get('install');
+    if (!installUrl || !/^https?:\/\//i.test(installUrl)) return;
+    history.replaceState({}, '', location.pathname);
+    setTimeout(async () => {
+      try { if (typeof switchView === 'function') switchView('scripts'); } catch {}
+      const inp = $('scriptImportUrl');
+      if (inp) inp.value = installUrl;
+      if (confirm(tx(`Install userscript from:\n${installUrl}`, `نصب اسکریپت کاربر از آدرس:\n${installUrl}`))) {
+        const res = await send({ type: 'us-import-url', url: installUrl });
+        if (reportSaveResult(res)) { if (inp) inp.value = ''; await refresh(); }
+      }
+    }, 350);
+  } catch {}
+})();
+
+safeOn('scriptExportAllBtn', 'click', async () => {
+  const scripts = state.customScripts || [];
+  if (!scripts.length) { showToast(tx('No scripts to export', 'اسکریپتی برای خروجی وجود ندارد'), 'error'); return; }
+  const full = [];
+  for (const s of scripts) {
+    const r = await send({ type: 'us-get', id: s.id });
+    if (r?.ok && r.script) full.push({ name: r.script.name, enabled: r.script.enabled, sourceUrl: r.script.sourceUrl, code: r.script.code });
+  }
+  const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), scripts: full }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'corsair-userscripts-export.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast(tx(`Exported ${full.length} script(s)`, `${full.length} اسکریپت خروجی گرفته شد`));
+});
 window.addEventListener('focus', async () => {
   const av = state.userscriptAvailability;
   if (!av || av.ok) return;
@@ -4381,4 +4977,439 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (show) {
     setTimeout(() => openOnboarding(), 400);
   }
+})();
+
+function renderOverviewDefenseMatrix() {
+  const box = $('overviewDefenseMatrix');
+  if (!box) return;
+  const s = state.settings || {};
+  const scripts = state.customScripts || [];
+  const enabledScripts = scripts.filter(x => x && x.enabled !== false).length;
+  const items = [
+    { label: tx('Auto-Arm Fortress', 'سپر خودکار Fortress'), on: Boolean(s.autoArmFortress), detail: s.autoArmFortress ? `${s.autoArmFortressThreshold || 10}% / ${s.autoBlockThreshold || 75}%` : tx('Off', 'خاموش') },
+    { label: tx('Safe Redirect Resolver', 'مسدودساز ریدایرکت'), on: s.resolverEnabled !== false, detail: s.resolverEnabled !== false ? tx('Active', 'فعال') : tx('Off', 'خاموش') },
+    { label: tx('Download Guard', 'محافظ دانلود'), on: s.downloadGuard !== false, detail: s.downloadGuard !== false ? tx('Active', 'فعال') : tx('Off', 'خاموش') },
+    { label: tx('Threat Intelligence', 'هوش تهدید'), on: s.threatIntelEnabled !== false, detail: s.threatIntelEnabled !== false ? tx('Active', 'فعال') : tx('Off', 'خاموش') },
+    { label: tx('Userscripts Engine', 'موتور اسکریپت‌ها'), on: enabledScripts > 0, detail: tx(`${enabledScripts} / ${scripts.length} active`, `${enabledScripts} از ${scripts.length} فعال`) }
+  ];
+  box.textContent = '';
+  for (const it of items) {
+    const row = document.createElement('div');
+    row.className = 'defense-row ' + (it.on ? 'on' : 'off');
+    const left = document.createElement('div');
+    left.className = 'defense-row-left';
+    const dot = document.createElement('span');
+    dot.className = 'defense-dot';
+    const name = document.createElement('span');
+    name.className = 'defense-name';
+    name.textContent = it.label;
+    left.append(dot, name);
+    const badge = document.createElement('span');
+    badge.className = 'defense-badge';
+    badge.textContent = it.detail;
+    row.append(left, badge);
+    box.appendChild(row);
+  }
+}
+
+
+/* ============================================================
+   INTERACTIVE CORSAIR GUARDIAN CAT (MULTI-MODE PLAYGROUND)
+   ============================================================ */
+(function initGuardianCat() {
+  const stage = $('catStage');
+  const petBtn = $('catPetBtn');
+  const walker = $('catWalker');
+  const hearts = $('catHearts');
+  const moodEl = $('catMoodText');
+  const card = $('catCompanionCard');
+  if (!stage || !walker) return;
+
+  const modeLabels = {
+    dance:   { en: 'Vibing while your shields stay active…', fa: 'در حال رقص و نگهبانی از سپرهای شما…' },
+    patrol:  { en: 'Patrolling across your command deck…',   fa: 'در حال گشت‌زنی روی عرشه‌ی فرماندهی…' },
+    zoomies: { en: 'Chasing suspicious trackers at full speed!', fa: 'در حال تعقیب ردیاب‌های مشکوک با سرعت بالا!' },
+    nap:     { en: 'Cozy power nap — Fortress is watching…', fa: 'چُرت کوتاه — سپر Fortress بیدار است…' }
+  };
+  const petMoods = [
+    { en: 'Purr… all shields steady ♥', fa: 'خُرخُر… همه سپرها امنه ♥' },
+    { en: 'Happy guardian on duty ♥',   fa: 'نگهبان خوشحال در حال انجام وظیفه ♥' },
+    { en: 'Fortress paws ready! ♥',     fa: 'پنجه‌های Fortress آماده! ♥' }
+  ];
+  let petIdx = 0;
+
+  function setMode(mode) {
+    if (!modeLabels[mode]) return;
+    stage.classList.remove('mode-dance', 'mode-patrol', 'mode-zoomies', 'mode-nap');
+    stage.classList.add('mode-' + mode);
+    if (card) {
+      card.querySelectorAll('.cat-mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.catMode === mode);
+      });
+    }
+    if (moodEl) moodEl.textContent = tx(modeLabels[mode].en, modeLabels[mode].fa);
+  }
+
+  function petCat() {
+    walker.classList.remove('happy');
+    void walker.offsetWidth;
+    walker.classList.add('happy');
+    if (moodEl) {
+      const m = petMoods[petIdx % petMoods.length];
+      moodEl.textContent = tx(m.en, m.fa);
+      petIdx++;
+    }
+    if (hearts) {
+      for (let i = 0; i < 4; i++) {
+        const h = document.createElement('span');
+        h.className = 'cat-heart';
+        h.textContent = i % 2 === 0 ? '♥' : '✦';
+        h.style.left = (25 + Math.random() * 50) + '%';
+        h.style.animationDelay = (i * 95) + 'ms';
+        hearts.appendChild(h);
+        setTimeout(() => h.remove(), 1300);
+      }
+    }
+    setTimeout(() => walker.classList.remove('happy'), 950);
+  }
+
+  if (card) {
+    card.querySelectorAll('.cat-mode-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setMode(btn.dataset.catMode);
+      });
+    });
+  }
+  stage.addEventListener('click', petCat);
+  stage.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); petCat(); } });
+  if (petBtn) petBtn.addEventListener('click', (e) => { e.stopPropagation(); petCat(); });
+})();
+
+
+/* ============================================================
+   ADVANCED SECURITY & PRIVACY SHIELDS (v1.12.0)
+   ============================================================ */
+async function loadAdvancedSecurityUi() {
+  if (!$('advSecurityPanel')) return;
+  try {
+    const res = await send({ type: 'adv-sec-get' });
+    if (!res || !res.ok) return;
+    const c = res.config || {};
+    if ($('advCredGuard')) $('advCredGuard').checked = c.credentialGuard !== false;
+    if ($('advClickFixGuard')) $('advClickFixGuard').checked = c.clickFixGuard !== false;
+    if ($('advHttpsFirst')) $('advHttpsFirst').checked = Boolean(c.httpsFirst);
+    if ($('advTrackingStrip')) $('advTrackingStrip').checked = c.trackingStrip !== false;
+    if ($('advHttpsExceptions')) $('advHttpsExceptions').value = (c.httpsFirstExceptions || []).join(', ');
+    if ($('advTrackingExceptions')) $('advTrackingExceptions').value = (c.trackingStripExceptions || []).join(', ');
+    if ($('advTrackingCount') && res.trackingParamsCount) {
+      $('advTrackingCount').textContent = tx(`${res.trackingParamsCount} params`, `${res.trackingParamsCount} پارامتر`);
+    }
+    if (res.offlineStatus && $('advOfflineStatus')) {
+      const st = res.offlineStatus;
+      const dt = st.updatedAt ? new Date(st.updatedAt).toISOString().slice(0, 10) : '—';
+      $('advOfflineStatus').textContent = tx(
+        `v${st.version} • ${st.totalIndicators} local indicators • Updated ${dt}${st.stale ? ' (stale)' : ''}`,
+        `نسخه ${st.version} • ${st.totalIndicators} شاخص محلی • بروزرسانی ${dt}${st.stale ? ' (قدیمی)' : ''}`
+      );
+      if ($('advOfflineVersion')) $('advOfflineVersion').textContent = st.stale ? tx('Stale', 'نیازمند بروزرسانی') : tx('Active', 'فعال');
+    }
+  } catch {}
+}
+
+async function saveAdvancedSecurityUi() {
+  const splitList = (id) => String($(id)?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+  const patch = {
+    credentialGuard: Boolean($('advCredGuard')?.checked),
+    clickFixGuard: Boolean($('advClickFixGuard')?.checked),
+    httpsFirst: Boolean($('advHttpsFirst')?.checked),
+    trackingStrip: Boolean($('advTrackingStrip')?.checked),
+    httpsFirstExceptions: splitList('advHttpsExceptions'),
+    trackingStripExceptions: splitList('advTrackingExceptions')
+  };
+  const res = await send({ type: 'adv-sec-set', patch });
+  if (res && res.ok) showToast(tx('Advanced security shields updated', 'تنظیمات سپرهای امنیتی ذخیره شد'));
+  else showToast((res && res.error) || tx('Failed to save', 'ذخیره ناموفق بود'), 'error');
+}
+
+safeOn('advSecSaveBtn', 'click', saveAdvancedSecurityUi);
+['advCredGuard', 'advClickFixGuard', 'advHttpsFirst', 'advTrackingStrip'].forEach(id => {
+  safeOn(id, 'change', saveAdvancedSecurityUi);
+});
+setTimeout(() => { loadAdvancedSecurityUi().catch(() => {}); }, 250);
+
+/* ============================================================
+   AI PROVIDERS & CODING RULES CONTROLLER (v1.13.0)
+   ============================================================ */
+(function initAiProvidersDashboard() {
+  if (!document.getElementById('view-ai-providers')) return;
+  const g = (id) => document.getElementById(id);
+  let presets = {};
+  let profiles = [];
+  let discoveredForCurrent = [];
+  const DEFAULT_SYS_INSTRUCTIONS = 'Always write clean modern JavaScript (ES2022+). Prefer MutationObserver over repeated polling. Avoid unnecessary dependencies, eval, or innerHTML with untrusted data. Properly handle SPA navigation, clean up listeners to prevent memory leaks, and restrict @match strictly to the target site.';
+
+  function populateModelDropdown(presetKey, selectedModel, discoveredList = []) {
+    const sel = g('aiProvModelSelect');
+    const inp = g('aiProvModel');
+    if (!sel) return;
+    const pr = presets[presetKey] || {};
+    const suggested = Array.isArray(pr.suggestedModels) ? pr.suggestedModels : [];
+    const disc = Array.isArray(discoveredList) ? discoveredList : [];
+    const seen = new Set();
+    sel.textContent = '';
+
+    const addGroup = (label, list) => {
+      const items = list.filter(m => m && !seen.has(m));
+      if (!items.length) return;
+      const og = document.createElement('optgroup');
+      og.label = label;
+      for (const m of items) {
+        seen.add(m);
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        og.appendChild(opt);
+      }
+      sel.appendChild(og);
+    };
+
+    addGroup('Discovered from Server', disc);
+    addGroup('Recommended Models', suggested);
+
+    if (selectedModel && !seen.has(selectedModel)) {
+      const opt = document.createElement('option');
+      opt.value = selectedModel;
+      opt.textContent = `${selectedModel} (Custom)`;
+      sel.appendChild(opt);
+      seen.add(selectedModel);
+    }
+
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = 'Custom Model ID (type below)…';
+    sel.appendChild(customOpt);
+
+    const bestModel = selectedModel || disc[0] || pr.defaultModel || suggested[0] || '';
+    if (bestModel && seen.has(bestModel)) {
+      sel.value = bestModel;
+    } else {
+      sel.value = '__custom__';
+    }
+    if (inp) inp.value = bestModel;
+  }
+
+  function applyPresetDefaults(presetKey) {
+    const pr = presets[presetKey];
+    if (!pr) return;
+    discoveredForCurrent = [];
+    if (g('aiProvName')) g('aiProvName').value = pr.name;
+    if (g('aiProvBaseUrl')) g('aiProvBaseUrl').value = pr.baseUrl;
+    if (g('aiProvAuthMode')) g('aiProvAuthMode').value = pr.authMode || 'none';
+    const defModel = pr.defaultModel || (pr.suggestedModels && pr.suggestedModels[0]) || '';
+    populateModelDropdown(presetKey, defModel, []);
+  }
+
+  async function loadAll() {
+    const [pRes, sRes] = await Promise.all([
+      chrome.runtime.sendMessage({ type: 'ai-providers-list' }),
+      chrome.runtime.sendMessage({ type: 'ai-settings-get' })
+    ]);
+    if (pRes && pRes.ok) {
+      presets = pRes.presets || {};
+      profiles = pRes.profiles || [];
+      const pSel = g('aiProvPreset');
+      if (pSel && !pSel.options.length) {
+        for (const [key, pr] of Object.entries(presets)) {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = `[${(pr.category || 'local').toUpperCase()}] ${pr.name}`;
+          pSel.appendChild(opt);
+        }
+      }
+      renderProfiles();
+      // Auto-populate form on first load if empty
+      if (g('aiProvBaseUrl') && !g('aiProvBaseUrl').value) {
+        const defProf = profiles.find(x => x.isDefault) || profiles[0];
+        if (defProf) fillForm(defProf);
+        else applyPresetDefaults(pSel ? pSel.value : 'llamacpp');
+      }
+    }
+    if (sRes && sRes.ok && sRes.settings) {
+      const s = sRes.settings;
+      if (g('aiRuleLang')) g('aiRuleLang').value = s.language || 'javascript';
+      if (g('aiRuleRunAt')) g('aiRuleRunAt').value = s.defaultRunAt || 'document-idle';
+      if (g('aiRuleWorld')) g('aiRuleWorld').value = s.defaultWorld || 'USER_SCRIPT';
+      if (g('aiRuleScope')) g('aiRuleScope').value = s.defaultScope || 'exact-origin';
+      if (g('aiRuleTemp')) g('aiRuleTemp').value = String(s.temperature ?? 0.2);
+      if (g('aiRuleMaxTokens')) g('aiRuleMaxTokens').value = String(s.maxTokens || 4096);
+      if (g('aiRuleSystem')) g('aiRuleSystem').value = (s.systemInstructions && s.systemInstructions.trim()) ? s.systemInstructions : DEFAULT_SYS_INSTRUCTIONS;
+    }
+  }
+
+  function renderProfiles() {
+    const list = g('aiProvidersList');
+    if (!list) return;
+    list.textContent = '';
+    for (const p of profiles) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border-radius:10px;border:1px solid var(--cu-border,rgba(255,255,255,0.1));flex-wrap:wrap;';
+      const left = document.createElement('div');
+      const title = document.createElement('strong');
+      title.textContent = `${p.isDefault ? '★ ' : ''}${p.name} [${(p.locality || 'local').toUpperCase()}]`;
+      const meta = document.createElement('div');
+      meta.className = 'panel-sub';
+      meta.textContent = `${p.baseUrl} · Model: ${p.model || '(manual)'} · Key: ${p.hasKey ? p.keyStorage : 'none'}`;
+      left.appendChild(title);
+      left.appendChild(meta);
+
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+      const mkBtn = (label, fn) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn-secondary';
+        b.textContent = label;
+        b.addEventListener('click', fn);
+        return b;
+      };
+      if (!p.isDefault) actions.appendChild(mkBtn('Set Default', async () => {
+        await chrome.runtime.sendMessage({ type: 'ai-provider-set-default', id: p.id });
+        loadAll();
+      }));
+      actions.appendChild(mkBtn('Edit', () => fillForm(p)));
+      actions.appendChild(mkBtn('Duplicate', async () => {
+        await chrome.runtime.sendMessage({ type: 'ai-provider-duplicate', id: p.id });
+        loadAll();
+      }));
+      actions.appendChild(mkBtn('Delete', async () => {
+        await chrome.runtime.sendMessage({ type: 'ai-provider-delete', id: p.id });
+        loadAll();
+      }));
+      row.appendChild(left);
+      row.appendChild(actions);
+      list.appendChild(row);
+    }
+  }
+
+  function fillForm(p) {
+    g('aiProvId').value = p.id || '';
+    g('aiProvPreset').value = p.type || 'llamacpp';
+    g('aiProvName').value = p.name || '';
+    g('aiProvBaseUrl').value = p.baseUrl || '';
+    g('aiProvAuthMode').value = p.authMode || 'none';
+    g('aiProvKeyPersist').value = p.keyPersistence || 'session';
+    g('aiProvTimeout').value = String(p.timeoutMs || 60000);
+    g('aiProvApiKey').value = '';
+    discoveredForCurrent = Array.isArray(p.discoveredModels) ? p.discoveredModels : [];
+    populateModelDropdown(p.type || 'llamacpp', p.model || '', discoveredForCurrent);
+  }
+
+  function readFormProfile() {
+    const presetKey = g('aiProvPreset').value || 'llamacpp';
+    const preset = presets[presetKey] || {};
+    return {
+      id: g('aiProvId').value || undefined,
+      type: presetKey,
+      adapter: preset.adapter || 'openai-compat',
+      name: g('aiProvName').value.trim() || preset.name || 'AI Provider',
+      baseUrl: g('aiProvBaseUrl').value.trim(),
+      model: g('aiProvModel').value.trim(),
+      discoveredModels: discoveredForCurrent,
+      authMode: g('aiProvAuthMode').value,
+      keyPersistence: g('aiProvKeyPersist').value,
+      timeoutMs: Number(g('aiProvTimeout').value) || 60000
+    };
+  }
+
+  g('aiProvPreset')?.addEventListener('change', () => {
+    applyPresetDefaults(g('aiProvPreset').value);
+  });
+
+  g('aiProvModelSelect')?.addEventListener('change', () => {
+    const val = g('aiProvModelSelect').value;
+    if (val && val !== '__custom__' && g('aiProvModel')) {
+      g('aiProvModel').value = val;
+    } else if (val === '__custom__' && g('aiProvModel')) {
+      g('aiProvModel').focus();
+    }
+  });
+
+  g('aiProvModel')?.addEventListener('input', () => {
+    const sel = g('aiProvModelSelect');
+    const v = g('aiProvModel').value.trim();
+    if (!sel) return;
+    const match = Array.from(sel.options).find(o => o.value === v);
+    sel.value = match ? v : '__custom__';
+  });
+
+  g('aiNewProviderBtn')?.addEventListener('click', () => {
+    g('aiProvId').value = '';
+    g('aiProvPreset').value = 'llamacpp';
+    applyPresetDefaults('llamacpp');
+    g('aiProvApiKey').value = '';
+  });
+
+  g('aiSaveProvBtn')?.addEventListener('click', async () => {
+    const profile = readFormProfile();
+    const apiKey = g('aiProvApiKey').value;
+    const r = await chrome.runtime.sendMessage({ type: 'ai-provider-save', profile, apiKey: apiKey ? apiKey : undefined });
+    g('aiProvDiag').textContent = r && r.ok ? 'Provider saved.' : `Error: ${(r && r.error) || 'save failed'}`;
+    if (r && r.ok) { g('aiProvApiKey').value = ''; loadAll(); }
+  });
+
+  g('aiTestConnBtn')?.addEventListener('click', async () => {
+    g('aiProvDiag').textContent = 'Testing connection…';
+    const r = await chrome.runtime.sendMessage({ type: 'ai-provider-test-connection', profile: readFormProfile(), apiKey: g('aiProvApiKey').value || undefined });
+    if (r && r.ok && Array.isArray(r.models) && r.models.length) {
+      discoveredForCurrent = r.models;
+      populateModelDropdown(g('aiProvPreset').value, g('aiProvModel').value.trim() || r.models[0], r.models);
+    }
+    g('aiProvDiag').textContent = r && r.ok ? `PASS: ${r.message} (${r.latencyMs}ms)` : `FAIL: ${(r && r.error) || 'connection failed'}`;
+  });
+
+  g('aiFetchModelsBtn')?.addEventListener('click', async () => {
+    g('aiProvDiag').textContent = 'Fetching models…';
+    const r = await chrome.runtime.sendMessage({ type: 'ai-provider-fetch-models', profile: readFormProfile(), apiKey: g('aiProvApiKey').value || undefined });
+    if (r && r.ok && Array.isArray(r.models)) {
+      discoveredForCurrent = r.models;
+      populateModelDropdown(g('aiProvPreset').value, r.models[0] || g('aiProvModel').value.trim(), r.models);
+      g('aiProvDiag').textContent = `Discovered ${r.models.length} model(s): ${r.models.slice(0, 8).join(', ')}`;
+    } else {
+      g('aiProvDiag').textContent = (r && r.error) || 'Could not fetch models.';
+    }
+  });
+
+  g('aiTestGenBtn')?.addEventListener('click', async () => {
+    g('aiProvDiag').textContent = 'Testing generation…';
+    const r = await chrome.runtime.sendMessage({ type: 'ai-provider-test-generation', profile: readFormProfile(), apiKey: g('aiProvApiKey').value || undefined });
+    g('aiProvDiag').textContent = r && r.ok ? `PASS: "${r.sample}" (${r.latencyMs}ms)` : `FAIL: ${(r && r.error) || 'generation failed'}`;
+  });
+
+  g('aiSaveRulesBtn')?.addEventListener('click', async () => {
+    const r = await chrome.runtime.sendMessage({
+      type: 'ai-settings-save',
+      settings: {
+        language: g('aiRuleLang').value,
+        defaultRunAt: g('aiRuleRunAt').value,
+        defaultWorld: g('aiRuleWorld').value,
+        defaultScope: g('aiRuleScope').value,
+        temperature: Number(g('aiRuleTemp').value),
+        maxTokens: Number(g('aiRuleMaxTokens').value),
+        systemInstructions: g('aiRuleSystem').value.trim() || DEFAULT_SYS_INSTRUCTIONS
+      }
+    });
+    g('aiRulesStatus').textContent = r && r.ok ? 'AI coding rules saved.' : 'Save failed.';
+  });
+
+  g('aiResetRulesBtn')?.addEventListener('click', () => {
+    if (g('aiRuleSystem')) g('aiRuleSystem').value = DEFAULT_SYS_INSTRUCTIONS;
+    g('aiRulesStatus').textContent = 'Default instructions restored (click Save AI Rules to apply).';
+  });
+
+  g('aiLaunchStudioDashBtn')?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'ai-open-studio' });
+  });
+
+  loadAll().catch(() => {});
 })();

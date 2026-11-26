@@ -259,4 +259,21 @@
       document.querySelectorAll('meta[http-equiv="refresh"]').forEach(processNode);
     } catch {}
   })();
+
+  /* Relay programmatic clipboard.writeText payloads containing shell-like tokens to isolated ClickFix guard */
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      const origWrite = navigator.clipboard.writeText.bind(navigator.clipboard);
+      navigator.clipboard.writeText = function (text) {
+        try {
+          const s = String(text || '');
+          if (s.length >= 10 && /(?:powershell|pwsh|mshta|cmd.exe|certutil|bitsadmin|rundll32|regsvr32|iex|invoke-expression|curls+.*|)/i.test(s)) {
+            document.dispatchEvent(new CustomEvent('corsair-clipboard-write', { detail: s.slice(0, 4000) }));
+          }
+        } catch {}
+        return origWrite(text);
+      };
+    }
+  } catch {}
+
 })();

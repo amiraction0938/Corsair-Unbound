@@ -2,18 +2,8 @@
    FONTS — Local fallback (avoid remote fetch in MV3)
    ============================================================ */
 :root {
-  --bg: #080d1a;
-  --card-bg: #101827;
-  --card-border: rgba(255, 255, 255, 0.08);
-  --text: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent: #10b981;
-  --accent-glow: rgba(16, 185, 129, 0.25);
-  --danger: #f43f5e;
-  --danger-glow: rgba(244, 63, 94, 0.25);
-  --warn: #f59e0b;
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
+  --card-bg: var(--surface);
+  --card-border: var(--border);
   --font-sans:
     'Inter var',
     'Inter',
@@ -600,3 +590,148 @@ body[data-theme="light"] .auto-arm-badge {
 body[data-theme="light"] .gm-script { background: #f8fafc; }
 body[data-theme="light"] .gm-cmd { background: #f1f5f9; color: #0f172a; }
 body[data-theme="light"] .gm-cmd:hover { background: #e2e8f0; }
+
+.gm-script.disabled { opacity: 0.6; }
+.gm-script-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gm-script-toggle { accent-color: var(--accent, #6366f1); cursor: pointer; flex: 0 0 auto; }
+.gm-script-err { font-size: 11px; color: #f87171; background: rgba(239, 68, 68, 0.12); padding: 3px 6px; border-radius: 5px; word-break: break-word; }
+body[data-theme="light"] .gm-script-err { color: #b91c1c; background: #fef2f2; }
+
+.gm-script-controls { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.gm-mini-btn { background: #1e293b; color: #e2e8f0; border: 1px solid var(--card-border); border-radius: 5px; padding: 2px 6px; font-size: 10px; cursor: pointer; }
+.gm-mini-btn:hover { background: #334155; }
+.gm-inject-bar { display: flex; align-items: center; gap: 5px; padding-top: 4px; border-top: 1px dashed var(--card-border); }
+.gm-inject-select { flex: 1; min-width: 0; background: #090d16; color: #e2e8f0; border: 1px solid var(--card-border); border-radius: 5px; padding: 3px 6px; font-size: 11px; }
+body[data-theme="light"] .gm-mini-btn { background: #f1f5f9; color: #0f172a; }
+body[data-theme="light"] .gm-inject-select { background: #ffffff; color: #0f172a; }
+
+
+/* ============================================================
+   POPUP v1.11.0 — UNIFIED DESIGN SYSTEM REBIRTH
+   ============================================================ */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+.site-card {
+  border-color: var(--border-strong);
+}
+.brand .cu-brand-mark { width: 30px; height: 30px; border-radius: 9px; }
+.brand .cu-brand-mark svg { width: 17px; height: 17px; }
+.brand h1 { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; }
+.version-tag { font-size: 10.5px; color: var(--text-muted); }
+.tool-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.tool-btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.shield-btn {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+}
+.shield-btn:active { transform: translateY(1px); }
+.gm-script {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.gm-script-name { color: var(--brand); }
+.gm-cmd {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+}
+.gm-cmd:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+body {
+  background: var(--bg-canvas);
+}
+.card {
+  background: linear-gradient(180deg, var(--surface) 0%, var(--bg-elevated) 100%);
+  box-shadow: var(--specular), var(--shadow-sm);
+}
+body[data-theme="light"] .card { background: #ffffff; }
+.shield-btn {
+  background: var(--brand-gradient);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.34);
+}
+
+
+/* Full Multi-Theme Synchronization for Popup (all 6 themes) */
+body[data-theme] {
+  --card-bg: var(--surface);
+  --card-border: var(--border);
+  background: var(--bg-canvas);
+  color: var(--text);
+}
+body[data-theme] .site-card {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+body[data-theme] .domain-title,
+body[data-theme] .stat-box strong { color: var(--text); }
+body[data-theme] .input-row input,
+body[data-theme] .blocked-item,
+body[data-theme] .vt-flags {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+body[data-theme] .btn-dashboard,
+body[data-theme] .action-pill {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+body[data-theme] .btn-dashboard:hover,
+body[data-theme] .action-pill:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+body[data-theme] .btn-block {
+  background: var(--brand-gradient);
+  color: #ffffff;
+  border-color: transparent;
+}
+body[data-theme] .risk-bar-wrap { background: var(--surface-2); }
+body[data-theme] .threshold-slider { accent-color: var(--brand); }
+body[data-theme="solar-gold"] .site-card {
+  background: linear-gradient(145deg, #ffffff, #fef9e7);
+  border-color: rgba(217, 119, 6, 0.28);
+}
+body[data-theme="solar-gold"] .toast {
+  background: #ffffff;
+  color: #1c1917;
+  border-color: rgba(217, 119, 6, 0.28);
+}
+
+/* AI Script Studio compact popup card (v1.13.0) */
+.ai-studio-card { display: flex; flex-direction: column; gap: 6px; }
+.ai-popup-row { display: flex; gap: 6px; align-items: center; }
+.ai-popup-select, .ai-popup-input {
+  flex: 1; min-width: 0; font-size: 12px; padding: 6px 8px;
+  border-radius: 8px; border: 1px solid var(--cu-border, rgba(255,255,255,0.12));
+  background: var(--cu-bg, #0b0d14); color: var(--cu-text, #f1f5f9);
+}
+.ai-popup-check { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--cu-text-muted, #94a3b8); cursor: pointer; }

@@ -1,6 +1,15 @@
 import './core/security.js';
 import './core/i18n.js';
 import './core/bloom.js';
+import './core/credential-guard.js';
+import './core/clickfix-guard.js';
+import './core/offline-intel.js';
+import './core/https-first.js';
+import './core/tracking-strip.js';
+import './core/ai-providers.js';
+import './core/ai-request-manager.js';
+import './core/ai-script-generator.js';
+import './core/ai-script-validator.js';
 import './core/storage.js';
 import './core/alarms.js';
 import './core/dnr.js';
@@ -338,8 +347,39 @@ async function maybeAutoScan(tabId, url, opts = {}) {
    ============================================================ */
 if (typeof CorsairUserScripts !== 'undefined') {
   CorsairUserScripts.init().catch(() => {});
-  chrome.runtime.onInstalled.addListener(() => { CorsairUserScripts.init().then(() => CorsairUserScripts.sync()).catch(() => {}); });
-  chrome.runtime.onStartup.addListener(() => { CorsairUserScripts.sync().catch(() => {}); });
+  chrome.runtime.onInstalled.addListener(() => {
+    CorsairUserScripts.init().then(() => CorsairUserScripts.ensureSynced({ force: true })).catch(() => {});
+  });
+  chrome.runtime.onStartup.addListener(() => {
+    CorsairUserScripts.ensureSynced({ force: true }).catch(() => {});
+  });
+  // Reconcile dynamic chrome.userScripts registrations automatically on top-frame
+  // navigations if Chrome cleared them (e.g. after extension reload or permission toggle).
+  if (chrome.webNavigation && chrome.webNavigation.onBeforeNavigate) {
+    chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+      if (details && details.frameId === 0 && /^https?:\/\//i.test(details.url || '')) {
+        CorsairUserScripts.ensureSynced().catch(() => {});
+      }
+    });
+  }
+  if (chrome.webNavigation && chrome.webNavigation.onCommitted) {
+    chrome.webNavigation.onCommitted.addListener((details) => {
+      if (details && /^https?:\/\//i.test(details.url || '')) {
+        CorsairUserScripts.autoInjectForNavigation({
+          tabId: details.tabId, frameId: details.frameId || 0, url: details.url, stage: 'start'
+        }).catch(() => {});
+      }
+    });
+  }
+  if (chrome.webNavigation && chrome.webNavigation.onCompleted) {
+    chrome.webNavigation.onCompleted.addListener((details) => {
+      if (details && /^https?:\/\//i.test(details.url || '')) {
+        CorsairUserScripts.autoInjectForNavigation({
+          tabId: details.tabId, frameId: details.frameId || 0, url: details.url, stage: 'idle'
+        }).catch(() => {});
+      }
+    });
+  }
 
   // GM_* bridge: messages sent from the isolated user-script world
   if (chrome.runtime.onUserScriptMessage) {
@@ -349,7 +389,96 @@ if (typeof CorsairUserScripts !== 'undefined') {
       return true;
     });
   }
+  if (chrome.runtime.onUserScriptConnect) {
+    chrome.runtime.onUserScriptConnect.addListener((port) => {
+      try { CorsairUserScripts.handleGmConnect(port); } catch {}
+    });
+  }
+
+  // Periodic background update check for URL-backed userscripts (every 12 hours)
+  try {
+    if (chrome.alarms) {
+      chrome.alarms.create('corsair-userscripts-autoupdate', { periodInMinutes: 720 });
+      chrome.alarms.onAlarm.addListener((alarm) => {
+        if (alarm && alarm.name === 'corsair-userscripts-autoupdate') {
+          CorsairUserScripts.checkAllUpdates().catch(() => {});
+        }
+      });
+    }
+  } catch {}
+
+  // Auto-intercept direct navigation to .user.js URLs for 1-click install in Dashboard
+  try {
+    if (chrome.webNavigation && chrome.webNavigation.onCommitted) {
+      chrome.webNavigation.onCommitted.addListener((details) => {
+        if (!details || details.frameId !== 0) return;
+        const u = String(details.url || '');
+        if (!/^https?:\/\/.+\.user\.js(?:[?#].*)?$/i.test(u)) return;
+        const dashUrl = chrome.runtime.getURL('dashboard.html?install=' + encodeURIComponent(u));
+        chrome.tabs.create({ url: dashUrl, active: true }).catch(() => {});
+      });
+    }
+  } catch {}
 }
+
+/* ============================================================
+   ADVANCED SECURITY EXPANSION (v1.12.0)
+   Offline Bloom Threat Intel, HTTPS-First DNR & Tracking Strip
+   ============================================================ */
+const ADV_SEC_KEY = 'corsairAdvancedSecurity';
+const DEFAULT_ADV_SEC = {
+  credentialGuard: true,
+  clickFixGuard: true,
+  offlineIntel: true,
+  httpsFirst: false,
+  httpsFirstExceptions: [],
+  trackingStrip: true,
+  trackingStripExceptions: []
+};
+
+async function getAdvancedSecurityConfig() {
+  try {
+    const r = await chrome.storage.local.get(ADV_SEC_KEY);
+    const saved = (r[ADV_SEC_KEY] && typeof r[ADV_SEC_KEY] === 'object') ? r[ADV_SEC_KEY] : {};
+    return {
+      ...DEFAULT_ADV_SEC,
+      ...saved,
+      httpsFirstExceptions: Array.isArray(saved.httpsFirstExceptions) ? saved.httpsFirstExceptions : [],
+      trackingStripExceptions: Array.isArray(saved.trackingStripExceptions) ? saved.trackingStripExceptions : []
+    };
+  } catch {
+    return { ...DEFAULT_ADV_SEC };
+  }
+}
+
+async function syncAdvancedSecurityDnr(cfg) {
+  const conf = cfg || await getAdvancedSecurityConfig();
+  const out = { httpsFirst: null, trackingStrip: null };
+  if (typeof CorsairHttpsFirst !== 'undefined') {
+    out.httpsFirst = await CorsairHttpsFirst.sync({
+      enabled: Boolean(conf.httpsFirst),
+      exceptions: conf.httpsFirstExceptions || []
+    });
+  }
+  if (typeof CorsairTrackingStrip !== 'undefined') {
+    out.trackingStrip = await CorsairTrackingStrip.sync({
+      enabled: Boolean(conf.trackingStrip),
+      exceptions: conf.trackingStripExceptions || []
+    });
+  }
+  return out;
+}
+
+async function initAdvancedSecurity() {
+  try { if (typeof CorsairOfflineIntel !== 'undefined') await CorsairOfflineIntel.init(); } catch {}
+  try { await syncAdvancedSecurityDnr(); } catch {}
+}
+
+initAdvancedSecurity().catch(() => {});
+try {
+  chrome.runtime.onInstalled.addListener(() => { initAdvancedSecurity().catch(() => {}); });
+  chrome.runtime.onStartup.addListener(() => { initAdvancedSecurity().catch(() => {}); });
+} catch {}
 
 /* ============================================================
    SAFE SCANNED DOMAINS
@@ -1053,7 +1182,7 @@ chrome.webNavigation.onCommitted.addListener(async details => {
   if (details.frameId !== 0) return;
   const tabId = details.tabId;
   if (!Number.isInteger(tabId)) return;
-  try { if (typeof CorsairUserScripts !== 'undefined') CorsairUserScripts.clearTabMenu(tabId); } catch {}
+  try { if (typeof CorsairUserScripts !== 'undefined') { CorsairUserScripts.clearTabMenu(tabId); CorsairUserScripts.clearTabData(tabId); } } catch {}
 
   try {
     // Threat scan + auto-arm must not depend on redirect-chain bookkeeping
@@ -1311,8 +1440,285 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
           catch (err) { send({ ok: false, error: err.message }); }
           break;
         }
+        case 'us-duplicate': {
+          try { send(await CorsairUserScripts.duplicate(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-refresh-deps': {
+          try { send(await CorsairUserScripts.refreshDependencies(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-update-remote': {
+          try { send(await CorsairUserScripts.updateFromRemote(String(m.id || ''), Boolean(m.force))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-validate': {
+          try { send({ ok: true, result: CorsairUserScripts.validateScript({ code: String(m.code || '') }) }); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-run-now': {
+          try { send(await CorsairUserScripts.executeNow(String(m.id || ''), m.tabId)); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-set-everywhere': {
+          try { send(await CorsairUserScripts.setRunEverywhere(String(m.id || ''), Boolean(m.enabled))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-add-match': {
+          try { send(await CorsairUserScripts.addMatchRule(String(m.id || ''), String(m.pattern || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-check-all-updates': {
+          try { send(await CorsairUserScripts.checkAllUpdates()); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-get-vals': {
+          try { send(await CorsairUserScripts.getValues(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'us-clear-vals': {
+          try { send(await CorsairUserScripts.clearValues(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
 
-        /* ============ LANGUAGE ============ */
+        /* ============ AI USERSCRIPT STUDIO & PROVIDERS (v1.13.0) ============ */
+        case 'ai-providers-list': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const data = await CorsairAIProviders.listProfiles();
+            send({ ok: true, ...data, presets: CorsairAIProviders.PRESETS });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-save': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const r = await CorsairAIProviders.saveProfile(m.profile || {}, m.apiKey);
+            send(r);
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-duplicate': {
+          try { send(await CorsairAIProviders.duplicateProfile(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-delete': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try { send(await CorsairAIProviders.deleteProfile(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-set-default': {
+          try { send(await CorsairAIProviders.setDefaultProfile(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-clear-key': {
+          try { send(await CorsairAIProviders.clearApiKey(String(m.id || ''))); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-test-connection': {
+          try {
+            const profile = m.profile || await CorsairAIProviders.getProfile(String(m.id || ''));
+            const r = await CorsairAIRequestManager.testConnection({ profile, apiKey: m.apiKey });
+            send(r);
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-fetch-models': {
+          try {
+            const profile = m.profile || await CorsairAIProviders.getProfile(String(m.id || ''));
+            const r = await CorsairAIRequestManager.fetchModels({ profile, apiKey: m.apiKey });
+            if (r.ok && profile && profile.id && r.models.length) {
+              await CorsairAIProviders.saveProfile({ ...profile, discoveredModels: r.models });
+            }
+            send(r);
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-provider-test-generation': {
+          try {
+            const profile = m.profile || await CorsairAIProviders.getProfile(String(m.id || ''));
+            const r = await CorsairAIRequestManager.testGeneration({ profile, apiKey: m.apiKey });
+            send(r);
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-settings-get': {
+          try {
+            const settings = await CorsairAIScriptGenerator.getSettings();
+            send({ ok: true, settings, builtinTemplates: CorsairAIScriptGenerator.BUILTIN_TEMPLATES });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-settings-save': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try { send(await CorsairAIScriptGenerator.saveSettings(m.settings || {})); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-collect-context': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const tabId = Number(m.tabId);
+            if (!Number.isInteger(tabId)) { send({ ok: false, error: 'Invalid tabId.' }); break; }
+            const tab = await chrome.tabs.get(tabId);
+            if (!tab || !/^https?:\/\//i.test(tab.url || '')) {
+              send({ ok: false, error: 'Target tab is not an HTTP/HTTPS webpage.' });
+              break;
+            }
+            let rawCtx = { url: tab.url, title: tab.title || '' };
+            try {
+              const res = await chrome.scripting.executeScript({
+                target: { tabId },
+                func: CorsairAIScriptGenerator.collectPageContextInTab
+              });
+              if (res && res[0] && res[0].result) rawCtx = res[0].result;
+            } catch {}
+            const context = CorsairAIScriptGenerator.sanitizePageContext(rawCtx, { includeQuery: Boolean(m.includeQuery) });
+            send({ ok: true, tabId, context });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-generate-script': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const profile = m.providerId
+              ? await CorsairAIProviders.getProfile(String(m.providerId))
+              : await CorsairAIProviders.getDefaultProfile();
+            if (!profile) { send({ ok: false, error: 'No AI provider configured.' }); break; }
+            const settings = await CorsairAIScriptGenerator.getSettings();
+            const messages = CorsairAIScriptGenerator.buildGenerationMessages({
+              userPrompt: String(m.prompt || ''),
+              pageContext: m.pageContext || null,
+              settings,
+              templateId: m.templateId || '',
+              previousCode: m.previousCode || '',
+              errorReport: m.errorReport || '',
+              scopeMode: m.scopeMode || settings.defaultScope
+            });
+            const gen = await CorsairAIRequestManager.generate({
+              profile,
+              messages,
+              model: m.model || profile.model,
+              temperature: settings.temperature,
+              maxTokens: settings.maxTokens,
+              stream: Boolean(settings.streaming),
+              timeoutMs: settings.timeoutMs || profile.timeoutMs,
+              requestId: m.requestId || undefined
+            });
+            if (!gen.ok) { send(gen); break; }
+            const extracted = CorsairAIScriptGenerator.extractCodeFromResponse(gen.text);
+            const finalCode = extracted.isTypeScript
+              ? CorsairAIScriptGenerator.stripTypeScriptTypes(extracted.code)
+              : extracted.code;
+            const validation = CorsairAIScriptValidator.analyze(finalCode);
+            send({
+              ok: true,
+              code: finalCode,
+              rawText: gen.text,
+              convertedFromTs: extracted.isTypeScript,
+              validation,
+              providerId: profile.id,
+              providerName: profile.name,
+              locality: gen.locality,
+              model: gen.model || m.model || profile.model,
+              latencyMs: gen.latencyMs
+            });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-cancel-request': {
+          try { send({ ok: true, cancelled: CorsairAIRequestManager.cancelRequest(String(m.requestId || '')) }); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-validate-script': {
+          try { send({ ok: true, validation: CorsairAIScriptValidator.analyze(String(m.code || '')) }); }
+          catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-preview-script': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const r = await CorsairUserScripts.executePreview({
+              code: String(m.code || ''),
+              tabId: Number(m.tabId),
+              world: m.world === 'MAIN' ? 'MAIN' : 'USER_SCRIPT',
+              allFrames: Boolean(m.allFrames)
+            });
+            send(r);
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'ai-open-studio': {
+          try {
+            const params = new URLSearchParams();
+            if (Number.isInteger(Number(m.tabId))) params.set('tabId', String(m.tabId));
+            if (m.prompt) params.set('prompt', String(m.prompt).slice(0, 1200));
+            if (m.providerId) params.set('providerId', String(m.providerId));
+            if (m.includeContext) params.set('ctx', '1');
+            if (m.autoGen) params.set('autoGen', '1');
+            const url = chrome.runtime.getURL('ai-studio.html') + (params.toString() ? '?' + params.toString() : '');
+            const tab = await chrome.tabs.create({ url });
+            send({ ok: true, studioTabId: tab?.id });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+
+        /* ============ ADVANCED SECURITY (v1.12.0) ============ */
+        case 'adv-sec-get': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const config = await getAdvancedSecurityConfig();
+            const offlineStatus = typeof CorsairOfflineIntel !== 'undefined' ? CorsairOfflineIntel.getStatus() : null;
+            const trackingParamsCount = typeof CorsairTrackingStrip !== 'undefined' ? CorsairTrackingStrip.TRACKING_PARAMS.length : 0;
+            send({ ok: true, config, offlineStatus, trackingParamsCount });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'adv-sec-set': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const cur = await getAdvancedSecurityConfig();
+            const patch = (m.patch && typeof m.patch === 'object') ? m.patch : {};
+            const next = {
+              credentialGuard: patch.credentialGuard !== undefined ? Boolean(patch.credentialGuard) : cur.credentialGuard,
+              clickFixGuard: patch.clickFixGuard !== undefined ? Boolean(patch.clickFixGuard) : cur.clickFixGuard,
+              offlineIntel: patch.offlineIntel !== undefined ? Boolean(patch.offlineIntel) : cur.offlineIntel,
+              httpsFirst: patch.httpsFirst !== undefined ? Boolean(patch.httpsFirst) : cur.httpsFirst,
+              httpsFirstExceptions: Array.isArray(patch.httpsFirstExceptions) ? patch.httpsFirstExceptions.map(String).filter(Boolean) : cur.httpsFirstExceptions,
+              trackingStrip: patch.trackingStrip !== undefined ? Boolean(patch.trackingStrip) : cur.trackingStrip,
+              trackingStripExceptions: Array.isArray(patch.trackingStripExceptions) ? patch.trackingStripExceptions.map(String).filter(Boolean) : cur.trackingStripExceptions
+            };
+            await chrome.storage.local.set({ [ADV_SEC_KEY]: next });
+            const dnr = await syncAdvancedSecurityDnr(next);
+            send({ ok: true, config: next, dnr });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+        case 'offline-intel-lookup': {
+          if (capability !== 'PRIVILEGED_INTERNAL') { send({ ok: false, error: 'unauthorized-sender' }); break; }
+          try {
+            const result = typeof CorsairOfflineIntel !== 'undefined' ? CorsairOfflineIntel.lookup(String(m.target || '')) : { hit: false };
+            send({ ok: true, result });
+          } catch (err) { send({ ok: false, error: err.message }); }
+          break;
+        }
+
+                /* ============ LANGUAGE ============ */
         case 'get-language': {
           try {
             const r = await chrome.storage.local.get('language');
