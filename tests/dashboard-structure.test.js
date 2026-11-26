@@ -32,7 +32,7 @@ describe('dashboard layout', () => {
   const navViews = () => [...document.querySelectorAll('.sidebar-nav .nav-item')].map(b => b.dataset.view);
 
   it('every nav item has a matching view section and a registered view key', () => {
-    const keys = [...js.match(/const VIEW_KEYS = \{([\s\S]*?)\};/)[1].matchAll(/(\w+):/g)].map(m => m[1]);
+    const keys = [...js.match(/const VIEW_KEYS = \{([\s\S]*?)\};/)[1].matchAll(/['"]?([\w-]+)['"]?\s*:/g)].map(m => m[1]);
     for (const v of navViews()) {
       expect(document.getElementById(`view-${v}`), `view-${v}`).not.toBeNull();
       expect(keys, `VIEW_KEYS has ${v}`).toContain(v);
@@ -45,7 +45,7 @@ describe('dashboard layout', () => {
     expect(order).toEqual([
       'G:Monitor', 'overview', 'analytics', 'activity',
       'G:Protection', 'domains', 'security', 'privacy',
-      'G:Tools', 'scripts', 'api',
+      'G:Tools', 'scripts', 'ai-providers', 'api',
       'G:System', 'settings', 'about'
     ]);
   });

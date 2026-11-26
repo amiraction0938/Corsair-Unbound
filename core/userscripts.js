@@ -2061,7 +2061,7 @@ const CorsairUserScripts = (() => {
       if (stage === 'start' && !wantsStart) continue;
       if (stage !== 'start' && wantsStart) continue;
 
-      if (!rec.runEverywhere && !urlMatchesMeta(url, meta)) continue;
+      if (!rec.runEverywhere && !urlMatchesMeta(meta, url)) continue;
 
       const dedupKey = `${tabId}:${frameId}:${rec.id}:${url}`;
       if (_recentAutoInject.has(dedupKey)) continue;
